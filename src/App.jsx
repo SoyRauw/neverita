@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import { Sparkle, CircleNotch } from '@phosphor-icons/react';
 
 // --- IMPORTACIÓN DE COMPONENTES ---
@@ -169,7 +169,7 @@ function App() {
   if (!currentFamily) return <FamilySelect families={userFamilies} onSelectFamily={setCurrentFamily} onCreateFamily={handleCreateFamily} />;
 
   return (
-    <BrowserRouter>
+    <HashRouter>
       <div className="app-container">
         <Sidebar activeFamily={currentFamily} onOpenManager={() => setShowFamilyManager(true)} />
 
@@ -202,7 +202,7 @@ function App() {
           <Route path="/shopping-list" element={<div className="main-content"><h1>🛒 Lista de Compras</h1></div>} />
         </Routes>
       </div>
-    </BrowserRouter>
+    </HashRouter>
   );
 }
 
