@@ -1,77 +1,121 @@
 import React, { useState } from 'react';
-import { User, Lock, Heartbeat, Ruler, Scales } from '@phosphor-icons/react';
+import { User, Lock, Ruler, Scales, ForkKnife } from '@phosphor-icons/react';
 
 const Auth = ({ onLogin }) => {
     const [isRegistering, setIsRegistering] = useState(false);
 
-    // Formulario de Registro con los datos que pediste
     const handleRegisterSubmit = (e) => {
         e.preventDefault();
-        // Simulamos registro exitoso y pasamos al siguiente paso
         onLogin(); 
     };
 
     return (
-        <div className="auth-container">
-            <div className="auth-card">
-                <div className="auth-logo">Neve<span>rita</span></div>
-                
-                <h2 style={{marginBottom: '1.5rem', fontSize: '1.5rem'}}>
-                    {isRegistering ? 'Crea tu Perfil' : '¡Hola de nuevo!'}
-                </h2>
-
-                <form onSubmit={handleRegisterSubmit}>
-                    {!isRegistering ? (
-                        /* --- FORMULARIO LOGIN --- */
-                        <>
-                            <div className="form-group">
-                                <div style={{position: 'relative'}}>
-                                    <User size={20} style={{position:'absolute', left:10, top:12, color:'#999'}}/>
-                                    <input type="email" className="form-input" placeholder="Correo electrónico" style={{paddingLeft: 35}} required />
-                                </div>
-                            </div>
-                            <div className="form-group">
-                                <div style={{position: 'relative'}}>
-                                    <Lock size={20} style={{position:'absolute', left:10, top:12, color:'#999'}}/>
-                                    <input type="password" className="form-input" placeholder="Contraseña" style={{paddingLeft: 35}} required />
-                                </div>
-                            </div>
-                            <button className="btn-primary" style={{width: '100%', justifyContent:'center'}}>Entrar</button>
-                        </>
-                    ) : (
-                        /* --- FORMULARIO REGISTRO COMPLETO --- */
-                        <div style={{textAlign: 'left'}}>
-                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
-                                <input type="text" className="form-input" placeholder="Nombre" required />
-                                <input type="text" className="form-input" placeholder="Apellido" required />
-                            </div>
-                            <div className="form-group" style={{marginTop:'10px'}}>
-                                <input type="email" className="form-input" placeholder="Correo electrónico" required />
-                            </div>
-                            <div className="form-group">
-                                <input type="password" className="form-input" placeholder="Contraseña" required />
-                            </div>
-                            
-                            {/* Datos de Salud */}
-                            <label style={{fontSize:'0.8rem', fontWeight:'bold', color:'#666', marginBottom:'5px', display:'block'}}>Datos Físicos (Para la IA nutricional)</label>
-                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'10px'}}>
-                                <div style={{position:'relative'}}>
-                                    <Scales size={18} style={{position:'absolute', right:10, top:12, color:'#999'}}/>
-                                    <input type="number" className="form-input" placeholder="Peso (kg)" />
-                                </div>
-                                <div style={{position:'relative'}}>
-                                    <Ruler size={18} style={{position:'absolute', right:10, top:12, color:'#999'}}/>
-                                    <input type="number" className="form-input" placeholder="Altura (cm)" />
-                                </div>
-                            </div>
-
-                            <button className="btn-primary" style={{width: '100%', justifyContent:'center', marginTop:'10px'}}>Registrarse</button>
+        <div className="login-split-screen">
+            
+            {/* --- LADO IZQUIERDO: BANNER --- */}
+            <div className="login-banner">
+                <div className="banner-content">
+                    <div className="logo-display">
+                        <div className="logo-icon-bg">
+                            <ForkKnife size={32} color="white" weight="fill" />
                         </div>
-                    )}
-                </form>
+                        <h1>Neve<span>rita.</span></h1>
+                    </div>
+                    <p className="banner-text">
+                        Tu cocina inteligente: planifica, ahorra y disfruta cocinando.
+                    </p>
+                </div>
+                <div className="banner-footer">© 2024 Neverita App</div>
+            </div>
 
-                <div className="link-text" onClick={() => setIsRegistering(!isRegistering)}>
-                    {isRegistering ? '¿Ya tienes cuenta? Inicia Sesión' : '¿Nuevo aquí? Regístrate'}
+            {/* --- LADO DERECHO: FORMULARIO MODERNO --- */}
+            <div className="login-form-container">
+                <div className="auth-card-glass">
+                    <div className="form-header">
+                        <h2>{isRegistering ? 'Crear Cuenta' : 'Bienvenido'}</h2>
+                        <p>{isRegistering ? 'Empieza tu viaje culinario' : 'Ingresa tus credenciales'}</p>
+                    </div>
+
+                    <form onSubmit={handleRegisterSubmit}>
+                        {!isRegistering ? (
+                            /* LOGIN */
+                            <>
+                                <div className="form-group-floating">
+                                    <label>Email</label>
+                                    <div className="input-wrapper-floating">
+                                        <User size={20} className="input-icon-floating"/>
+                                        <input type="email" placeholder="hola@ejemplo.com" required />
+                                    </div>
+                                </div>
+                                <div className="form-group-floating">
+                                    <label>Contraseña</label>
+                                    <div className="input-wrapper-floating">
+                                        <Lock size={20} className="input-icon-floating"/>
+                                        <input type="password" placeholder="••••••••" required />
+                                    </div>
+                                </div>
+                                <div className="forgot-pass">
+                                    <a href="#">¿Olvidaste tu contraseña?</a>
+                                </div>
+                                <button className="btn-floating-primary">
+                                    Iniciar Sesión
+                                </button>
+                            </>
+                        ) : (
+                            /* REGISTRO */
+                            <>
+                                <div className="form-group-floating">
+                                    <label>Nombre</label>
+                                    <div className="input-wrapper-floating">
+                                        <User size={20} className="input-icon-floating"/>
+                                        <input type="text" placeholder="Tu nombre" />
+                                    </div>
+                                </div>
+                                
+                                <div className="form-group-floating">
+                                    <label>Email</label>
+                                    <div className="input-wrapper-floating">
+                                        <User size={20} className="input-icon-floating"/>
+                                        <input type="email" placeholder="hola@ejemplo.com" required />
+                                    </div>
+                                </div>
+
+                                <div className="form-group-floating">
+                                    <label>Contraseña</label>
+                                    <div className="input-wrapper-floating">
+                                        <Lock size={20} className="input-icon-floating"/>
+                                        <input type="password" placeholder="Crea una clave segura" required />
+                                    </div>
+                                </div>
+
+                                {/* Datos IA Flotantes */}
+                                <div className="ia-data-container">
+                                    <span className="ia-label">Datos para tu IA</span>
+                                    <div className="ia-inputs-row">
+                                        <div className="input-wrapper-floating small">
+                                            <Scales size={18} className="input-icon-floating"/>
+                                            <input type="number" placeholder="Peso (kg)" />
+                                        </div>
+                                        <div className="input-wrapper-floating small">
+                                            <Ruler size={18} className="input-icon-floating"/>
+                                            <input type="number" placeholder="Altura (cm)" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button className="btn-floating-primary">
+                                    Registrarse
+                                </button>
+                            </>
+                        )}
+                    </form>
+
+                    <div className="auth-footer-modern">
+                        {isRegistering ? '¿Ya tienes cuenta? ' : '¿Nuevo usuario? '}
+                        <span onClick={() => setIsRegistering(!isRegistering)}>
+                            {isRegistering ? 'Ingresa aquí' : 'Crea una cuenta'}
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>
