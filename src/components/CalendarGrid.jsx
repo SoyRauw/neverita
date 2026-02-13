@@ -10,31 +10,42 @@ const CalendarGrid = ({ data }) => {
         <div className="calendar-body">
             {mealTypes.map((type) => (
                 <React.Fragment key={type}>
-                    {/* Etiqueta Lateral */}
+                    {/* Etiqueta Lateral (Desayuno, Almuerzo...) */}
                     <div className="meal-label">{type}</div>
 
-                    {/* Días */}
+                    {/* Celdas de los días */}
                     {days.map((_, dayIndex) => {
-                        // Buscamos si hay comida para este día y tipo específico
+                        // Creamos la clave única para buscar la receta (ej: "0-Desayuno")
                         const mealKey = `${dayIndex}-${type}`;
-                        // Verificamos que 'data' exista antes de buscar
                         const meal = data ? data[mealKey] : null;
 
                         return (
-                            <div key={mealKey} className="meal-card" style={meal ? { border: 'none', padding: 0 } : {}}>
+                            <div 
+                                key={mealKey} 
+                                className="meal-card" 
+                                // Si hay comida, quitamos el borde y padding para que la foto se vea limpia
+                                style={meal ? { border: 'none', padding: 0, overflow: 'hidden' } : {}}
+                            >
                                 {meal ? (
-                                    // SI HAY COMIDA: Mostramos la tarjeta llena
-                                    <>
-                                        <img src={meal.img} alt={meal.name} />
-                                        <div style={{padding: '0 8px 8px'}}>
-                                            <div className="meal-name">{meal.name}</div>
-                                            <div className="calories">{meal.cal} kcal</div>
-                                        </div>
-                                    </>
+                                    // OPCIÓN A: HAY RECETA
+                                    // Solo mostramos la imagen ocupando todo el espacio
+                                    <img 
+                                        src={meal.img} 
+                                        alt={meal.name}
+                                        title={meal.name} // Tooltip nativo al pasar el mouse
+                                        style={{
+                                            width: '100%',
+                                            height: '100%',
+                                            objectFit: 'cover',
+                                            display: 'block'
+                                        }} 
+                                    />
                                 ) : (
-                                    // NO HAY COMIDA: Mostramos el botón "+"
+                                    // OPCIÓN B: ESTÁ VACÍO
+                                    // Mostramos el contenedor con el icono +
                                     <div className="empty-state">
-                                        <Plus size={24} color="#ddd" weight="bold" />
+                                        {/* Usamos un gris muy claro (#e5e7eb) para que sea sutil */}
+                                        <Plus size={32} color="#e5e7eb" weight="bold" />
                                     </div>
                                 )}
                             </div>

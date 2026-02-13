@@ -1,331 +1,456 @@
-/* === index.css - Diseño Final Claro === */
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap');
+/* ============================================================
+   NEVERITA APP - ESTILOS GLOBALES (MASTER FILE DEFINITIVO)
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Inter:wght@400;600;700&display=swap');
 
 :root {
-    /* Colores extraídos de la imagen */
-    --bg-main: #FDFCF8;      /* Fondo principal muy claro */
-    --bg-sidebar: #FFFFFF;   /* Fondo barra lateral blanca */
-    --bg-card: #FFFFFF;      /* Fondo del calendario */
-    --bg-accent-light: #FFFBF5; /* Fondo tarjeta familia */
+    /* --- VARIABLES DE COLOR --- */
+    --bg-main: #FFF0E3;      
     
-    --color-primary: #F7B27B; /* Naranja del botón e iconos */
-    --color-danger: #FA7070;  /* Rojo de notificaciones */
+    /* FONDO DEGRADADO GLOBAL */
+    --bg-gradient: linear-gradient(135deg, #FFF0E3 0%, #FFD6A5 100%);
     
-    --text-dark: #333333;    /* Títulos */
-    --text-medium: #666666;  /* Subtítulos */
-    --text-light: #B0B0B0;   /* Etiquetas de días/horas */
+    --bg-sidebar: rgba(255, 255, 255, 0.75); 
+    --bg-card: rgba(255, 255, 255, 0.85);    
     
-    --border-light: #F0F0F0; /* Bordes sutiles */
-    --border-dashed: #DDDDDD; /* Bordes de los cuadritos vacíos */
+    --color-primary: #F7B27B; /* Naranja Principal */
+    --color-primary-dark: #e67e22;
+    --color-danger: #FA7070;  
+    
+    /* TEXTOS OSCUROS */
+    --text-dark: #1a1a1a;    /* Negro suave */
+    --text-medium: #4a5568;  /* Gris oscuro */
+    --text-light: #718096;   
+    
+    --border-light: rgba(255, 255, 255, 0.6); 
+    --border-dashed: #DDDDDD;
+    
+    /* Borde sutil definido */
+    --border-defined: 1px solid rgba(0, 0, 0, 0.08);
 
-    --radius-lg: 24px;       /* Redondeado grande (calendario) */
-    --radius-md: 16px;       /* Redondeado medio (botones, tarjetas) */
-    --radius-sm: 12px;       /* Redondeado pequeño (items menú) */
+    --radius-lg: 24px;       
+    --radius-md: 16px;       
+    --radius-sm: 12px;
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Nunito', sans-serif; }
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Nunito', 'Inter', sans-serif; }
 
-body { background-color: var(--bg-main); color: var(--text-dark); height: 100vh; overflow: hidden; }
-
-.app-container { display: grid; grid-template-columns: 260px 1fr; height: 100%; }
-
-/* === SIDEBAR === */
-.sidebar {
-    background-color: var(--bg-sidebar);
-    padding: 2rem 1.5rem;
-    display: flex; flex-direction: column; height: 100%;
-    border-right: 1px solid var(--border-light);
+body { 
+    background: var(--bg-gradient); 
+    background-attachment: fixed;
+    color: var(--text-dark); 
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
-.logo { margin-bottom: 3rem; }
-.logo h2 { font-size: 1.8rem; font-weight: 800; color: var(--text-dark); }
-.logo span { color: var(--color-primary); }
+/* SCROLLBARS */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: rgba(0,0,0,0.05); }
+::-webkit-scrollbar-thumb { background: var(--color-primary); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-primary-dark); }
 
-.menu { display: flex; flex-direction: column; gap: 0.8rem; flex-grow: 1; }
-.menu a {
-    display: flex; align-items: center; gap: 12px;
-    text-decoration: none; color: var(--text-medium);
-    font-weight: 600; padding: 12px 16px; border-radius: var(--radius-sm);
-    transition: all 0.3s ease;
+/* =========================================
+   LAYOUT PRINCIPAL
+   ========================================= */
+
+.app-container {
+    padding-left: 280px; 
+    min-height: 100vh;
+    position: relative;
+    display: block;
 }
-.menu a:hover, .menu a.active { background-color: var(--bg-accent-light); color: var(--color-primary); }
-.badge.warning { background-color: #FFEEEE; color: var(--color-danger); padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; margin-left: auto; }
 
-.family-card {
-    background-color: var(--bg-accent-light); padding: 1.2rem;
-    border-radius: var(--radius-md); margin-top: auto;
+.main-content {
+    padding: 2rem 3rem;
+    max-width: 1400px;
+    margin: 0 auto;
+    min-height: 100vh; 
+    animation: fadeIn 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); 
 }
-.family-card h4 { font-size: 0.9rem; color: var(--text-light); margin-bottom: 0.5rem; font-weight: 600; }
-.family-card p { font-weight: 700; color: var(--text-dark); font-size: 1.1rem; }
 
-/* === MAIN CONTENT & HEADER === */
-.main-content { padding: 2rem 3rem; overflow-y: auto; height: 100vh; }
-
-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2.5rem; }
+/* Headers */
+header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 2.5rem;
+    background: rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(5px);
+    padding: 15px;
+    border-radius: var(--radius-md);
+    border: var(--border-defined);
+}
 .header-title h1 { font-size: 2.2rem; font-weight: 800; color: var(--text-dark); }
-.header-title p { color: var(--text-light); margin-top: 0.5rem; font-weight: 600; }
+.header-title p { color: var(--text-medium); margin-top: 0.5rem; font-weight: 600; }
 
 .header-actions { display: flex; align-items: center; gap: 2rem; }
 .avatars { display: flex; }
-.avatars img { width: 40px; height: 40px; border-radius: 50%; border: 3px solid var(--bg-main); margin-left: -15px; }
+.avatars img { width: 40px; height: 40px; border-radius: 50%; border: 3px solid white; margin-left: -15px; }
 .avatars img:first-child { margin-left: 0; }
 
-.btn-primary {
-    background-color: var(--color-primary); color: white; border: none;
-    padding: 12px 24px; border-radius: var(--radius-md); font-weight: 700; font-size: 1rem;
-    cursor: pointer; display: flex; align-items: center; gap: 10px;
-    box-shadow: 0 4px 12px rgba(247, 178, 123, 0.3); transition: transform 0.2s;
-}
-.btn-primary:hover { transform: translateY(-2px); }
 
-/* === CALENDAR GRID === */
-.calendar-wrapper {
-    background: var(--bg-card); border-radius: var(--radius-lg); padding: 2rem;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.02);
-}
-.calendar-header {
-    display: grid; grid-template-columns: 100px repeat(7, 1fr); gap: 12px;
-    margin-bottom: 1.5rem; text-align: center;
-}
-.day-label { font-weight: 700; color: var(--text-light); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px;}
-.calendar-body { display: grid; grid-template-columns: 100px repeat(7, 1fr); gap: 12px; row-gap: 20px; }
-.meal-label {
-    display: flex; align-items: center; font-weight: 700; color: var(--text-dark);
-    font-size: 1.1rem; height: 130px;
-}
-.meal-card {
-    height: 130px; border-radius: var(--radius-md);
-    border: 2px dashed var(--border-dashed);
-    display: flex; justify-content: center; align-items: center;
-    cursor: pointer; transition: all 0.3s ease; background-color: var(--bg-main);
-}
-.meal-card:hover { border-color: var(--color-primary); background-color: white; }
-.meal-card img { width: 100%; height: 130px; object-fit: cover; border-radius: var(--radius-md); }
-.empty-state { display: flex; flex-direction: column; align-items: center; color: var(--border-dashed);}
+/* =========================================
+   SIDEBAR MODERNO (MENU LATERAL)
+   ========================================= */
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+.sidebar-modern {
+    width: 280px;
+    height: 100vh;
+    background: var(--bg-sidebar); 
+    backdrop-filter: blur(15px);   
+    border-right: 1px solid rgba(0, 0, 0, 0.08); 
+    display: flex;
+    flex-direction: column;
+    padding: 2rem 1.5rem;
+    position: fixed; 
+    left: 0; top: 0;
+    z-index: 100;
+    transition: all 0.3s;
+    box-shadow: 5px 0 15px rgba(0,0,0,0.02);
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
+.sidebar-logo {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 3rem; padding-left: 10px;
 }
-button:hover {
-  border-color: #646cff;
+.sidebar-logo .icon-badge {
+    background: var(--color-primary);
+    width: 35px; height: 35px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 10px rgba(247, 178, 123, 0.4); color: white;
 }
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+.sidebar-logo h2 {
+    font-size: 1.5rem; font-weight: 800; color: #1a1a1a; margin: 0; letter-spacing: -0.5px;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+/* --- MENÚ DE NAVEGACIÓN --- */
+.sidebar-menu {
+    display: flex; flex-direction: column; gap: 10px;
+    flex: 1; 
 }
 
-/* === VENTANA MODAL (POPUP IA) === */
-.modal-overlay {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background-color: rgba(0, 0, 0, 0.5); /* Fondo oscuro transparente */
-    backdrop-filter: blur(4px); /* Efecto borroso elegante */
-    display: flex; justify-content: center; align-items: center;
-    z-index: 1000;
+.menu-label {
+    font-size: 0.75rem; font-weight: 800; color: #888;
+    margin-bottom: 10px; padding-left: 15px; letter-spacing: 1px;
 }
 
-.modal-content {
-    background-color: white;
-    width: 500px;
-    padding: 2rem;
-    border-radius: var(--radius-lg);
-    box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-    animation: slideIn 0.3s ease-out;
+.nav-item {
+    display: flex; align-items: center; gap: 15px;
+    padding: 14px 18px;
+    text-decoration: none;
+    color: #1a1a1a; 
+    font-weight: 700; 
+    border-radius: 16px; 
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+    position: relative;
+    border: 1px solid transparent;
 }
 
-@keyframes slideIn {
-    from { transform: translateY(20px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
+.nav-item:hover {
+    background: linear-gradient(90deg, rgba(255,255,255,0.9), rgba(255,255,255,0.5));
+    color: #000;
+    border-color: rgba(0,0,0,0.05);
+    transform: translateX(4px);
 }
 
-.modal-header h2 { font-size: 1.5rem; color: var(--text-dark); margin-bottom: 0.5rem; }
-.modal-header p { color: var(--text-medium); margin-bottom: 1.5rem; }
-
-.form-group { margin-bottom: 1.2rem; }
-.form-group label { display: block; font-weight: 700; color: var(--text-dark); margin-bottom: 8px; font-size: 0.9rem; }
-.form-input { 
-    width: 100%; padding: 10px; border: 1px solid var(--border-dashed); 
-    border-radius: var(--radius-sm); font-size: 1rem; outline: none;
+.nav-item.active {
+    background: linear-gradient(135deg, var(--color-primary), #e67e22);
+    color: white;
+    box-shadow: 0 8px 20px rgba(230, 126, 34, 0.3); 
+    transform: translateX(5px);
 }
-.form-input:focus { border-color: var(--color-primary); }
+.nav-item span { font-size: 0.95rem; }
 
-/* Etiquetas de ingredientes/días */
-.tags-container { display: flex; flex-wrap: wrap; gap: 8px; }
-.tag-chip {
-    padding: 6px 12px; border: 1px solid var(--border-dashed);
-    border-radius: 20px; font-size: 0.85rem; cursor: pointer; color: var(--text-medium);
+.nav-badge {
+    margin-left: auto;
+    background: #FF6B6B;
+    color: white;
+    font-size: 0.7rem;
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+.nav-item.active .nav-badge { background: white; color: var(--color-primary); }
+
+.sidebar-footer {
+    margin-top: auto;
+    display: flex; 
+    flex-direction: column; 
+    gap: 15px;
+}
+
+.btn-sidebar-logout {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: #ff7675; 
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    padding: 12px;
+    border-radius: 12px;
     transition: all 0.2s;
 }
-.tag-chip.selected {
-    background-color: var(--color-primary); color: white; border-color: var(--color-primary);
+
+.btn-sidebar-logout:hover {
+    background-color: #fff0f0; 
+    color: #d63031; 
+    border-color: #ffdcdc;
 }
 
-.modal-footer {
-    margin-top: 2rem; display: flex; justify-content: flex-end; gap: 10px;
-}
-.btn-secondary {
-    background: transparent; border: 1px solid var(--border-dashed);
-    color: var(--text-medium); padding: 10px 20px; border-radius: var(--radius-md);
-    cursor: pointer; font-weight: 700;
-}
-.btn-secondary:hover { background-color: #f5f5f5; }
 
-/* === ESTILOS DE RECETAS === */
+/* =================================================================
+   CALENDARIO (PLANIFICACIÓN) - VERSIÓN PREMIUM (SOLO FOTOS)
+   ================================================================= */
+
+.calendar-wrapper {
+    background: var(--bg-card); 
+    backdrop-filter: blur(10px);
+    border-radius: var(--radius-lg); 
+    
+    /* Padding ajustado para centrar mejor sin ser gigante */
+    padding: 1.5rem 2rem; 
+    
+    box-shadow: 0 20px 40px rgba(0,0,0,0.08);
+    border: var(--border-defined);
+    
+    /* Centrado y ancho máximo aumentado para lucir las fotos */
+    margin: 0 auto;
+    max-width: 1250px; 
+}
+
+.calendar-header {
+    display: grid; 
+    /* Columna de etiquetas un poco más estrecha para dar espacio a fotos */
+    grid-template-columns: 80px repeat(7, 1fr); 
+    gap: 15px;
+    margin-bottom: 1rem; 
+    text-align: center;
+}
+
+.day-label { 
+    font-weight: 800; 
+    color: var(--text-medium); 
+    font-size: 0.9rem; 
+    text-transform: uppercase; 
+    letter-spacing: 0.5px;
+}
+
+.calendar-body { 
+    display: grid; 
+    grid-template-columns: 80px repeat(7, 1fr); 
+    gap: 15px;          /* Espacio horizontal */
+    row-gap: 15px;      /* Espacio vertical compacto */
+}
+
+.meal-label {
+    display: flex; 
+    align-items: center; 
+    font-weight: 700; 
+    color: var(--text-dark);
+    font-size: 1.05rem; 
+    height: 140px; /* Misma altura que las tarjetas */
+}
+
+.meal-card {
+    height: 140px; /* Hacemos las tarjetas más altas y visibles */
+    
+    border-radius: var(--radius-md);
+    border: 2px dashed rgba(0,0,0,0.12);
+    display: flex; 
+    justify-content: center; 
+    align-items: center;
+    cursor: pointer; 
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    background-color: rgba(255, 255, 255, 0.4);
+    overflow: hidden; 
+    position: relative; /* Clave para que la imagen llene todo */
+    padding: 0; /* Sin padding para que la foto toque los bordes */
+    box-shadow: 0 4px 10px rgba(0,0,0,0.02);
+}
+
+.meal-card:hover { 
+    border-color: var(--color-primary); 
+    background-color: white; 
+    transform: translateY(-5px) scale(1.02); /* Efecto Pop moderno */
+    box-shadow: 0 15px 30px rgba(247, 178, 123, 0.25); 
+    z-index: 10;
+}
+
+/* ESTILO DE FOTO EN PLANIFICACIÓN */
+.meal-card img { 
+    width: 100%; 
+    height: 100%; 
+    object-fit: cover; /* La foto cubre todo el cuadro perfectamente */
+    border-radius: var(--radius-md); /* Mismos bordes que la tarjeta */
+    display: block;
+}
+
+/* OCULTAR TEXTO EN EL CALENDARIO */
+.meal-card .meal-name, 
+.meal-card .meal-calories { 
+    display: none !important; 
+}
+
+/* Estado vacío (+) */
+.empty-state { 
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
+    color: #b0b0b0;
+    width: 100%;
+    height: 100%;
+    transition: color 0.3s;
+}
+.meal-card:hover .empty-state {
+    color: var(--color-primary);
+}
+
+
+/* =========================================
+   RECETAS (GRID & CARDS) - RESTAURADO
+   ========================================= */
 .recipes-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 2rem;
+    /* Grid responsivo mejorado */
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 25px;
 }
 
 .recipe-card {
-    background: white;
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.03);
-    border: 1px solid var(--border-light);
-    transition: transform 0.2s, box-shadow 0.2s;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(8px);
+    border-radius: 20px; 
+    overflow: hidden; 
     cursor: pointer;
-    display: flex; flex-direction: column;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.06); 
+    border: 1px solid rgba(0,0,0,0.08);
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    display: flex; 
+    flex-direction: column;
 }
 
 .recipe-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+    transform: translateY(-8px);
+    box-shadow: 0 20px 40px rgba(247, 178, 123, 0.25); 
+    border-color: rgba(247, 178, 123, 0.5);
 }
 
-.recipe-image-container { position: relative; height: 180px; }
-.recipe-image { width: 100%; height: 100%; object-fit: cover; }
-.recipe-type-badge {
-    position: absolute; top: 12px; right: 12px;
-    background: rgba(255, 255, 255, 0.9);
-    padding: 6px 12px; border-radius: 20px;
-    font-size: 0.75rem; font-weight: 700;
-    display: flex; align-items: center; gap: 6px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+.recipe-img { 
+    width: 100%; 
+    height: 160px; /* Un poco más de altura para la foto de receta */
+    object-fit: cover; 
 }
 
-.recipe-content { padding: 1.2rem; flex-grow: 1; display: flex; flex-direction: column; }
-.recipe-title { font-size: 1.2rem; font-weight: 800; color: var(--text-dark); margin-bottom: 0.5rem; }
-.recipe-desc { font-size: 0.9rem; color: var(--text-medium); margin-bottom: 1rem; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-
-.recipe-meta {
-    display: flex; gap: 12px; margin-bottom: 1rem; flex-wrap: wrap;
-}
-.meta-tag {
-    display: flex; align-items: center; gap: 6px;
-    font-size: 0.8rem; font-weight: 600; color: var(--text-medium);
-    background: var(--bg-main); padding: 4px 10px; border-radius: 8px;
+.recipe-content { 
+    padding: 18px; 
+    flex: 1; 
+    display: flex; 
+    flex-direction: column; 
 }
 
-.recipe-footer {
-    margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--border-light);
-    display: flex; justify-content: space-between; align-items: center;
-}
-.author-info { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 700; color: var(--text-dark); }
-.author-avatar { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
-
-/* Modal de Receta Específica */
-.recipe-detail-header { position: relative; height: 250px; margin: -2rem -2rem 2rem -2rem; }
-.recipe-detail-img { width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
-.instruction-step { display: flex; gap: 1rem; margin-bottom: 1rem; }
-.step-number { 
-    background: var(--color-primary); color: white; width: 28px; height: 28px; 
-    border-radius: 50%; display: flex; justify-content: center; align-items: center; 
-    font-weight: bold; flex-shrink: 0; 
-}
-.difficulty-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-.diff-Easy { background-color: #4CAF50; }
-.diff-Medium { background-color: #FFC107; }
-.diff-Hard { background-color: #FA7070; }
-
-/* === AUTENTICACIÓN Y SELECCIÓN DE FAMILIA === */
-.auth-container {
-    height: 100vh; width: 100%;
-    background-color: var(--bg-main);
-    display: flex; justify-content: center; align-items: center;
-    background-image: radial-gradient(circle at 10% 20%, rgba(247, 178, 123, 0.1) 0%, transparent 20%);
+.recipe-title { 
+    font-size: 1.1rem; 
+    font-weight: 800; 
+    margin: 0 0 10px; 
+    color: var(--text-dark); 
+    line-height: 1.3; 
 }
 
-.auth-card {
-    background: white; padding: 3rem; width: 450px;
-    border-radius: var(--radius-lg);
-    box-shadow: 0 20px 60px rgba(0,0,0,0.05);
-    text-align: center;
-    animation: slideIn 0.5s ease-out;
+.recipe-badges {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
+}
+.mini-badge {
+    font-size: 0.7rem; padding: 5px 12px; border-radius: 8px; color: white; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
-.auth-logo { font-size: 2.5rem; font-weight: 800; color: var(--text-dark); margin-bottom: 2rem; }
-.auth-logo span { color: var(--color-primary); }
-
-.family-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 1.5rem; margin-top: 2rem; width: 100%; max-width: 800px;
+.recipe-stats {
+    display: flex; justify-content: space-between; align-items: center; margin-top: auto; 
+    font-size: 0.85rem; color: var(--text-medium); font-weight: 700; padding-top: 12px; border-top: 1px solid rgba(0,0,0,0.06);
 }
+.stat-item { display: flex; align-items: center; gap: 6px; }
 
-.family-card-select {
-    background: white; padding: 2rem; border-radius: var(--radius-md);
-    border: 2px solid transparent;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
-    cursor: pointer; transition: all 0.3s;
-    display: flex; flex-direction: column; align-items: center; gap: 1rem;
-}
 
-.family-card-select:hover { transform: translateY(-5px); border-color: var(--color-primary); }
-.family-card-select.add-new { border: 2px dashed var(--border-dashed); background: transparent; }
-.family-card-select.add-new:hover { border-color: var(--color-primary); background: white; }
-
-.avatar-large { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 0.5rem; }
-
-/* Enlace simple para cambiar entre login/registro */
-.link-text {
-    color: var(--color-primary); font-weight: 700; cursor: pointer; text-decoration: underline;
-    margin-top: 1rem; display: inline-block; font-size: 0.9rem;
-}
 /* =========================================
-   LOGIN MODERNO (DEGRADADO & GLASSMORPHISM)
+   MODALES Y POPUPS
+   ========================================= */
+.modal-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background-color: rgba(30, 30, 30, 0.5);
+    backdrop-filter: blur(8px);
+    display: flex; justify-content: center; align-items: center;
+    z-index: 5000;
+}
+
+.modal-content, .modal-modern {
+    background-color: white;
+    width: 95%; max-width: 650px;
+    border-radius: var(--radius-lg);
+    border: 1px solid rgba(0,0,0,0.1);
+    box-shadow: 0 30px 60px rgba(0,0,0,0.25);
+    animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex; flex-direction: column; overflow: hidden;
+}
+@keyframes slideUp { from { transform: translateY(40px) scale(0.95); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+
+.modal-header { padding: 20px 28px; border-bottom: 1px solid #eee; background: white; display: flex; justify-content: space-between; align-items: center; }
+.modal-body { padding: 28px; overflow-y: auto; max-height: 70vh; }
+.modal-footer { padding: 20px 28px; border-top: 1px solid #eee; display: flex; justify-content: flex-end; gap: 12px; background: #fafafa; }
+
+/* Botones */
+.btn-primary, .btn-new {
+    background: var(--color-primary); color: white; border: none;
+    padding: 12px 24px; border-radius: var(--radius-md); font-weight: 700; font-size: 1rem;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;
+    box-shadow: 0 4px 14px rgba(247, 178, 123, 0.4); 
+    transition: all 0.2s ease;
+}
+.btn-primary:hover, .btn-new:hover { transform: translateY(-2px); background: var(--color-primary-dark); box-shadow: 0 6px 20px rgba(247, 178, 123, 0.6); }
+
+.btn-secondary {
+    background: transparent; border: 1px solid #ccc;
+    color: var(--text-medium); padding: 10px 20px; border-radius: var(--radius-md);
+    cursor: pointer; font-weight: 700; transition: all 0.2s ease;
+}
+.btn-secondary:hover { background-color: #f1f1f1; border-color: #bbb; color: #333; }
+
+/* Inputs */
+.form-input, .form-textarea { 
+    width: 100%; padding: 12px; border-radius: 12px; 
+    border: 1px solid rgba(0,0,0,0.15);
+    font-size: 0.95rem; outline: none; transition: 0.2s; 
+    background: #fdfdfd; color: #333;
+}
+.form-input:focus, .form-textarea:focus { border-color: var(--color-primary); background: white; box-shadow: 0 0 0 3px rgba(247, 178, 123, 0.2); }
+
+/* Chips */
+.chips-wrap { display: flex; flex-wrap: wrap; gap: 10px; }
+.chip {
+    padding: 8px 16px; border-radius: 50px; font-size: 0.9rem; cursor: pointer; font-weight: 600;
+    border: 1px solid #e0e0e0; background: #fff; color: #666; transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1); display: flex; align-items: center; gap: 6px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+.chip.active { background: var(--color-primary); color: white; border-color: transparent; box-shadow: 0 5px 15px rgba(247, 178, 123, 0.4); transform: translateY(-2px); }
+
+
+/* =========================================
+   LOGIN
    ========================================= */
 
 .login-split-screen {
-    display: flex;
-    min-height: 100vh;
-    width: 100vw;
+    display: flex; min-height: 100vh; width: 100vw;
     position: fixed; top: 0; left: 0; z-index: 9999;
 }
 
-/* --- IZQUIERDA (Imagen) --- */
 .login-banner {
     flex: 1.2;
     background-image: linear-gradient(135deg, rgba(247, 178, 123, 0.9), rgba(230, 126, 34, 0.8)), 
                       url('https://images.unsplash.com/photo-1498837167922-ddd27525d352?q=80&w=2070&auto=format&fit=crop');
     background-size: cover; background-position: center;
-    padding: 4rem;
-    display: flex; flex-direction: column; justify-content: space-between;
-    color: white;
+    padding: 4rem; display: flex; flex-direction: column; justify-content: space-between; color: white;
 }
 .logo-display { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
 .logo-icon-bg { background: rgba(255,255,255,0.25); padding: 10px; border-radius: 14px; backdrop-filter: blur(5px); display: flex; }
@@ -334,230 +459,284 @@ button:focus-visible {
 .banner-text { font-size: 1.4rem; font-weight: 600; opacity: 0.95; line-height: 1.4; max-width: 450px; }
 .banner-footer { opacity: 0.7; font-size: 0.9rem; }
 
-/* --- DERECHA (Degradado Fresco) --- */
 .login-form-container {
-    flex: 1;
-    display: flex; align-items: center; justify-content: center;
-    padding: 2rem;
-    /* EL DEGRADADO QUE PEDISTE: Naranja suave bajando a blanco */
-    background: linear-gradient(180deg, #FFF0E3 0%, #FFFFFF 60%, #FFFFFF 100%);
+    flex: 1; display: flex; align-items: center; justify-content: center; padding: 2rem;
+    background: white;
 }
 
-/* Tarjeta Flotante "Glass" */
 .auth-card-glass {
     width: 100%; max-width: 400px;
-    background: rgba(255, 255, 255, 0.65); /* Semitransparente */
-    backdrop-filter: blur(12px); /* Efecto borroso detrás */
-    padding: 2.5rem;
-    border-radius: 30px; /* Bordes muy redondeados */
-    box-shadow: 0 20px 60px rgba(247, 178, 123, 0.15); /* Sombra naranja suave */
-    border: 1px solid rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.9);
+    padding: 2.5rem; border-radius: 30px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1); 
+    border: 1px solid rgba(0, 0, 0, 0.08);
     animation: floatUp 0.6s ease-out;
 }
 @keyframes floatUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
 .form-header { text-align: center; margin-bottom: 2rem; }
-.form-header h2 { font-size: 2.2rem; margin: 0 0 5px 0; color: #333; letter-spacing: -0.5px; }
-.form-header p { color: #888; font-size: 1rem; margin: 0; }
+.form-header h2 { font-size: 2.2rem; margin: 0 0 5px 0; color: #1a1a1a; letter-spacing: -0.5px; }
+.form-header p { color: #666; font-size: 1rem; margin: 0; }
 
-/* Inputs Flotantes */
 .form-group-floating { margin-bottom: 1.2rem; }
 .form-group-floating label { display: block; font-size: 0.85rem; font-weight: 700; color: #555; margin-bottom: 8px; margin-left: 10px; }
-
 .input-wrapper-floating { position: relative; transition: all 0.3s; }
 .input-icon-floating { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #aaa; transition: 0.3s; z-index: 2; }
 
 .input-wrapper-floating input {
-    width: 100%;
-    padding: 16px 16px 16px 48px;
-    border: none; /* Sin bordes negros */
-    border-radius: 16px;
-    background: white;
-    font-size: 1rem;
-    color: #333;
-    /* Sombra suave para que flote */
-    box-shadow: 0 4px 15px rgba(0,0,0,0.03); 
-    transition: all 0.3s ease;
+    width: 100%; padding: 16px 16px 16px 48px; border: 1px solid rgba(0,0,0,0.05); border-radius: 16px;
+    background: #f8f9fa; font-size: 1rem; color: #1a1a1a;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.03); transition: all 0.3s ease;
 }
-
-.input-wrapper-floating input:focus {
-    outline: none;
-    box-shadow: 0 8px 25px rgba(247, 178, 123, 0.25); /* Resplandor naranja */
-    transform: translateY(-2px); /* Se eleva un poco al escribir */
-}
+.input-wrapper-floating input:focus { outline: none; box-shadow: 0 8px 25px rgba(247, 178, 123, 0.25); transform: translateY(-2px); background: white; border-color: var(--color-primary); }
 .input-wrapper-floating input:focus + .input-icon-floating { color: var(--color-primary); }
 
-/* Botón Primario Flotante */
 .btn-floating-primary {
-    width: 100%;
-    padding: 18px;
-    margin-top: 15px;
-    border: none;
-    border-radius: 18px;
-    background: linear-gradient(135deg, #FF9F43 0%, #FF7F50 100%); /* Degradado Naranja Vivo */
-    color: white;
-    font-size: 1.1rem;
-    font-weight: 800;
-    cursor: pointer;
-    box-shadow: 0 10px 25px rgba(255, 127, 80, 0.4); /* Sombra naranja fuerte */
-    transition: all 0.3s;
+    width: 100%; padding: 18px; margin-top: 15px; border: none; border-radius: 18px;
+    background: linear-gradient(135deg, #FF9F43 0%, #FF7F50 100%);
+    color: white; font-size: 1.1rem; font-weight: 800; cursor: pointer;
+    box-shadow: 0 10px 25px rgba(255, 127, 80, 0.4); transition: all 0.3s;
 }
-.btn-floating-primary:hover {
-    transform: translateY(-4px) scale(1.02); /* Efecto de elevación */
-    box-shadow: 0 15px 35px rgba(255, 127, 80, 0.5);
-}
-.btn-floating-primary:active { transform: translateY(-1px); }
+.btn-floating-primary:hover { transform: translateY(-4px) scale(1.02); box-shadow: 0 15px 35px rgba(255, 127, 80, 0.5); }
 
-/* Footer y Links */
 .forgot-pass { text-align: right; margin-bottom: 20px; }
-.forgot-pass a { color: #aaa; font-size: 0.9rem; text-decoration: none; font-weight: 600; transition: 0.2s; }
+.forgot-pass a { color: #888; font-size: 0.9rem; text-decoration: none; font-weight: 600; transition: 0.2s; }
 .forgot-pass a:hover { color: var(--color-primary); }
-
-.auth-footer-modern { text-align: center; margin-top: 2rem; font-size: 1rem; color: #777; }
+.auth-footer-modern { text-align: center; margin-top: 2rem; font-size: 1rem; color: #666; }
 .auth-footer-modern span { color: var(--color-primary); font-weight: 800; cursor: pointer; margin-left: 5px; transition: 0.2s; }
 .auth-footer-modern span:hover { text-decoration: underline; color: #e67e22; }
 
-/* Estilos extra para sección IA */
 .ia-data-container { background: rgba(255,255,255,0.5); padding: 15px; border-radius: 20px; margin-bottom: 15px; border: 1px dashed #ddd; }
-.ia-label { display: block; font-size: 0.8rem; font-weight: 800; color: #aaa; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+.ia-label { display: block; font-size: 0.8rem; font-weight: 800; color: #999; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
 .ia-inputs-row { display: flex; gap: 10px; }
-.input-wrapper-floating.small input { padding: 12px 12px 12px 40px; font-size: 0.9rem; }
-
-/* Responsive */
-@media (max-width: 900px) {
-    .login-split-screen { flex-direction: column; overflow-y: auto; }
-    .login-banner { display: none; }
-    .login-form-container { background: white; align-items: flex-start; padding-top: 4rem; }
-    .auth-card-glass { box-shadow: none; background: transparent; border: none; padding: 0; }
-}
-
 
 
 /* =========================================
-   PANTALLA DE SELECCIÓN DE FAMILIA (LIGHT & FRESH)
+   SELECCIÓN DE FAMILIA
    ========================================= */
 
 .family-screen-bg {
     position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-    /* FONDO LUMINOSO: Imagen de cocina con capa blanca/naranja suave encima */
-    background: linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 240, 230, 0.9)),
-                url('https://images.unsplash.com/photo-1556910103-1c02745a30bf?q=80&w=2070&auto=format&fit=crop');
-    background-size: cover; background-position: center;
-    display: flex; align-items: center; justify-content: center;
-    z-index: 8000;
+    background: var(--bg-gradient);
+    display: flex; align-items: center; justify-content: center; z-index: 8000;
 }
 
-.family-content-wrapper {
-    width: 100%; max-width: 1000px; padding: 2rem;
-    text-align: center; color: var(--text-dark); /* Texto oscuro ahora */
-}
-
-.family-logo {
-    position: absolute; top: 40px; left: 50%; transform: translateX(-50%);
-    font-size: 2rem; font-weight: 800; letter-spacing: -1px; color: #444;
-}
+.family-content-wrapper { width: 100%; max-width: 1000px; padding: 2rem; text-align: center; color: var(--text-dark); }
+.family-logo { position: absolute; top: 40px; left: 50%; transform: translateX(-50%); font-size: 2rem; font-weight: 800; color: #333; }
 .family-logo span { color: var(--color-primary); }
+.family-title { font-size: 2.5rem; margin-bottom: 0.5rem; font-weight: 800; color: #1a1a1a; }
+.family-subtitle { font-size: 1.2rem; color: #555; margin-bottom: 3rem; font-weight: 500; }
 
-.family-title { font-size: 2.5rem; margin-bottom: 0.5rem; font-weight: 800; color: #333; }
-.family-subtitle { font-size: 1.2rem; color: #777; margin-bottom: 3rem; font-weight: 500; }
+.family-grid-modern { display: flex; flex-wrap: wrap; justify-content: center; gap: 25px; }
 
-/* GRID */
-.family-grid-modern {
-    display: flex; flex-wrap: wrap; justify-content: center; gap: 25px;
-}
-
-/* TARJETA GLASS (VERSION CLARA) */
 .family-card-glass {
-    background: white;
-    border: 1px solid #eee;
-    width: 220px; padding: 30px 20px;
-    border-radius: 24px;
-    cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-    display: flex; flex-direction: column; align-items: center; gap: 15px;
-    position: relative; overflow: hidden;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.05); /* Sombra muy suave */
+    background: rgba(255,255,255,0.8); backdrop-filter: blur(10px); 
+    border: 1px solid rgba(255,255,255,0.8); width: 220px; padding: 30px 20px;
+    border-radius: 24px; cursor: pointer; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    display: flex; flex-direction: column; align-items: center; gap: 15px; position: relative; overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
 }
+.family-card-glass:hover { transform: translateY(-8px); box-shadow: 0 20px 40px rgba(247, 178, 123, 0.2); border-color: var(--color-primary); background: white; }
+.icon-box { background: #FFF3E0; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--color-primary); }
+.role-badge { position: absolute; top: 12px; right: 12px; background: #FFEDD5; color: #F97316; font-size: 0.7rem; font-weight: 800; padding: 4px 10px; border-radius: 20px; }
 
-.family-card-glass:hover {
-    transform: translateY(-8px);
-    box-shadow: 0 20px 40px rgba(247, 178, 123, 0.2); /* Sombra naranja al flotar */
-    border-color: var(--color-primary);
-}
+.action-card .icon-box-dashed { width: 60px; height: 60px; border-radius: 50%; border: 2px dashed #ccc; display: flex; align-items: center; justify-content: center; color: #ccc; transition: 0.3s; }
+.action-card:hover .icon-box-dashed { border-color: var(--color-primary); color: var(--color-primary); background: #FFF3E0; }
 
-.icon-box {
-    background: #FFF3E0; width: 60px; height: 60px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    color: var(--color-primary);
-}
-
-.card-info h3 { margin: 0; font-size: 1.1rem; color: #333; font-weight: 700; }
-.card-info span { font-size: 0.85rem; color: #888; }
-
-.role-badge {
-    position: absolute; top: 12px; right: 12px;
-    background: #FFEDD5; color: #F97316;
-    font-size: 0.7rem; font-weight: 800; padding: 4px 10px; border-radius: 20px;
-}
-
-/* TARJETAS DE ACCIÓN (CREAR / UNIRSE) */
-.action-card .icon-box-dashed {
-    width: 60px; height: 60px; border-radius: 50%;
-    border: 2px dashed #ccc;
-    display: flex; align-items: center; justify-content: center; color: #ccc;
-    transition: 0.3s;
-}
-.action-card:hover .icon-box-dashed { 
-    border-color: var(--color-primary); 
-    color: var(--color-primary); 
-    background: #FFF3E0; 
-}
-
-/* FORMULARIOS FLOTANTES CLAROS */
 .form-container-glass {
-    background: rgba(255,255,255,0.9); backdrop-filter: blur(20px);
-    padding: 3rem; border-radius: 30px; max-width: 600px; margin: 0 auto;
-    border: 1px solid white;
+    background: rgba(255,255,255,0.9); backdrop-filter: blur(20px); padding: 3rem;
+    border-radius: 30px; max-width: 600px; margin: 0 auto; border: 1px solid rgba(255,255,255,0.5);
     box-shadow: 0 20px 60px rgba(0,0,0,0.1);
 }
-
-.form-container-glass h2 { color: #333; margin-top: 0; }
-.form-container-glass p { color: #666; }
-
-.btn-back {
-    background: transparent; border: none; color: #999;
-    display: flex; align-items: center; gap: 8px; font-size: 1rem; cursor: pointer;
-    margin-bottom: 20px; transition: 0.2s; font-weight: 600;
-}
+.btn-back { background: transparent; border: none; color: #888; display: flex; align-items: center; gap: 8px; font-size: 1rem; cursor: pointer; margin-bottom: 20px; font-weight: 600; }
 .btn-back:hover { color: var(--color-primary); transform: translateX(-5px); }
 
 .input-group-huge input {
-    width: 100%; background: transparent; border: none;
-    border-bottom: 2px solid #ddd;
-    font-size: 2rem; color: #333; padding: 15px 0;
-    text-align: center; outline: none; transition: 0.3s;
-    font-weight: 700;
+    width: 100%; background: transparent; border: none; border-bottom: 2px solid #ddd;
+    font-size: 2rem; color: #333; padding: 15px 0; text-align: center; outline: none; transition: 0.3s; font-weight: 700;
 }
 .input-group-huge input:focus { border-color: var(--color-primary); }
-.input-group-huge input::placeholder { color: #ddd; font-weight: 400; }
 
 .btn-confirm-huge {
-    margin-top: 2rem; background: var(--color-primary); color: white;
-    border: none; padding: 15px 40px; border-radius: 50px;
-    font-size: 1.1rem; font-weight: 800; cursor: pointer;
+    margin-top: 2rem; background: var(--color-primary); color: white; border: none;
+    padding: 15px 40px; border-radius: 50px; font-size: 1.1rem; font-weight: 800; cursor: pointer;
     display: flex; align-items: center; gap: 10px; margin-left: auto; margin-right: auto;
-    transition: 0.2s;
-    box-shadow: 0 10px 20px rgba(247, 178, 123, 0.4);
+    transition: 0.2s; box-shadow: 0 10px 20px rgba(247, 178, 123, 0.4);
 }
 .btn-confirm-huge:hover { transform: scale(1.05); box-shadow: 0 15px 30px rgba(247, 178, 123, 0.6); }
 
-.animate-fade-up { animation: fadeUp 0.5s ease-out; }
-@keyframes fadeUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+/* UTILIDADES */
+.auth-container { height: 100vh; width: 100%; display: flex; justify-content: center; align-items: center; }
+.auth-card { background: white; padding: 3rem; border-radius: var(--radius-lg); box-shadow: 0 20px 60px rgba(0,0,0,0.05); }
 
-/* Responsive */
-@media (max-width: 600px) {
-    .family-title { font-size: 1.8rem; }
-    .family-card-glass { width: 100%; flex-direction: row; padding: 20px; text-align: left; }
-    .icon-box, .action-card .icon-box-dashed { width: 50px; height: 50px; }
-    .role-badge { top: 50%; transform: translateY(-50%); }
+/* RESPONSIVE */
+@media (max-width: 900px) {
+    .app-container { padding-left: 0; display: block; } 
+    .sidebar-modern { display: none; }
+    .login-split-screen { flex-direction: column; overflow-y: auto; }
+    .login-banner { display: none; }
+    .login-form-container { background: white; align-items: flex-start; padding-top: 4rem; }
+    .auth-card-glass { box-shadow: none; background: transparent; border: none; padding: 0; }
+    .calendar-body, .calendar-header { grid-template-columns: 1fr; }
+    .calendar-header { display: none; }
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* MODAL DE DETALLE (MODERNO) */
+
+.recipe-hero-wrapper {
+    position: relative;
+    width: 100%;
+    height: 250px; 
+    border-radius: 20px;
+    overflow: hidden;
+    margin-bottom: 25px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1); 
+    border: 1px solid rgba(0,0,0,0.05);
+}
+
+.recipe-hero-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; 
+    transition: transform 0.5s ease;
+}
+
+.recipe-hero-wrapper:hover .recipe-hero-img {
+    transform: scale(1.05); 
+}
+
+.hero-badges-overlay {
+    position: absolute;
+    bottom: 15px;
+    left: 15px;
+    display: flex;
+    gap: 8px;
+    z-index: 2;
+}
+
+.detail-card-section {
+    background: #f8f9fa; 
+    padding: 20px;
+    border-radius: 18px;
+    height: 100%; 
+    border: 1px solid rgba(0,0,0,0.08); 
+}
+
+.detail-card-section h4 {
+    color: var(--color-primary);
+    margin-bottom: 15px;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 2px solid rgba(247, 178, 123, 0.2);
+    padding-bottom: 10px;
+    font-weight: 800;
+}
+
+.detail-list { list-style: none; padding: 0; margin: 0; }
+
+.detail-list li {
+    margin-bottom: 12px;
+    padding-left: 20px;
+    position: relative;
+    color: #444; 
+    line-height: 1.5;
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.detail-list li::before {
+    content: "•";
+    color: var(--color-primary);
+    font-weight: bold;
+    font-size: 1.2rem;
+    position: absolute;
+    left: 0;
+    top: -2px;
+}
+
+
+/* =========================================================
+   ESTILOS PARA EL WIDGET DE FAMILIA (CASA PLAYA)
+   (Compatible con tu Sidebar actual)
+   ========================================================= */
+
+/* 1. La tarjeta blanca contenedora */
+.family-widget {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 12px 16px;
+    margin-top: auto;      /* Empuja hacia abajo si hay espacio */
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05); /* Sombra suave */
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.family-widget:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+    border-color: rgba(0,0,0,0.05);
+}
+
+/* 2. El círculo rosado con la letra inicial */
+.family-avatar {
+    width: 42px;
+    height: 42px;
+    background-color: #FFE5D9; /* Fondo rosita/durazno */
+    color: #E67E22;            /* Letra naranja */
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 1.1rem;
+    flex-shrink: 0;            /* Para que no se aplaste */
+}
+
+/* 3. El texto del medio (Tu Espacio / Casa Playa) */
+.family-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1; /* Ocupa el espacio disponible */
+    overflow: hidden;
+}
+
+.family-info .label {
+    font-size: 0.7rem;
+    color: #999;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+    display: block;
+}
+
+.family-info h4 {
+    font-size: 0.95rem;
+    color: #1a1a1a;
+    font-weight: 800;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 4. El ícono de engranaje (settings) */
+.family-settings {
+    color: #b0b0b0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+}
+
+.family-widget:hover .family-settings {
+    color: #E67E22; /* Se pone naranja al pasar el mouse */
 }
