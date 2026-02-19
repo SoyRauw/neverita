@@ -15,9 +15,9 @@ const initialRecipes = [
 // --- COLORES SEGÚN COMIDA ---
 const getMealColor = (type) => {
     switch(type) {
-        case 'Desayuno': return '#f6b93b'; // Amarillo
-        case 'Almuerzo': return '#e55039'; // Rojo/Naranja
-        case 'Cena': return '#4a69bd';     // Azul
+        case 'Desayuno': return '#f6b93b'; 
+        case 'Almuerzo': return '#e55039'; 
+        case 'Cena': return '#4a69bd';     
         default: return '#95a5a6';
     }
 };
@@ -41,11 +41,6 @@ const Recipes = ({ onAddToPlanner }) => {
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (file) setNewRecipe({ ...newRecipe, img: URL.createObjectURL(file) });
-  };
-
-  const toggleSelection = (item, list, setList) => {
-    if (list.includes(item)) setList(list.filter(i => i !== item));
-    else setList([...list, item]);
   };
 
   const toggleNewRecipeCategory = (type) => {
@@ -75,28 +70,40 @@ const Recipes = ({ onAddToPlanner }) => {
     setNewRecipe({ name: "", cal: "", time: "", category: [], img: "", imgType: "url", ingredients: "", steps: "" });
   };
 
-  // Handler planificación
-  const [selectedDays, setSelectedDays] = useState([]);
-  const [selectedMeals, setSelectedMeals] = useState([]);
+  // --- LÓGICA DEL MINI-CALENDARIO (MODAL 3) ---
   const weekDays = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
   const mealTypes = ['Desayuno', 'Almuerzo', 'Cena'];
+  
+  // Guardará strings con el formato "dayIndex-mealType", ej: "0-Desayuno"
+  const [selectedSlots, setSelectedSlots] = useState([]);
+
+  const toggleSlot = (dayIndex, meal) => {
+      const slotKey = `${dayIndex}-${meal}`;
+      if (selectedSlots.includes(slotKey)) {
+          setSelectedSlots(selectedSlots.filter(key => key !== slotKey)); // Lo quita si ya estaba
+      } else {
+          setSelectedSlots([...selectedSlots, slotKey]); // Lo agrega si no estaba
+      }
+  };
 
   const handleConfirmPlan = () => {
-    if (selectedDays.length === 0 || selectedMeals.length === 0) return alert("Selecciona días y tipo de comida.");
-    selectedDays.forEach(day => {
-        const dayIndex = weekDays.indexOf(day);
-        selectedMeals.forEach(meal => {
-            onAddToPlanner(planRecipe, dayIndex, meal);
-        });
+    if (selectedSlots.length === 0) return alert("Selecciona al menos un espacio en el calendario.");
+    
+    // Iteramos sobre cada cuadrito seleccionado y lo mandamos al planificador principal
+    selectedSlots.forEach(slot => {
+        const [dayIndexStr, meal] = slot.split('-'); // Separa "0-Desayuno" en "0" y "Desayuno"
+        onAddToPlanner(planRecipe, parseInt(dayIndexStr, 10), meal);
     });
-    setPlanRecipe(null); setViewRecipe(null);
+    
+    setPlanRecipe(null); 
+    setViewRecipe(null);
   };
 
   const filtered = recipes.filter(r => r.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
     <div className="main-content">
-      {/* HEADER: Ahora usa clases globales */}
+      {/* HEADER */}
       <header>
         <div className="header-title">
             <h1>Mis Recetas</h1>
@@ -120,14 +127,13 @@ const Recipes = ({ onAddToPlanner }) => {
         </div>
       </header>
 
-      {/* GRID DE RECETAS (Usando las clases de index.css) */}
+      {/* GRID DE RECETAS */}
       <div className="recipes-grid">
         {filtered.map(recipe => (
           <div key={recipe.id} className="recipe-card" onClick={() => setViewRecipe(recipe)}>
             <img src={recipe.img || 'https://via.placeholder.com/400x200'} alt={recipe.name} className="recipe-img" />
             
             <div className="recipe-content">
-                {/* Badges de Categoría */}
                 <div className="recipe-badges">
                     {recipe.category.map(cat => (
                         <span key={cat} className="mini-badge" style={{background: getMealColor(cat)}}>
@@ -135,10 +141,7 @@ const Recipes = ({ onAddToPlanner }) => {
                         </span>
                     ))}
                 </div>
-
                 <h3 className="recipe-title">{recipe.name}</h3>
-                
-                {/* Estadísticas pequeñas */}
                 <div className="recipe-stats">
                     <div className="stat-item"><Fire weight="fill" color="#F7B27B"/> {recipe.cal} kcal</div>
                     <div className="stat-item"><Clock weight="fill" color="#F7B27B"/> {recipe.time}</div>
@@ -148,22 +151,19 @@ const Recipes = ({ onAddToPlanner }) => {
         ))}
       </div>
 
-      {/* --- MODAL 1: DETALLE DE RECETA (VERSIÓN PREMIUM ACTUALIZADA) --- */}
+      {/* --- MODAL 1: DETALLE DE RECETA --- */}
       {viewRecipe && (
         <div className="modal-overlay" onClick={() => setViewRecipe(null)}>
             <div className="modal-modern" onClick={e => e.stopPropagation()}>
                 
-                {/* Header limpio */}
                 <div className="modal-header">
                     <h3 style={{margin:0, fontSize:'1.6rem', fontWeight:800, color: '#2d3436'}}>{viewRecipe.name}</h3>
                     <button onClick={() => setViewRecipe(null)} className="btn-secondary" style={{padding:8, border:'none'}}><X size={24}/></button>
                 </div>
                 
                 <div className="modal-body">
-                    {/* IMAGEN HERO (Centrada y Grande) */}
                     <div className="recipe-hero-wrapper">
                         <img src={viewRecipe.img} className="recipe-hero-img" alt={viewRecipe.name}/>
-                        {/* Badges superpuestos en la imagen */}
                         <div className="hero-badges-overlay">
                             {viewRecipe.category.map(cat => (
                                 <span key={cat} className="mini-badge" style={{background: 'rgba(255,255,255,0.95)', color: getMealColor(cat), boxShadow: '0 4px 10px rgba(0,0,0,0.2)'}}>
@@ -173,7 +173,6 @@ const Recipes = ({ onAddToPlanner }) => {
                         </div>
                     </div>
                     
-                    {/* Barra de Estadísticas (Centrada) */}
                     <div style={{display:'flex', justifyContent: 'center', gap:30, marginBottom:30, padding: '10px 0', borderBottom: '1px dashed #eee'}}>
                         <span style={{display:'flex', alignItems:'center', gap:8, fontSize:'1rem', color:'#555', fontWeight:700}}>
                            <Fire weight="fill" color="#F7B27B" size={22}/> {viewRecipe.cal} kcal
@@ -183,9 +182,7 @@ const Recipes = ({ onAddToPlanner }) => {
                         </span>
                     </div>
 
-                    {/* Grid de Información (Tarjetas internas) */}
                     <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20}}>
-                        {/* Columna Ingredientes */}
                         <div className="detail-card-section">
                             <h4><ChefHat size={24} weight="duotone"/> Ingredientes</h4>
                             <ul className="detail-list">
@@ -193,7 +190,6 @@ const Recipes = ({ onAddToPlanner }) => {
                             </ul>
                         </div>
                         
-                        {/* Columna Pasos */}
                         <div className="detail-card-section">
                             <h4><ListNumbers size={24} weight="duotone"/> Pasos</h4>
                             <ol className="detail-list" style={{listStyle:'none', padding:0}}>
@@ -209,7 +205,10 @@ const Recipes = ({ onAddToPlanner }) => {
                 
                 <div className="modal-footer">
                     <button className="btn-secondary" onClick={() => setViewRecipe(null)}>Cerrar</button>
-                    <button className="btn-primary" onClick={() => { setPlanRecipe(viewRecipe); setSelectedDays([]); setSelectedMeals([]); }}>
+                    <button className="btn-primary" onClick={() => { 
+                        setPlanRecipe(viewRecipe); 
+                        setSelectedSlots([]); // Limpiamos la selección al abrir
+                    }}>
                         Planificar <ArrowRight weight="bold"/>
                     </button>
                 </div>
@@ -230,7 +229,7 @@ const Recipes = ({ onAddToPlanner }) => {
                 </div>
                 
                 <div className="modal-body">
-                    {/* Grid Inputs Superiores */}
+                    {/* ... (Todo el contenido de crear receta se mantiene igual) ... */}
                     <div style={{display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: 15, marginBottom: 20}}>
                         <div>
                             <label className="ia-label">Nombre del plato</label>
@@ -246,30 +245,23 @@ const Recipes = ({ onAddToPlanner }) => {
                         </div>
                     </div>
 
-                    {/* Selector Categorías */}
                     <div style={{marginBottom: 20}}>
                         <label className="ia-label">Categoría (Selección múltiple)</label>
                         <div className="chips-wrap">
                             {mealTypes.map(type => (
-                                <div 
-                                    key={type} 
-                                    className={`chip ${newRecipe.category.includes(type) ? 'active' : ''}`}
-                                    onClick={() => toggleNewRecipeCategory(type)}
-                                >
+                                <div key={type} className={`chip ${newRecipe.category.includes(type) ? 'active' : ''}`} onClick={() => toggleNewRecipeCategory(type)}>
                                     {type} {newRecipe.category.includes(type) && <Check weight="bold"/>}
                                 </div>
                             ))}
                         </div>
                     </div>
 
-                    {/* Imagen */}
                     <div style={{marginBottom: 20}}>
                         <label className="ia-label">Imagen</label>
                         <div style={{display:'flex', gap:10, marginBottom:10}}>
                              <button className={`btn-secondary ${newRecipe.imgType === 'url' ? 'active' : ''}`} style={{flex:1, borderColor: newRecipe.imgType === 'url' ? '#F7B27B' : '#ddd'}} onClick={() => setNewRecipe({...newRecipe, imgType: 'url'})}>Enlace URL</button>
                              <button className={`btn-secondary ${newRecipe.imgType === 'upload' ? 'active' : ''}`} style={{flex:1, borderColor: newRecipe.imgType === 'upload' ? '#F7B27B' : '#ddd'}} onClick={() => setNewRecipe({...newRecipe, imgType: 'upload'})}>Subir Archivo</button>
                         </div>
-                        
                         {newRecipe.imgType === 'url' ? (
                             <input className="form-input" placeholder="https://..." value={newRecipe.img} onChange={e => setNewRecipe({...newRecipe, img: e.target.value})} />
                         ) : (
@@ -277,7 +269,6 @@ const Recipes = ({ onAddToPlanner }) => {
                         )}
                     </div>
 
-                    {/* Ingredientes y Pasos */}
                     <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20}}>
                         <div>
                             <label className="ia-label">Ingredientes (Uno por línea)</label>
@@ -298,39 +289,89 @@ const Recipes = ({ onAddToPlanner }) => {
         </div>
       )}
 
-      {/* --- MODAL 3: PLANIFICAR --- */}
+      {/* --- MODAL 3: PLANIFICAR TIPO CINE (MINI-GRID) --- */}
       {planRecipe && (
         <div className="modal-overlay" onClick={() => setPlanRecipe(null)}>
-            <div className="modal-modern" style={{maxWidth:500}} onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                    <div>
-                        <h3 style={{margin:0, fontWeight:800}}>Añadir al Plan</h3>
-                        <p style={{margin:0, color:'#888', fontSize:'0.9rem'}}>{planRecipe.name}</p>
+            <div className="modal-modern" style={{maxWidth: 600}} onClick={e => e.stopPropagation()}>
+                
+                <div className="modal-header" style={{ borderBottom: '1px solid #eee', paddingBottom: 15, marginBottom: 20 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 15 }}>
+                        <img src={planRecipe.img} alt={planRecipe.name} style={{ width: 50, height: 50, borderRadius: 10, objectFit: 'cover' }} />
+                        <div>
+                            <h3 style={{margin:0, fontSize:'1.3rem', fontWeight:800, color: '#2d3436'}}>Planificar Plato</h3>
+                            <p style={{margin:0, color:'#888', fontSize:'0.9rem'}}>Toca las casillas donde quieres comer <span style={{color: '#F7B27B', fontWeight: 600}}>{planRecipe.name}</span></p>
+                        </div>
                     </div>
-                    <button onClick={() => setPlanRecipe(null)} className="btn-secondary" style={{padding:8, border:'none'}}><X size={24}/></button>
+                    <button onClick={() => setPlanRecipe(null)} className="btn-secondary" style={{padding:8, border:'none', alignSelf: 'flex-start'}}><X size={24}/></button>
                 </div>
-                <div className="modal-body">
-                    <label className="ia-label" style={{marginTop: 10}}>Selecciona los Días</label>
-                    <div className="chips-wrap" style={{marginBottom:25}}>
+                
+                <div className="modal-body" style={{ overflowX: 'auto', paddingBottom: '10px' }}>
+                    {/* MINI CALENDARIO */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '70px repeat(7, 1fr)', gap: 8, minWidth: '450px' }}>
+                        
+                        {/* Esquina superior izquierda vacía */}
+                        <div></div>
+                        
+                        {/* Cabecera de Días */}
                         {weekDays.map(d => (
-                            <div key={d} className={`chip ${selectedDays.includes(d) ? 'active' : ''}`} onClick={() => toggleSelection(d, selectedDays, setSelectedDays)}>
-                                {d.substring(0, 3)} {selectedDays.includes(d) && <Check weight="bold"/>}
+                            <div key={d} style={{ textAlign: 'center', fontSize: '0.75rem', fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase' }}>
+                                {d.substring(0, 3)}
                             </div>
                         ))}
-                    </div>
-                    
-                    <label className="ia-label">Selecciona la Comida</label>
-                    <div className="chips-wrap">
-                        {mealTypes.map(type => (
-                            <div key={type} className={`chip ${selectedMeals.includes(type) ? 'active' : ''}`} onClick={() => toggleSelection(type, selectedMeals, setSelectedMeals)}>
-                                {type} {selectedMeals.includes(type) && <Check weight="bold"/>}
-                            </div>
+
+                        {/* Filas del Calendario */}
+                        {mealTypes.map(meal => (
+                            <React.Fragment key={meal}>
+                                {/* Nombre de la comida (Columna izquierda) */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', fontSize: '0.85rem', fontWeight: 700, color: '#4a5568', paddingRight: 8 }}>
+                                    {meal}
+                                </div>
+                                
+                                {/* Casillas (Asientos) */}
+                                {weekDays.map((_, dayIndex) => {
+                                    const slotKey = `${dayIndex}-${meal}`;
+                                    const isSelected = selectedSlots.includes(slotKey);
+                                    
+                                    return (
+                                        <div 
+                                            key={slotKey}
+                                            onClick={() => toggleSlot(dayIndex, meal)}
+                                            style={{
+                                                aspectRatio: '1',
+                                                borderRadius: '8px',
+                                                border: isSelected ? '2px solid #F7B27B' : '2px dashed #cbd5e1',
+                                                backgroundColor: isSelected ? '#fffaf5' : '#f8fafc',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                transition: 'all 0.15s ease',
+                                                transform: isSelected ? 'scale(0.95)' : 'scale(1)'
+                                            }}
+                                        >
+                                            {isSelected ? (
+                                                <Check weight="bold" color="#F7B27B" size={20}/>
+                                            ) : (
+                                                <Plus weight="bold" color="#cbd5e1" size={16}/>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </React.Fragment>
                         ))}
                     </div>
                 </div>
-                <div className="modal-footer">
+                
+                <div className="modal-footer" style={{ borderTop: '1px solid #eee', paddingTop: 20, marginTop: 10 }}>
                     <button className="btn-secondary" onClick={() => setPlanRecipe(null)}>Cancelar</button>
-                    <button className="btn-primary" onClick={handleConfirmPlan}>Confirmar</button>
+                    <button 
+                        className="btn-primary" 
+                        onClick={handleConfirmPlan} 
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: selectedSlots.length === 0 ? 0.5 : 1, cursor: selectedSlots.length === 0 ? 'not-allowed' : 'pointer' }}
+                        disabled={selectedSlots.length === 0}
+                    >
+                        Confirmar Ubicaciones <Check weight="bold"/>
+                    </button>
                 </div>
             </div>
         </div>
