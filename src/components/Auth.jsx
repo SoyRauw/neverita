@@ -41,10 +41,10 @@ const Auth = ({ onLogin }) => {
                             /* LOGIN */
                             <>
                                 <div className="form-group-floating">
-                                    <label>Email</label>
+                                    <label>Nombre de Usuario</label>
                                     <div className="input-wrapper-floating">
                                         <User size={20} className="input-icon-floating"/>
-                                        <input type="email" placeholder="hola@ejemplo.com" required />
+                                        <input type="text" placeholder="Ej: jperez" required />
                                     </div>
                                 </div>
                                 <div className="form-group-floating">
@@ -65,18 +65,18 @@ const Auth = ({ onLogin }) => {
                             /* REGISTRO */
                             <>
                                 <div className="form-group-floating">
-                                    <label>Nombre</label>
+                                    <label>Nombre Completo</label>
                                     <div className="input-wrapper-floating">
                                         <User size={20} className="input-icon-floating"/>
-                                        <input type="text" placeholder="Tu nombre" />
+                                        <input type="text" placeholder="Tu nombre" required />
                                     </div>
                                 </div>
                                 
                                 <div className="form-group-floating">
-                                    <label>Email</label>
+                                    <label>Nombre de Usuario</label>
                                     <div className="input-wrapper-floating">
                                         <User size={20} className="input-icon-floating"/>
-                                        <input type="email" placeholder="hola@ejemplo.com" required />
+                                        <input type="text" placeholder="Crea tu usuario (Ej: jperez)" required />
                                     </div>
                                 </div>
 

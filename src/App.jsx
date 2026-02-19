@@ -10,6 +10,7 @@ import Recipes from './components/Recipes';
 import Auth from './components/Auth';           
 import FamilySelect from './components/FamilySelect'; 
 import FamilyManager from './components/FamilyManager'; 
+import ShoppingList from './components/ShoppingList';
 
 // --- ESTILOS CSS INYECTADOS (MODAL MODERNO) ---
 const modalStyles = `
@@ -82,20 +83,13 @@ const modalStyles = `
   @keyframes slideUp { from { opacity: 0; transform: translateY(20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
 `;
 
-// --- COMPONENTE DUMMY SHOPPING LIST ---
-const ShoppingList = () => (
-    <div className="main-content">
-        <header><h1><ShoppingCart size={32}/> Lista de Compras</h1></header>
-        <div style={{padding: '20px', color: '#666'}}>Tu lista de compras aparecerá aquí.</div>
-    </div>
-);
-
 // ==========================================
 // PÁGINA DEL PLANIFICADOR
 // ==========================================
 const PlannerPage = ({ userProfile, plannerData, setPlannerData }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [selectedMealDetails, setSelectedMealDetails] = useState(null);
   
   // --- ESTADOS DE LA IA ---
   const [prompt, setPrompt] = useState("");
@@ -106,14 +100,14 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData }) => {
   // Estados de selección (Arrays para permitir múltiple selección)
   const [selectedIngredients, setSelectedIngredients] = useState([]);
   const [selectedDays, setSelectedDays] = useState(['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']);
-  const [selectedMeals, setSelectedMeals] = useState(['Almuerzo', 'Cena']); // Por defecto 2, pero puedes elegir 1, 2 o 3.
+  const [selectedMeals, setSelectedMeals] = useState(['Almuerzo', 'Cena']);
 
-  // Función genérica para añadir/quitar elementos de una lista (Multi-select)
+  // Función genérica para añadir/quitar elementos de una lista
   const toggleSelection = (item, list, setList) => {
     if (list.includes(item)) {
-        setList(list.filter(i => i !== item)); // Si ya está, lo quita
+        setList(list.filter(i => i !== item));
     } else {
-        setList([...list, item]); // Si no está, lo añade
+        setList([...list, item]);
     }
   };
 
@@ -128,22 +122,20 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData }) => {
     setTimeout(() => {
       const newMenu = { ...plannerData }; 
       
+      // Platos de demo enriquecidos con ingredientes, pasos y tiempo
       const demoDishes = [
-        { name: "Bowl de Pollo", cal: 450, img: "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=400" },
-        { name: "Pasta Carbonara", cal: 550, img: "https://images.unsplash.com/photo-1612874742237-6526221588e3?w=400" },
-        { name: "Ensalada César", cal: 300, img: "https://images.unsplash.com/photo-1550304943-4f24f54ddde9?w=400" },
-        { name: "Tacos de Pescado", cal: 380, img: "https://images.unsplash.com/photo-1512838243147-84b35363d3db?w=400" },
-        { name: "Salmón al Horno", cal: 420, img: "https://images.unsplash.com/photo-1467003909585-2f8a7270028d?w=400" },
-        { name: "Tortilla Francesa", cal: 250, img: "https://images.unsplash.com/photo-1587339144367-f1cacbecac82?w=400" },
-        { name: "Tostadas Aguacate", cal: 320, img: "https://images.unsplash.com/photo-1588137372308-15f75323ca8d?w=400" },
-        { name: "Pancakes de Avena", cal: 380, img: "https://images.unsplash.com/photo-1506084868230-bb9d95c24759?w=400" }
+        { name: "Bowl de Pollo", cal: 450, time: "25 min", img: "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=400", ingredients: ["Pollo desmenuzado", "Arroz integral", "Aguacate", "Tomate cherry", "Maíz"], steps: ["Cocinar el arroz.", "Asar el pollo a la plancha.", "Cortar los vegetales.", "Mezclar todo en un bowl."] },
+        { name: "Pasta Carbonara", cal: 550, time: "20 min", img: "https://images.unsplash.com/photo-1612874742237-6526221588e3?w=400", ingredients: ["Pasta (Spaghetti)", "Panceta o Bacon", "Huevos", "Queso Parmesano", "Pimienta negra"], steps: ["Hervir la pasta.", "Freír la panceta.", "Batir yemas con queso.", "Mezclar pasta caliente con huevo y panceta fuera del fuego."] },
+        { name: "Ensalada César", cal: 300, time: "15 min", img: "https://images.unsplash.com/photo-1550304943-4f24f54ddde9?w=400", ingredients: ["Lechuga romana", "Pollo a la parrilla", "Crutones", "Queso Parmesano", "Aderezo César"], steps: ["Lavar y cortar lechuga.", "Añadir pollo troceado.", "Espolvorear queso y crutones.", "Bañar con aderezo."] },
+        { name: "Tacos de Pescado", cal: 380, time: "30 min", img: "https://images.unsplash.com/photo-1512838243147-84b35363d3db?w=400", ingredients: ["Pescado blanco", "Tortillas de maíz", "Col picada", "Pico de gallo", "Salsa de yogur"], steps: ["Marinar el pescado.", "Cocinar a la plancha.", "Calentar tortillas.", "Servir el pescado con col y salsa."] },
+        { name: "Salmón al Horno", cal: 420, time: "35 min", img: "https://images.unsplash.com/photo-1467003909585-2f8a7270028d?w=400", ingredients: ["Filete de salmón", "Espárragos", "Limón", "Aceite de oliva", "Ajo"], steps: ["Precalentar horno a 200°C.", "Colocar salmón y espárragos en bandeja.", "Aliñar con limón, aceite y ajo.", "Hornear por 20 min."] },
+        { name: "Tortilla Francesa", cal: 250, time: "10 min", img: "https://images.unsplash.com/photo-1587339144367-f1cacbecac82?w=400", ingredients: ["3 Huevos", "Sal y pimienta", "Aceite o mantequilla", "Queso (opcional)"], steps: ["Batir los huevos con sal.", "Calentar sartén con aceite.", "Verter huevos y cocinar 2 min por lado.", "Rellenar con queso y doblar."] },
+        { name: "Tostadas Aguacate", cal: 320, time: "5 min", img: "https://images.unsplash.com/photo-1588137372308-15f75323ca8d?w=400", ingredients: ["Pan integral", "1 Aguacate", "Salmón ahumado (opcional)", "Semillas de sésamo"], steps: ["Tostar el pan.", "Hacer puré el aguacate y untar.", "Colocar salmón encima.", "Espolvorear semillas."] },
+        { name: "Pancakes de Avena", cal: 380, time: "15 min", img: "https://images.unsplash.com/photo-1506084868230-bb9d95c24759?w=400", ingredients: ["Avena en hojuelas", "1 Banana", "1 Huevo", "Chorrito de leche", "Miel"], steps: ["Licuar avena, banana, huevo y leche.", "Verter porciones en sartén caliente.", "Cocinar 2 min por lado.", "Servir con miel."] }
       ];
 
-      // BUCLE DE GENERACIÓN: 
-      // Recorre CADA día seleccionado Y CADA tipo de comida seleccionado.
       weekDays.forEach((d, dayIndex) => {
           if (selectedDays.includes(d)) {
-              // Aquí ocurre la magia: si elegiste las 3, entra 3 veces. Si elegiste 1, entra 1 vez.
               selectedMeals.forEach(type => {
                   const key = `${dayIndex}-${type}`;
                   newMenu[key] = demoDishes[Math.floor(Math.random() * demoDishes.length)];
@@ -173,7 +165,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData }) => {
             </div>
         </header>
 
-        {/* --- MODAL MODERNO --- */}
+        {/* --- MODAL MODERNO DE GENERACIÓN IA --- */}
         {showModal && (
             <div className="modal-overlay" onClick={() => setShowModal(false)}>
                 <div className="modal-modern" onClick={e => e.stopPropagation()}>
@@ -231,7 +223,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData }) => {
                             ))}
                         </div>
 
-                        {/* 4. Tipos de Comida (AQUÍ ESTÁ LA LÓGICA FLEXIBLE) */}
+                        {/* 4. Tipos de Comida */}
                         <div className="section-title"><Coffee weight="fill" color="#FF9F43"/> ¿Qué comidas del día?</div>
                         <p style={{fontSize:'0.8rem', color:'#888', marginBottom:'10px'}}>Selecciona una, dos o las tres.</p>
                         <div className="chips-container">
@@ -242,7 +234,6 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData }) => {
                                     onClick={() => toggleSelection(type, selectedMeals, setSelectedMeals)}
                                 >
                                     {type}
-                                    {/* El check visual confirma que está seleccionado */}
                                     {selectedMeals.includes(type) && <Check size={14} weight="bold"/>}
                                 </div>
                             ))}
@@ -256,7 +247,71 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData }) => {
                             Generar Menú <Sparkle weight="fill" />
                         </button>
                     </div>
+                </div>
+            </div>
+        )}
 
+        {/* --- MODAL DETALLE DEL PLATO (SOLO LECTURA) --- */}
+        {selectedMealDetails && (
+            <div className="modal-overlay" onClick={() => setSelectedMealDetails(null)}>
+                <div className="modal-modern" onClick={e => e.stopPropagation()} style={{ padding: 0, maxWidth: '650px' }}>
+                    
+                    {/* Cabecera con Imagen */}
+                    <div style={{ position: 'relative', height: '220px' }}>
+                        <img src={selectedMealDetails.img} alt={selectedMealDetails.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        
+                        {/* Botón Cerrar Flotante */}
+                        <button onClick={() => setSelectedMealDetails(null)} style={{ position: 'absolute', top: '15px', right: '15px', background: 'white', border: 'none', borderRadius: '50%', width: '36px', height: '36px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+                            <X size={20} weight="bold" color="#4B5563" />
+                        </button>
+                        
+                        {/* Píldora de Kcal y Tiempo */}
+                        <div style={{ position: 'absolute', bottom: '-20px', left: '50%', transform: 'translateX(-50%)', background: 'white', padding: '10px 24px', borderRadius: '50px', display: 'flex', gap: '20px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', whiteSpace: 'nowrap' }}>
+                            <span style={{ fontWeight: '700', color: '#4B5563', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap:'6px' }}>🔥 {selectedMealDetails.cal || 'N/A'} kcal</span>
+                            <span style={{ fontWeight: '700', color: '#4B5563', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap:'6px' }}>⏱️ {selectedMealDetails.time || '30 min'}</span>
+                        </div>
+                    </div>
+
+                    {/* Contenido: Ingredientes y Pasos */}
+                    <div className="modal-scroll-content" style={{ padding: '45px 30px 30px', marginTop: '10px' }}>
+                        <h2 style={{ textAlign: 'center', marginTop: 0, color: '#1F2937', fontSize: '1.8rem', fontWeight: '800' }}>{selectedMealDetails.name}</h2>
+                        
+                        <div style={{ display: 'flex', gap: '24px', marginTop: '24px', flexWrap: 'wrap' }}>
+                            
+                            {/* Caja Ingredientes */}
+                            <div style={{ flex: 1, minWidth: '220px', background: '#F9FAFB', padding: '24px', borderRadius: '20px', border: '1px solid #F3F4F6' }}>
+                                <h3 style={{ fontSize: '1.15rem', color: '#FF9F43', display: 'flex', alignItems: 'center', gap: '10px', marginTop: 0, marginBottom: '16px' }}>
+                                    <ChefHat weight="fill" size={24}/> Ingredientes
+                                </h3>
+                                <ul style={{ paddingLeft: '20px', color: '#4B5563', lineHeight: '1.8', margin: 0, fontSize: '1rem' }}>
+                                    {selectedMealDetails.ingredients ? 
+                                        selectedMealDetails.ingredients.map((ing, i) => <li key={i}>{ing}</li>) 
+                                        : <li style={{ color: '#9CA3AF' }}>No hay ingredientes detallados para este plato.</li>
+                                    }
+                                </ul>
+                            </div>
+
+                            {/* Caja Pasos */}
+                            <div style={{ flex: 1, minWidth: '220px', background: '#F9FAFB', padding: '24px', borderRadius: '20px', border: '1px solid #F3F4F6' }}>
+                                <h3 style={{ fontSize: '1.15rem', color: '#FF9F43', display: 'flex', alignItems: 'center', gap: '10px', marginTop: 0, marginBottom: '16px' }}>
+                                    <Check weight="bold" size={24}/> Pasos
+                                </h3>
+                                <ol style={{ paddingLeft: '20px', color: '#4B5563', lineHeight: '1.8', margin: 0, fontSize: '1rem' }}>
+                                    {selectedMealDetails.steps ? 
+                                        selectedMealDetails.steps.map((step, i) => <li key={i} style={{marginBottom: '8px'}}>{step}</li>)
+                                        : <li style={{ color: '#9CA3AF' }}>No hay instrucciones para este plato.</li>
+                                    }
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Footer Solo de Cierre */}
+                    <div className="modal-footer-modern" style={{ justifyContent: 'center', padding: '20px', background: '#F9FAFB' }}>
+                        <button className="btn-cancel" onClick={() => setSelectedMealDetails(null)} style={{ width: '100%', maxWidth: '250px', background: 'white', border: '2px solid #E5E7EB' }}>
+                            Cerrar
+                        </button>
+                    </div>
                 </div>
             </div>
         )}
@@ -266,7 +321,8 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData }) => {
                 <div style={{width:100}}></div>
                 {weekDays.map(d => <div key={d} className="day-label">{d}</div>)}
             </div>
-            <CalendarGrid data={plannerData} />
+            {/* AQUÍ SE PASA LA FUNCIÓN AL CALENDARIO */}
+            <CalendarGrid data={plannerData} onMealClick={setSelectedMealDetails} />
         </div>
     </div>
   );
@@ -310,8 +366,9 @@ function App() {
       setShowFamilyManager(false);
   };
 
+  // Función actualizada para guardar el objeto receta COMPLETO
   const handleAddToPlanner = (recipe, dayIndex, mealType) => {
-      setPlannerData(prev => ({ ...prev, [`${dayIndex}-${mealType}`]: { name: recipe.name, cal: recipe.cal || 0, img: recipe.img } }));
+      setPlannerData(prev => ({ ...prev, [`${dayIndex}-${mealType}`]: recipe }));
       alert(`¡${recipe.name} añadido!`);
   };
 
