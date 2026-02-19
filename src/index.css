@@ -740,3 +740,136 @@ header {
 .family-widget:hover .family-settings {
     color: #E67E22; /* Se pone naranja al pasar el mouse */
 }
+
+
+/* =========================================
+   LISTA DE COMPRAS
+   ========================================= */
+.shopping-container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+/* Tarjeta para agregar nuevo item */
+.shopping-add-card {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(10px);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    margin-bottom: 30px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+    border: 1px solid rgba(0,0,0,0.05);
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.shopping-add-card input {
+    flex: 1;
+    min-width: 150px;
+    padding: 14px 16px;
+    border: 1px solid rgba(0,0,0,0.1);
+    border-radius: 12px;
+    outline: none;
+    font-size: 0.95rem;
+    background: #fdfdfd;
+    transition: 0.2s;
+}
+
+.shopping-add-card input:focus {
+    border-color: var(--color-primary);
+    background: white;
+    box-shadow: 0 0 0 3px rgba(247, 178, 123, 0.2);
+}
+
+.shopping-add-card input[type="number"] {
+    flex: 0 0 120px; /* Hace que el campo de cantidad sea más pequeño */
+}
+
+/* Lista y elementos */
+.shopping-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.shopping-item {
+    background: white;
+    border-radius: 16px;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.02);
+    border: 1px solid rgba(0,0,0,0.05);
+    transition: transform 0.2s;
+}
+
+.shopping-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+}
+
+.item-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.item-qty {
+    background: #FFE5D9;
+    color: #E67E22;
+    font-weight: 800;
+    width: 45px;
+    height: 45px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    font-size: 1.1rem;
+}
+
+.item-name {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--text-dark);
+}
+
+/* Botones de acción */
+.item-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 700;
+    font-size: 0.8rem;
+}
+
+.btn-check { background: #E8F5E9; color: #2E7D32; }
+.btn-check:hover { background: #C8E6C9; transform: scale(1.05); }
+
+.btn-partial { background: #FFF3E0; color: #EF6C00; }
+.btn-partial:hover { background: #FFE0B2; transform: scale(1.05); }
+
+.btn-delete { background: #FFEBEE; color: #C62828; }
+.btn-delete:hover { background: #FFCDD2; transform: scale(1.05); }
+
+/* Modal simplificado para compra parcial */
+.close-modal-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #999;
+}
+.close-modal-btn:hover { color: #333; }

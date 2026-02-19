@@ -1,8 +1,8 @@
 import React from 'react';
 import { Plus } from '@phosphor-icons/react';
 
-// Recibimos "data" como propiedad (prop) desde App.jsx
-const CalendarGrid = ({ data }) => {
+// Recibimos "data" y la nueva función "onMealClick" como props desde App.jsx
+const CalendarGrid = ({ data, onMealClick }) => {
     const mealTypes = ['Desayuno', 'Almuerzo', 'Cena'];
     const days = Array(7).fill(null);
 
@@ -23,12 +23,17 @@ const CalendarGrid = ({ data }) => {
                             <div 
                                 key={mealKey} 
                                 className="meal-card" 
-                                // Si hay comida, quitamos el borde y padding para que la foto se vea limpia
-                                style={meal ? { border: 'none', padding: 0, overflow: 'hidden' } : {}}
+                                // Si hay comida, quitamos el borde, padding, y agregamos cursor pointer
+                                style={meal ? { border: 'none', padding: 0, overflow: 'hidden', cursor: 'pointer' } : {}}
+                                // AQUÍ ACTIVAMOS EL CLICK PARA ABRIR EL MODAL:
+                                onClick={() => {
+                                    if (meal && onMealClick) {
+                                        onMealClick(meal);
+                                    }
+                                }}
                             >
                                 {meal ? (
                                     // OPCIÓN A: HAY RECETA
-                                    // Solo mostramos la imagen ocupando todo el espacio
                                     <img 
                                         src={meal.img} 
                                         alt={meal.name}
@@ -42,7 +47,6 @@ const CalendarGrid = ({ data }) => {
                                     />
                                 ) : (
                                     // OPCIÓN B: ESTÁ VACÍO
-                                    // Mostramos el contenedor con el icono +
                                     <div className="empty-state">
                                         {/* Usamos un gris muy claro (#e5e7eb) para que sea sutil */}
                                         <Plus size={32} color="#e5e7eb" weight="bold" />
