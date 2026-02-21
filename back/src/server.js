@@ -19,7 +19,8 @@ dotenv.config();
 const app = express();
 
 app.use(cors({
-  origin: ['http://127.0.0.1:5500', 'http://localhost:5500', 'http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:5173'],
+  // Permite todas las URLs para que no tengas problemas al probar en otros dispositivos (o puedes especificar el arreglo con dominios exactos)
+  origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
