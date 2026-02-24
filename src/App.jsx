@@ -11,7 +11,7 @@ import Auth from './components/Auth';
 import FamilySelect from './components/FamilySelect';
 import FamilyManager from './components/FamilyManager';
 import ShoppingList from './components/ShoppingList';
-import { familiesService } from './api';
+import { familiesService, menuPlansService, dailyMealsService } from './api';
 
 // --- ESTILOS CSS INYECTADOS (MODAL MODERNO) ---
 const modalStyles = `
@@ -406,11 +406,90 @@ function App() {
     };
 
     const [plannerData, setPlannerData] = useState({});
+    const [currentMenuPlan, setCurrentMenuPlan] = useState(null);
 
-    // Función actualizada para guardar el objeto receta COMPLETO
-    const handleAddToPlanner = (recipe, dayIndex, mealType) => {
-        setPlannerData(prev => ({ ...prev, [`${dayIndex}-${mealType}`]: recipe }));
-        alert(`¡${recipe.name} añadido!`);
+    // Mapeo entre índice de día (0=Lunes) y el enum de la BD
+    const DAY_ENUM = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+    const MEAL_ENUM = { 'Desayuno': 'desayuno', 'Almuerzo': 'almuerzo', 'Cena': 'cena' };
+    const MEAL_ENUM_REV = { 'desayuno': 'Desayuno', 'almuerzo': 'Almuerzo', 'cena': 'Cena' };
+
+    // Cargar o crear el menu_plan y sus daily_meals cuando se selecciona una familia
+    useEffect(() => {
+        if (!currentFamily || !userProfile?.user_id) return;
+
+        const loadMenuPlan = async () => {
+            try {
+                // 1. Buscar si ya existe un plan para este usuario
+                const plans = await menuPlansService.getByUser(userProfile.user_id);
+                let plan = plans[0]; // Tomar el más reciente
+
+                // 2. Si no existe, crear uno nuevo
+                if (!plan) {
+                    plan = await menuPlansService.create({
+                        plan_name: `Menú de ${currentFamily.name}`,
+                        start_date: new Date().toISOString().split('T')[0],
+                        created_by: userProfile.user_id,
+                    });
+                }
+                setCurrentMenuPlan(plan);
+
+                // 3. Cargar los daily_meals de ese plan
+                const meals = await dailyMealsService.getByPlan(plan.menu_plan_id);
+
+                // 4. Reconstruir plannerData a partir de los daily_meals
+                const rebuilt = {};
+                for (const meal of meals) {
+                    const dayIndex = DAY_ENUM.indexOf(meal.day_of_week);
+                    const mealType = MEAL_ENUM_REV[meal.meal_type];
+                    if (dayIndex === -1 || !mealType) continue;
+                    const key = `${dayIndex}-${mealType}`;
+                    rebuilt[key] = {
+                        daily_meal_id: meal.daily_meal_id,
+                        recipe_id: meal.recipe_id,
+                        name: meal.title,
+                        cal: meal.calories_per_serving,
+                        time: meal.preparation_time ? `${meal.preparation_time} min` : 'N/A',
+                        img: meal.image_url || 'https://images.unsplash.com/photo-1546554137-f86b9593a222?w=400',
+                        ingredients: [],
+                        steps: meal.instructions ? meal.instructions.split('\n').filter(Boolean) : [],
+                        description: meal.description || '',
+                        category: ['Almuerzo'],
+                    };
+                }
+                setPlannerData(rebuilt);
+            } catch (err) {
+                console.error('Error cargando el menú semanal:', err);
+            }
+        };
+
+        loadMenuPlan();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentFamily]);
+
+    // Guardar en BD cuando se asigna una receta al planificador
+    const handleAddToPlanner = async (recipe, dayIndex, mealType) => {
+        const key = `${dayIndex}-${mealType}`;
+        // Actualizar UI inmediatamente (optimistic update)
+        setPlannerData(prev => ({ ...prev, [key]: recipe }));
+
+        // Guardar en BD si hay un plan activo
+        if (currentMenuPlan) {
+            try {
+                const saved = await dailyMealsService.save({
+                    menu_plan_id: currentMenuPlan.menu_plan_id,
+                    recipe_id: recipe.recipe_id || recipe.id,
+                    meal_type: MEAL_ENUM[mealType] || mealType.toLowerCase(),
+                    day_of_week: DAY_ENUM[dayIndex],
+                });
+                // Guardar el daily_meal_id para poder eliminar después si se necesita
+                setPlannerData(prev => ({
+                    ...prev,
+                    [key]: { ...prev[key], daily_meal_id: saved.daily_meal_id },
+                }));
+            } catch (err) {
+                console.error('Error guardando en el menú:', err);
+            }
+        }
     };
 
     if (!isAuthenticated) return <Auth onLogin={handleLogin} />;
@@ -438,9 +517,9 @@ function App() {
                 )}
 
                 <Routes>
-                    <Route path="/" element={<PlannerPage userProfile={userProfile} plannerData={plannerData} setPlannerData={setPlannerData} />} />
-                    <Route path="/recipes" element={<Recipes onAddToPlanner={handleAddToPlanner} />} />
-                    <Route path="/inventory" element={<Inventory />} />
+                    <Route path="/" element={<PlannerPage userProfile={userProfile} plannerData={plannerData} setPlannerData={setPlannerData} currentMenuPlan={currentMenuPlan} />} />
+                    <Route path="/recipes" element={<Recipes onAddToPlanner={handleAddToPlanner} currentFamily={currentFamily} userProfile={userProfile} />} />
+                    <Route path="/inventory" element={<Inventory currentFamily={currentFamily} />} />
                     <Route path="/shopping-list" element={<ShoppingList />} />
                 </Routes>
             </div>

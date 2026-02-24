@@ -3,9 +3,17 @@ import { db } from '../db.js';
 
 export const router = express.Router();
 
+// GET /menu-plans?created_by=X — filtrar por usuario
 router.get('/', async (req, res, next) => {
   try {
-    const [rows] = await db.query('SELECT * FROM menu_plans');
+    const { created_by } = req.query;
+    let query = 'SELECT * FROM menu_plans';
+    const params = [];
+    if (created_by) {
+      query += ' WHERE created_by = ?';
+      params.push(created_by);
+    }
+    const [rows] = await db.query(query, params);
     res.json(rows);
   } catch (err) { next(err); }
 });

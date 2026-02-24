@@ -89,24 +89,59 @@ export const familiesService = {
     }),
 };
 
-// Puedes ir agregando más servicios aquí conforme vayas conectando
-// por ejemplo: ingredientsService, menuPlansService, etc.
-
 export const authService = {
-    /**
-     * Inicia sesión con usuario y contraseña
-     */
     login: (username, password) => fetchAPI('/users/login', {
         method: 'POST',
         body: JSON.stringify({ username, password }),
     }),
-
-    /**
-     * Registra un nuevo usuario
-     */
     register: (userData) => fetchAPI('/users', {
         method: 'POST',
         body: JSON.stringify(userData),
     }),
+};
+
+export const ingredientsService = {
+    getAll: () => fetchAPI('/ingredients'),
+};
+
+export const inventoryService = {
+    getByFamily: (familyId) => fetchAPI(`/inventory?family_id=${familyId}`),
+    getAll: () => fetchAPI('/inventory'),
+    create: (data) => fetchAPI('/inventory', {
+        method: 'POST',
+        body: JSON.stringify(data),
+    }),
+    delete: (id) => fetchAPI(`/inventory/${id}`, { method: 'DELETE' }),
+};
+
+export const recipesService = {
+    getAll: () => fetchAPI('/recipes'),
+    create: (data) => fetchAPI('/recipes', {
+        method: 'POST',
+        body: JSON.stringify(data),
+    }),
+    delete: (id) => fetchAPI(`/recipes/${id}`, { method: 'DELETE' }),
+};
+
+export const menuPlansService = {
+    /** Obtiene planes de menú filtrados por usuario */
+    getByUser: (userId) => fetchAPI(`/menu-plans?created_by=${userId}`),
+    /** Crea un nuevo plan de menú */
+    create: (data) => fetchAPI('/menu-plans', {
+        method: 'POST',
+        body: JSON.stringify(data),
+    }),
+};
+
+export const dailyMealsService = {
+    /** Obtiene todas las comidas de un plan (con datos de la receta) */
+    getByPlan: (menuPlanId) => fetchAPI(`/daily-meals?menu_plan_id=${menuPlanId}`),
+    /** Guarda una receta en un slot día/comida (upsert en el backend) */
+    save: (data) => fetchAPI('/daily-meals', {
+        method: 'POST',
+        body: JSON.stringify(data),
+    }),
+    /** Elimina una comida del plan */
+    delete: (dailyMealId) => fetchAPI(`/daily-meals/${dailyMealId}`, { method: 'DELETE' }),
 };
 

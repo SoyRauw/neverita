@@ -5,7 +5,14 @@ export const router = express.Router();
 
 router.get('/', async (req, res, next) => {
   try {
-    const [rows] = await db.query('SELECT * FROM inventory');
+    const { family_id } = req.query;
+    let query = 'SELECT * FROM inventory';
+    const params = [];
+    if (family_id) {
+      query += ' WHERE family_id = ?';
+      params.push(family_id);
+    }
+    const [rows] = await db.query(query, params);
     res.json(rows);
   } catch (err) { next(err); }
 });
