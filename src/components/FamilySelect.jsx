@@ -108,6 +108,7 @@ const FamilySelect = ({ families, onSelectFamily, onCreateFamily, onJoinByCode }
                                 type="text"
                                 placeholder="Código de invitación (Ej. 0205)"
                                 value={newFamilyCode}
+                                maxLength={11}
                                 onChange={(e) => setNewFamilyCode(e.target.value)}
                             />
                         </div>
@@ -139,6 +140,7 @@ const FamilySelect = ({ families, onSelectFamily, onCreateFamily, onJoinByCode }
                                 placeholder="Ingresa el código"
                                 value={joinCode}
                                 autoFocus
+                                maxLength={11}
                                 onChange={(e) => setJoinCode(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
                             />
