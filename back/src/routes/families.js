@@ -20,9 +20,12 @@ router.get('/:id', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { name, created_by } = req.body;
-    const [result] = await db.query('INSERT INTO families (name, created_by) VALUES (?, ?)', [name, created_by]);
-    res.status(201).json({ family_id: result.insertId, name, created_by });
+    const { name, created_by, code } = req.body;
+    const [result] = await db.query('INSERT INTO families (name, created_by, code) VALUES (?, ?, ?)', [name, created_by, code || null]);
+    const family_id = result.insertId;
+    // Vincular automáticamente al creador con la familia
+    await db.query('INSERT INTO user_family (user_id, family_id) VALUES (?, ?)', [created_by, family_id]);
+    res.status(201).json({ family_id, name, created_by, code: code || null });
   } catch (err) { next(err); }
 });
 

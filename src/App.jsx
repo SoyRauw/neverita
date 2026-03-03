@@ -11,7 +11,7 @@ import Auth from './components/Auth';
 import FamilySelect from './components/FamilySelect';
 import FamilyManager from './components/FamilyManager';
 import ShoppingList from './components/ShoppingList';
-import { familiesService, menuPlansService, dailyMealsService } from './api';
+import { familiesService, userFamilyService, menuPlansService, dailyMealsService } from './api';
 
 // --- ESTILOS CSS INYECTADOS (MODAL MODERNO) ---
 const modalStyles = `
@@ -343,17 +343,17 @@ function App() {
 
     const [userFamilies, setUserFamilies] = useState([]);
 
-    // Fetch from Backend when user is authenticated
+    // Fetch families for the authenticated user
     useEffect(() => {
         const fetchFamilies = async () => {
             try {
-                const data = await familiesService.getAll();
+                const data = await userFamilyService.getFamilies(userProfile.user_id);
                 // Mapear los datos del backend al formato que espera el frontend
                 const mappedFamilies = data.map(fam => ({
                     ...fam,
                     id: fam.family_id,
                     role: "Admin",
-                    members: 1
+                    members: fam.members || 1
                 }));
                 setUserFamilies(mappedFamilies);
             } catch (error) {
@@ -361,10 +361,10 @@ function App() {
             }
         };
 
-        if (isAuthenticated) {
+        if (isAuthenticated && userProfile.user_id) {
             fetchFamilies();
         }
-    }, [isAuthenticated]);
+    }, [isAuthenticated, userProfile.user_id]);
 
     const handleLogin = (user) => {
         setUserProfile({
@@ -383,11 +383,16 @@ function App() {
 
     const handleCreateFamily = async (newFam) => {
         try {
-            const response = await familiesService.create({ name: newFam.name, created_by: userProfile.user_id });
+            const response = await familiesService.create({
+                name: newFam.name,
+                created_by: userProfile.user_id,
+                code: newFam.code || null,
+            });
 
             const fam = {
                 ...newFam,
                 id: response.family_id,
+                family_id: response.family_id,
                 role: "Admin",
                 members: 1
             };
@@ -405,6 +410,14 @@ function App() {
         setShowFamilyManager(false);
     };
 
+    const handleJoinByCode = async (code) => {
+        const family = await userFamilyService.joinByCode(userProfile.user_id, code);
+        // Añadir la familia a la lista local
+        const mapped = { ...family, id: family.family_id, role: "Miembro", members: 1 };
+        setUserFamilies(prev => [...prev, mapped]);
+        return family;
+    };
+
     const [plannerData, setPlannerData] = useState({});
     const [currentMenuPlan, setCurrentMenuPlan] = useState(null);
 
@@ -419,8 +432,8 @@ function App() {
 
         const loadMenuPlan = async () => {
             try {
-                // 1. Buscar si ya existe un plan para este usuario
-                const plans = await menuPlansService.getByUser(userProfile.user_id);
+                // 1. Buscar si ya existe un plan para esta familia
+                const plans = await menuPlansService.getByFamily(currentFamily.family_id || currentFamily.id);
                 let plan = plans[0]; // Tomar el más reciente
 
                 // 2. Si no existe, crear uno nuevo
@@ -429,6 +442,7 @@ function App() {
                         plan_name: `Menú de ${currentFamily.name}`,
                         start_date: new Date().toISOString().split('T')[0],
                         created_by: userProfile.user_id,
+                        family_id: currentFamily.family_id || currentFamily.id,
                     });
                 }
                 setCurrentMenuPlan(plan);
@@ -493,7 +507,7 @@ function App() {
     };
 
     if (!isAuthenticated) return <Auth onLogin={handleLogin} />;
-    if (!currentFamily) return <FamilySelect families={userFamilies} onSelectFamily={setCurrentFamily} onCreateFamily={handleCreateFamily} />;
+    if (!currentFamily) return <FamilySelect families={userFamilies} onSelectFamily={setCurrentFamily} onCreateFamily={handleCreateFamily} onJoinByCode={handleJoinByCode} />;
 
     return (
         <HashRouter>

@@ -100,6 +100,21 @@ export const authService = {
     }),
 };
 
+export const userFamilyService = {
+    /**
+     * Obtiene las familias completas a las que pertenece un usuario
+     */
+    getFamilies: (userId) => fetchAPI(`/user-family/families/${userId}`),
+
+    /**
+     * Unirse a una familia usando un código de invitación
+     */
+    joinByCode: (userId, code) => fetchAPI('/user-family/join', {
+        method: 'POST',
+        body: JSON.stringify({ user_id: userId, code }),
+    }),
+};
+
 export const ingredientsService = {
     getAll: () => fetchAPI('/ingredients'),
 };
@@ -126,6 +141,8 @@ export const recipesService = {
 export const menuPlansService = {
     /** Obtiene planes de menú filtrados por usuario */
     getByUser: (userId) => fetchAPI(`/menu-plans?created_by=${userId}`),
+    /** Obtiene planes de menú filtrados por familia */
+    getByFamily: (familyId) => fetchAPI(`/menu-plans?family_id=${familyId}`),
     /** Crea un nuevo plan de menú */
     create: (data) => fetchAPI('/menu-plans', {
         method: 'POST',

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Lock, Ruler, Scales, ForkKnife, CircleNotch } from '@phosphor-icons/react';
+import { User, Lock, EnvelopeSimple, ForkKnife, CircleNotch } from '@phosphor-icons/react';
 import { authService } from '../api';
 
 const Auth = ({ onLogin }) => {
@@ -103,25 +103,18 @@ const Auth = ({ onLogin }) => {
                                 </div>
 
                                 <div className="form-group-floating">
+                                    <label>Correo Electrónico</label>
+                                    <div className="input-wrapper-floating">
+                                        <EnvelopeSimple size={20} className="input-icon-floating" />
+                                        <input type="email" name="email" placeholder="tucorreo@ejemplo.com" value={formData.email} onChange={handleChange} required />
+                                    </div>
+                                </div>
+
+                                <div className="form-group-floating">
                                     <label>Contraseña</label>
                                     <div className="input-wrapper-floating">
                                         <Lock size={20} className="input-icon-floating" />
                                         <input type="password" name="password" placeholder="Crea una clave segura" value={formData.password} onChange={handleChange} required />
-                                    </div>
-                                </div>
-
-                                {/* Datos IA Flotantes */}
-                                <div className="ia-data-container">
-                                    <span className="ia-label">Datos para tu IA</span>
-                                    <div className="ia-inputs-row">
-                                        <div className="input-wrapper-floating small">
-                                            <Scales size={18} className="input-icon-floating" />
-                                            <input type="number" placeholder="Peso (kg)" />
-                                        </div>
-                                        <div className="input-wrapper-floating small">
-                                            <Ruler size={18} className="input-icon-floating" />
-                                            <input type="number" placeholder="Altura (cm)" />
-                                        </div>
                                     </div>
                                 </div>
 
