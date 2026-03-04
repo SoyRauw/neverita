@@ -46,7 +46,7 @@ const Auth = ({ onLogin }) => {
                         Tu cocina inteligente: planifica, ahorra y disfruta cocinando.
                     </p>
                 </div>
-                <div className="banner-footer">© 2024 Neverita App</div>
+                <div className="banner-footer">© 2026 Neverita App</div>
             </div>
 
             {/* --- LADO DERECHO: FORMULARIO MODERNO --- */}

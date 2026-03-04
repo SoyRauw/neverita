@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 24-02-2026 a las 21:22:51
+-- Tiempo de generación: 04-03-2026 a las 19:29:22
 -- Versión del servidor: 10.4.28-MariaDB
 -- Versión de PHP: 8.0.28
 
@@ -35,14 +35,6 @@ CREATE TABLE `daily_meals` (
   `recipe_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
---
--- Volcado de datos para la tabla `daily_meals`
---
-
-INSERT INTO `daily_meals` (`daily_meal_id`, `menu_plan_id`, `meal_type`, `day_of_week`, `recipe_id`) VALUES
-(1, 1, 'cena', 'lunes', 17),
-(2, 1, 'almuerzo', 'domingo', 1);
-
 -- --------------------------------------------------------
 
 --
@@ -53,15 +45,16 @@ CREATE TABLE `families` (
   `family_id` int(11) NOT NULL,
   `name` varchar(255) NOT NULL,
   `created_by` int(11) NOT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `code` varchar(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Volcado de datos para la tabla `families`
 --
 
-INSERT INTO `families` (`family_id`, `name`, `created_by`, `created_at`) VALUES
-(1, 'rauw family', 1, '2025-12-29 20:51:49');
+INSERT INTO `families` (`family_id`, `name`, `created_by`, `created_at`, `code`) VALUES
+(1, 'rauw family', 1, '2025-12-29 20:51:49', '');
 
 -- --------------------------------------------------------
 
@@ -217,15 +210,9 @@ CREATE TABLE `menu_plans` (
   `plan_name` varchar(255) NOT NULL,
   `start_date` date NOT NULL,
   `created_by` int(11) NOT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `family_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Volcado de datos para la tabla `menu_plans`
---
-
-INSERT INTO `menu_plans` (`menu_plan_id`, `plan_name`, `start_date`, `created_by`, `created_at`) VALUES
-(1, 'Menu de la semana', '2026-02-23', 1, '2026-02-24 19:10:22');
 
 -- --------------------------------------------------------
 
@@ -592,6 +579,7 @@ ALTER TABLE `daily_meals`
 --
 ALTER TABLE `families`
   ADD PRIMARY KEY (`family_id`),
+  ADD UNIQUE KEY `code` (`code`),
   ADD KEY `created_by` (`created_by`);
 
 --
@@ -613,7 +601,8 @@ ALTER TABLE `inventory`
 --
 ALTER TABLE `menu_plans`
   ADD PRIMARY KEY (`menu_plan_id`),
-  ADD KEY `created_by` (`created_by`);
+  ADD KEY `created_by` (`created_by`),
+  ADD KEY `family_id` (`family_id`);
 
 --
 -- Indices de la tabla `recipes`
@@ -712,7 +701,8 @@ ALTER TABLE `inventory`
 -- Filtros para la tabla `menu_plans`
 --
 ALTER TABLE `menu_plans`
-  ADD CONSTRAINT `menu_plans_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`);
+  ADD CONSTRAINT `menu_plans_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`),
+  ADD CONSTRAINT `menu_plans_ibfk_2` FOREIGN KEY (`family_id`) REFERENCES `families` (`family_id`);
 
 --
 -- Filtros para la tabla `recipes`
