@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,8 +16,8 @@ export const router = express.Router();
 // ==========================================
 router.post('/suggest', async (req, res) => {
     try {
-        const { ingredients } = req.body; 
-        const apiKey = process.env.GROQ_API_KEY;
+        const { ingredients } = req.body;
+        const apiKey = process.env.GEMINI_API_KEY || "AIzaSyAU4T5KvvhpHNwmkrfWCK3pVTU2lxgfUAY";
 
         if (!ingredients || ingredients.length === 0) return res.status(400).json({ error: "Faltan ingredientes" });
         if (!apiKey) return res.status(500).json({ error: "Falta API KEY" });
@@ -36,21 +37,14 @@ router.post('/suggest', async (req, res) => {
             { "suggestions": [{ "title": "Nombre del Plato", "description": "Descripción corta de 10 palabras" }, ...] }
         `;
 
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                messages: [{ role: "system", content: systemPrompt }],
-                model: "llama-3.3-70b-versatile",
-                temperature: 0.5,
-                response_format: { type: "json_object" }
-            })
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({
+            model: "gemini-2.5-flash",
+            generationConfig: { responseMimeType: "application/json" }
         });
 
-        const data = await response.json();
-        if (!data.choices) throw new Error("Error en la respuesta de la IA");
-        
-        const content = JSON.parse(data.choices[0].message.content);
+        const result = await model.generateContent(systemPrompt);
+        const content = JSON.parse(result.response.text());
         res.json(content);
 
     } catch (error) {
@@ -66,7 +60,7 @@ router.post('/generate', async (req, res) => {
     const connection = await db.getConnection();
     try {
         const { selected_title, available_ingredients } = req.body;
-        
+
         if (!selected_title) return res.status(400).json({ error: "Falta título" });
 
         console.log("🍳 Usuario eligió:", selected_title);
@@ -81,18 +75,18 @@ router.post('/generate', async (req, res) => {
                 SELECT i.name, ri.quantity, i.unit 
                 FROM ingredients i JOIN recipe_ingredients ri ON i.ingredient_id = ri.ingredient_id
                 WHERE ri.recipe_id = ?`, [existing[0].recipe_id]);
-            
+
             connection.release();
-            return res.json({ 
+            return res.json({
                 source: "database",
-                recipe: existing[0], 
-                ingredients: dbIngredients 
+                recipe: existing[0],
+                ingredients: dbIngredients
             });
         }
 
         // --- B. NO EXISTE -> GENERAR CON IA ---
         console.log("🤖 Receta nueva. Generando con IA...");
-        const apiKey = process.env.GROQ_API_KEY;
+        const apiKey = process.env.GEMINI_API_KEY || "AIzaSyAU4T5KvvhpHNwmkrfWCK3pVTU2lxgfUAY";
 
         const systemPrompt = `
             Genera la receta completa para: "${selected_title}".
@@ -119,19 +113,14 @@ router.post('/generate', async (req, res) => {
             }
         `;
 
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                messages: [{ role: "system", content: systemPrompt }],
-                model: "llama-3.3-70b-versatile",
-                temperature: 0.4,
-                response_format: { type: "json_object" }
-            })
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({
+            model: "gemini-2.5-flash",
+            generationConfig: { responseMimeType: "application/json" }
         });
 
-        const jsonRes = await response.json();
-        const aiData = JSON.parse(jsonRes.choices[0].message.content);
+        const result = await model.generateContent(systemPrompt);
+        const aiData = JSON.parse(result.response.text());
 
         // --- C. GUARDAR EN BD ---
         await connection.beginTransaction();
@@ -147,16 +136,16 @@ router.post('/generate', async (req, res) => {
         if (aiData.ingredients) {
             for (const ing of aiData.ingredients) {
                 // Limpieza: quitamos espacios
-                let rawName = ing.name.trim(); 
-                
+                let rawName = ing.name.trim();
+
                 // Búsqueda insensible a mayúsculas (Case Insensitive)
                 const [existIng] = await connection.query(
-                    'SELECT ingredient_id, name FROM ingredients WHERE LOWER(name) = LOWER(?) LIMIT 1', 
+                    'SELECT ingredient_id, name FROM ingredients WHERE LOWER(name) = LOWER(?) LIMIT 1',
                     [rawName]
                 );
-                
+
                 let ingId;
-                
+
                 if (existIng.length > 0) {
                     // YA EXISTE: Usamos el ID original (ej: 97 para "Papas")
                     console.log(`✅ Reutilizando ingrediente: "${existIng[0].name}" (ID: ${existIng[0].ingredient_id})`);
@@ -165,9 +154,9 @@ router.post('/generate', async (req, res) => {
                     // NO EXISTE: Lo creamos capitalizado
                     const formattedName = rawName.charAt(0).toUpperCase() + rawName.slice(1).toLowerCase();
                     console.log(`✨ Creando nuevo ingrediente: "${formattedName}"`);
-                    
+
                     const [newIng] = await connection.query(
-                        'INSERT INTO ingredients (name, unit) VALUES (?, ?)', 
+                        'INSERT INTO ingredients (name, unit) VALUES (?, ?)',
                         [formattedName, ing.unit || 'u']
                     );
                     ingId = newIng.insertId;
@@ -175,7 +164,7 @@ router.post('/generate', async (req, res) => {
 
                 // Relacionar receta con ingrediente
                 await connection.query(
-                    'INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity) VALUES (?, ?, ?)', 
+                    'INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity) VALUES (?, ?, ?)',
                     [recipeId, ingId, ing.quantity]
                 );
             }
@@ -184,10 +173,10 @@ router.post('/generate', async (req, res) => {
         await connection.commit();
         console.log("✅ Receta guardada correctamente.");
 
-        res.json({ 
+        res.json({
             source: "ai_generated",
-            recipe: aiData.recipe, 
-            ingredients: aiData.ingredients 
+            recipe: aiData.recipe,
+            ingredients: aiData.ingredients
         });
 
     } catch (error) {
