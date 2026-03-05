@@ -1,26 +1,102 @@
 import React, { useState } from 'react';
-import { User, Lock, EnvelopeSimple, ForkKnife, CircleNotch } from '@phosphor-icons/react';
+import { User, Lock, EnvelopeSimple, ForkKnife, CircleNotch, Eye, EyeSlash, CheckCircle, XCircle } from '@phosphor-icons/react';
 import { authService } from '../api';
+
+// --- Función para cifrar la contraseña con SHA-256 (Web Crypto API) ---
+async function hashPassword(password) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// --- Validaciones de contraseña ---
+function getPasswordRules(password) {
+    return [
+        { label: 'Mínimo 8 caracteres', ok: password.length >= 8 },
+        { label: 'Al menos una letra', ok: /[a-zA-Z]/.test(password) },
+        { label: 'Al menos un número', ok: /[0-9]/.test(password) },
+    ];
+}
+
+// --- Componente reutilizable de campo contraseña ---
+const PasswordField = ({ name, placeholder, value, onChange, showPw, onToggleShow }) => (
+    <div className="input-wrapper-floating" style={{ position: 'relative' }}>
+        <Lock size={20} className="input-icon-floating" />
+        <input
+            type={showPw ? 'text' : 'password'}
+            name={name}
+            placeholder={placeholder}
+            value={value}
+            onChange={onChange}
+            required
+            style={{ paddingRight: '44px' }}
+        />
+        <button
+            type="button"
+            onClick={onToggleShow}
+            style={{
+                position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)',
+                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                color: '#9CA3AF', display: 'flex', alignItems: 'center',
+            }}
+            title={showPw ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+        >
+            {showPw ? <EyeSlash size={20} /> : <Eye size={20} />}
+        </button>
+    </div>
+);
 
 const Auth = ({ onLogin }) => {
     const [isRegistering, setIsRegistering] = useState(false);
-    const [formData, setFormData] = useState({ username: '', password: '', name: '', email: '' });
+    const [formData, setFormData] = useState({ username: '', password: '', confirmPassword: '', name: '', email: '' });
     const [errorMsg, setErrorMsg] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
+    // Visibilidad de contraseñas
+    const [showPw, setShowPw] = useState(false);
+    const [showConfirmPw, setShowConfirmPw] = useState(false);
+
     const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+
+    const passwordRules = getPasswordRules(formData.password);
+    const passwordValid = passwordRules.every(r => r.ok);
+    const passwordsMatch = formData.password === formData.confirmPassword;
 
     const handleAuthSubmit = async (e) => {
         e.preventDefault();
         setErrorMsg('');
-        setIsLoading(true);
 
+        if (isRegistering) {
+            // Validar reglas de contraseña
+            if (!passwordValid) {
+                setErrorMsg('La contraseña no cumple los requisitos mínimos.');
+                return;
+            }
+            // Validar que las contraseñas coincidan
+            if (!passwordsMatch) {
+                setErrorMsg('Las contraseñas no coinciden.');
+                return;
+            }
+        }
+
+        setIsLoading(true);
         try {
             let userData;
             if (isRegistering) {
-                userData = await authService.register(formData);
+                // Cifrar la contraseña antes de enviarla al backend
+                const hashedPassword = await hashPassword(formData.password);
+                userData = await authService.register({
+                    username: formData.username,
+                    password: hashedPassword,
+                    name: formData.name,
+                    email: formData.email,
+                });
             } else {
-                userData = await authService.login(formData.username, formData.password);
+                // También ciframos al hacer login para que coincida con lo guardado
+                const hashedPassword = await hashPassword(formData.password);
+                userData = await authService.login(formData.username, hashedPassword);
             }
             onLogin(userData);
         } catch (err) {
@@ -28,6 +104,14 @@ const Auth = ({ onLogin }) => {
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const switchMode = () => {
+        setIsRegistering(!isRegistering);
+        setErrorMsg('');
+        setFormData({ username: '', password: '', confirmPassword: '', name: '', email: '' });
+        setShowPw(false);
+        setShowConfirmPw(false);
     };
 
     return (
@@ -49,7 +133,7 @@ const Auth = ({ onLogin }) => {
                 <div className="banner-footer">© 2026 Neverita App</div>
             </div>
 
-            {/* --- LADO DERECHO: FORMULARIO MODERNO --- */}
+            {/* --- LADO DERECHO: FORMULARIO --- */}
             <div className="login-form-container">
                 <div className="auth-card-glass">
                     <div className="form-header">
@@ -58,9 +142,19 @@ const Auth = ({ onLogin }) => {
                     </div>
 
                     <form onSubmit={handleAuthSubmit}>
-                        {errorMsg && <div style={{ color: 'red', marginBottom: '10px', fontSize: '0.9rem', textAlign: 'center' }}>{errorMsg}</div>}
+                        {errorMsg && (
+                            <div style={{
+                                background: '#FEF2F2', border: '1px solid #FECACA',
+                                color: '#DC2626', borderRadius: '12px',
+                                padding: '10px 14px', marginBottom: '14px',
+                                fontSize: '0.875rem', textAlign: 'center'
+                            }}>
+                                {errorMsg}
+                            </div>
+                        )}
+
                         {!isRegistering ? (
-                            /* LOGIN */
+                            /* ===== LOGIN ===== */
                             <>
                                 <div className="form-group-floating">
                                     <label>Nombre de Usuario</label>
@@ -71,10 +165,14 @@ const Auth = ({ onLogin }) => {
                                 </div>
                                 <div className="form-group-floating">
                                     <label>Contraseña</label>
-                                    <div className="input-wrapper-floating">
-                                        <Lock size={20} className="input-icon-floating" />
-                                        <input type="password" name="password" placeholder="••••••••" value={formData.password} onChange={handleChange} required />
-                                    </div>
+                                    <PasswordField
+                                        name="password"
+                                        placeholder="••••••••"
+                                        value={formData.password}
+                                        onChange={handleChange}
+                                        showPw={showPw}
+                                        onToggleShow={() => setShowPw(v => !v)}
+                                    />
                                 </div>
                                 <div className="forgot-pass">
                                     <a href="#">¿Olvidaste tu contraseña?</a>
@@ -84,7 +182,7 @@ const Auth = ({ onLogin }) => {
                                 </button>
                             </>
                         ) : (
-                            /* REGISTRO */
+                            /* ===== REGISTRO ===== */
                             <>
                                 <div className="form-group-floating">
                                     <label>Nombre Completo</label>
@@ -112,13 +210,65 @@ const Auth = ({ onLogin }) => {
 
                                 <div className="form-group-floating">
                                     <label>Contraseña</label>
-                                    <div className="input-wrapper-floating">
-                                        <Lock size={20} className="input-icon-floating" />
-                                        <input type="password" name="password" placeholder="Crea una clave segura" value={formData.password} onChange={handleChange} required />
-                                    </div>
+                                    <PasswordField
+                                        name="password"
+                                        placeholder="Crea una clave segura"
+                                        value={formData.password}
+                                        onChange={handleChange}
+                                        showPw={showPw}
+                                        onToggleShow={() => setShowPw(v => !v)}
+                                    />
+                                    {/* Indicadores de requisitos */}
+                                    {formData.password.length > 0 && (
+                                        <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                            {passwordRules.map(rule => (
+                                                <div key={rule.label} style={{
+                                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                                    fontSize: '0.78rem', color: rule.ok ? '#16a34a' : '#9CA3AF',
+                                                    transition: 'color 0.2s'
+                                                }}>
+                                                    {rule.ok
+                                                        ? <CheckCircle size={14} weight="fill" color="#16a34a" />
+                                                        : <XCircle size={14} weight="fill" color="#D1D5DB" />
+                                                    }
+                                                    {rule.label}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
 
-                                <button className="btn-floating-primary" disabled={isLoading}>
+                                <div className="form-group-floating">
+                                    <label>Confirmar Contraseña</label>
+                                    <PasswordField
+                                        name="confirmPassword"
+                                        placeholder="Repite tu contraseña"
+                                        value={formData.confirmPassword}
+                                        onChange={handleChange}
+                                        showPw={showConfirmPw}
+                                        onToggleShow={() => setShowConfirmPw(v => !v)}
+                                    />
+                                    {/* Indicador de coincidencia */}
+                                    {formData.confirmPassword.length > 0 && (
+                                        <div style={{
+                                            marginTop: '6px', display: 'flex', alignItems: 'center', gap: '6px',
+                                            fontSize: '0.78rem',
+                                            color: passwordsMatch ? '#16a34a' : '#DC2626',
+                                            transition: 'color 0.2s'
+                                        }}>
+                                            {passwordsMatch
+                                                ? <><CheckCircle size={14} weight="fill" /> Las contraseñas coinciden</>
+                                                : <><XCircle size={14} weight="fill" /> Las contraseñas no coinciden</>
+                                            }
+                                        </div>
+                                    )}
+                                </div>
+
+                                <button
+                                    className="btn-floating-primary"
+                                    disabled={isLoading || !passwordValid || !passwordsMatch}
+                                    style={{ opacity: (!passwordValid || !passwordsMatch) ? 0.6 : 1 }}
+                                >
                                     {isLoading ? <CircleNotch className="ph-spin" size={20} /> : 'Registrarse'}
                                 </button>
                             </>
@@ -127,7 +277,7 @@ const Auth = ({ onLogin }) => {
 
                     <div className="auth-footer-modern">
                         {isRegistering ? '¿Ya tienes cuenta? ' : '¿Nuevo usuario? '}
-                        <span onClick={() => setIsRegistering(!isRegistering)}>
+                        <span onClick={switchMode}>
                             {isRegistering ? 'Ingresa aquí' : 'Crea una cuenta'}
                         </span>
                     </div>

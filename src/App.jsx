@@ -333,12 +333,27 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData }) => {
 // APP PRINCIPAL
 // ==========================================
 function App() {
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [currentFamily, setCurrentFamily] = useState(null);
+    // --- PERSISTENCIA DE SESIÓN: leer desde localStorage al iniciar ---
+    const [isAuthenticated, setIsAuthenticated] = useState(() => {
+        return localStorage.getItem('neverita_auth') === 'true';
+    });
+    const [currentFamily, setCurrentFamily] = useState(() => {
+        try {
+            const saved = localStorage.getItem('neverita_family');
+            return saved ? JSON.parse(saved) : null;
+        } catch { return null; }
+    });
     const [showFamilyManager, setShowFamilyManager] = useState(false);
 
-    const [userProfile, setUserProfile] = useState({
-        name: "Usuario", email: "user@test.com", avatar: "https://i.pravatar.cc/150?u=a042581f4e29026704d", role: "Admin"
+    const [userProfile, setUserProfile] = useState(() => {
+        try {
+            const saved = localStorage.getItem('neverita_user');
+            return saved ? JSON.parse(saved) : {
+                name: "Usuario", email: "user@test.com", avatar: "https://i.pravatar.cc/150?u=a042581f4e29026704d", role: "Admin"
+            };
+        } catch {
+            return { name: "Usuario", email: "user@test.com", avatar: "https://i.pravatar.cc/150?u=a042581f4e29026704d", role: "Admin" };
+        }
     });
 
     const [userFamilies, setUserFamilies] = useState([]);
@@ -367,18 +382,26 @@ function App() {
     }, [isAuthenticated, userProfile.user_id]);
 
     const handleLogin = (user) => {
-        setUserProfile({
+        const profile = {
             ...user,
             avatar: `https://i.pravatar.cc/150?u=${user.user_id || user.username}`,
             role: "Admin"
-        });
+        };
+        setUserProfile(profile);
         setIsAuthenticated(true);
+        // Guardar sesión en localStorage
+        localStorage.setItem('neverita_auth', 'true');
+        localStorage.setItem('neverita_user', JSON.stringify(profile));
     };
 
     const handleLogout = () => {
         setIsAuthenticated(false);
         setCurrentFamily(null);
         setShowFamilyManager(false);
+        // Limpiar sesión de localStorage
+        localStorage.removeItem('neverita_auth');
+        localStorage.removeItem('neverita_user');
+        localStorage.removeItem('neverita_family');
     };
 
     const handleCreateFamily = async (newFam) => {
@@ -407,6 +430,7 @@ function App() {
 
     const handleSwitchFamily = (fam) => {
         setCurrentFamily(fam);
+        localStorage.setItem('neverita_family', JSON.stringify(fam));
         setShowFamilyManager(false);
     };
 
@@ -507,7 +531,7 @@ function App() {
     };
 
     if (!isAuthenticated) return <Auth onLogin={handleLogin} />;
-    if (!currentFamily) return <FamilySelect families={userFamilies} onSelectFamily={setCurrentFamily} onCreateFamily={handleCreateFamily} onJoinByCode={handleJoinByCode} />;
+    if (!currentFamily) return <FamilySelect families={userFamilies} onSelectFamily={(fam) => { setCurrentFamily(fam); localStorage.setItem('neverita_family', JSON.stringify(fam)); }} onCreateFamily={handleCreateFamily} onJoinByCode={handleJoinByCode} />;
 
     return (
         <HashRouter>
