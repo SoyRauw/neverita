@@ -43,6 +43,7 @@ const Inventory = ({ currentFamily }) => {
                     return {
                         ...item,
                         name: ingredient ? ingredient.name : `Ingrediente #${item.ingredient_id}`,
+                        unit: ingredient ? ingredient.unit : '',
                     };
                 });
 
@@ -79,7 +80,7 @@ const Inventory = ({ currentFamily }) => {
             const payload = {
                 family_id: currentFamily?.family_id || currentFamily?.id || null,
                 ingredient_id: Number(form.ingredient_id),
-                quantity: `${form.quantity} ${form.unit}`,
+                quantity: Number(form.quantity),
                 expiration_date: form.expiration_date || null,
             };
             const created = await inventoryService.create(payload);
@@ -87,6 +88,7 @@ const Inventory = ({ currentFamily }) => {
             setItems(prev => [...prev, {
                 ...created,
                 name: ingredient ? ingredient.name : `Ingrediente #${created.ingredient_id}`,
+                unit: ingredient ? ingredient.unit : '',
             }]);
             setShowModal(false);
             setForm({ ingredient_id: '', quantity: '', unit: 'unidades', expiration_date: '' });
@@ -138,7 +140,7 @@ const Inventory = ({ currentFamily }) => {
                                 items.map((item) => (
                                     <tr key={item.inventory_id} style={{ borderBottom: '1px solid #eee' }}>
                                         <td style={{ padding: '1rem', fontWeight: 'bold' }}>{item.name}</td>
-                                        <td>{item.quantity}</td>
+                                        <td>{item.quantity} {item.unit}</td>
                                         <td>
                                             <span style={{
                                                 backgroundColor: '#FFF4E5',
@@ -218,13 +220,11 @@ const Inventory = ({ currentFamily }) => {
                                     <label style={{ fontWeight: 600, fontSize: '0.9rem', color: '#555', display: 'block', marginBottom: 6 }}>
                                         Unidad
                                     </label>
-                                    <select
-                                        value={form.unit}
-                                        onChange={e => setForm({ ...form, unit: e.target.value })}
-                                        style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: '2px solid #E5E7EB', fontSize: '1rem', outline: 'none' }}
-                                    >
-                                        {units.map(u => <option key={u} value={u}>{u}</option>)}
-                                    </select>
+                                    <div style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: '2px solid #E5E7EB', fontSize: '1rem', background: '#F3F4F6', color: '#6B7280' }}>
+                                        {form.ingredient_id
+                                            ? (ingredients.find(i => i.ingredient_id === Number(form.ingredient_id))?.unit || '—')
+                                            : '—'}
+                                    </div>
                                 </div>
                             </div>
 
