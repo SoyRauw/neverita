@@ -11,7 +11,7 @@ import Auth from './components/Auth';
 import FamilySelect from './components/FamilySelect';
 import FamilyManager from './components/FamilyManager';
 import ShoppingList from './components/ShoppingList';
-import { familiesService, userFamilyService, menuPlansService, dailyMealsService } from './api';
+import { familiesService, userFamilyService, menuPlansService, dailyMealsService, aiService, inventoryService, ingredientsService } from './api';
 
 // --- ESTILOS CSS INYECTADOS (MODAL MODERNO) ---
 const modalStyles = `
@@ -87,23 +87,67 @@ const modalStyles = `
 // ==========================================
 // PÁGINA DEL PLANIFICADOR
 // ==========================================
-const PlannerPage = ({ userProfile, plannerData, setPlannerData }) => {
+const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentFamily }) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [selectedMealDetails, setSelectedMealDetails] = useState(null);
 
     // --- ESTADOS DE LA IA ---
     const [prompt, setPrompt] = useState("");
-    const myInventory = ['Huevos', 'Pollo', 'Leche', 'Arroz', 'Aguacate', 'Pasta', 'Atún', 'Tomate', 'Queso', 'Espinacas'];
+    const [myInventory, setMyInventory] = useState([]);
+    const [loadingInventory, setLoadingInventory] = useState(false);
     const weekDays = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
     const mealTypesOptions = ['Desayuno', 'Almuerzo', 'Cena'];
 
-    // Estados de selección (Arrays para permitir múltiple selección)
+    // Estados de selección
     const [selectedIngredients, setSelectedIngredients] = useState([]);
     const [selectedDays, setSelectedDays] = useState(['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']);
     const [selectedMeals, setSelectedMeals] = useState(['Almuerzo', 'Cena']);
 
-    // Función genérica para añadir/quitar elementos de una lista
+    // --- ESTADOS PARA FLUJO DE 2 PASOS ---
+    const [aiStep, setAiStep] = useState('config'); // 'config' | 'suggestions' | 'generating'
+    const [suggestions, setSuggestions] = useState([]);
+    const [aiError, setAiError] = useState(null);
+
+    // Cargar inventario real CADA VEZ que se abre el modal
+    useEffect(() => {
+        if (!showModal) return;
+        const loadInventory = async () => {
+            setLoadingInventory(true);
+            setMyInventory([]); // limpiar datos previos
+            try {
+                const [inv, allIngredients] = await Promise.all([
+                    inventoryService.getAll(),
+                    ingredientsService.getAll(),
+                ]);
+                const familyId = currentFamily?.family_id || currentFamily?.id;
+                const filtered = familyId ? inv.filter(i => i.family_id === familyId) : inv;
+
+                // Agrupar cantidades por ingrediente (puede haber varias entradas del mismo)
+                const grouped = {};
+                for (const item of filtered) {
+                    const ing = allIngredients.find(i => i.ingredient_id === item.ingredient_id);
+                    const name = ing ? ing.name : `Ingrediente #${item.ingredient_id}`;
+                    const unit = ing ? ing.unit : '';
+                    if (!grouped[name]) {
+                        grouped[name] = { name, quantity: 0, unit };
+                    }
+                    grouped[name].quantity += Number(item.quantity) || 0;
+                }
+                const inventoryItems = Object.values(grouped);
+                setMyInventory(inventoryItems);
+                setSelectedIngredients(inventoryItems.map(i => i.name)); // pre-seleccionar todos
+            } catch (err) {
+                console.error('Error cargando inventario:', err);
+                setMyInventory([]);
+                setSelectedIngredients([]);
+            } finally {
+                setLoadingInventory(false);
+            }
+        };
+        loadInventory();
+    }, [showModal]);
+
     const toggleSelection = (item, list, setList) => {
         if (list.includes(item)) {
             setList(list.filter(i => i !== item));
@@ -112,41 +156,99 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData }) => {
         }
     };
 
-    const handleAIGenerate = () => {
-        // Validaciones
+    // PASO 1: Pedir sugerencias a la IA
+    const handleAISuggest = async () => {
+        if (selectedIngredients.length === 0) { alert("Selecciona al menos un ingrediente."); return; }
         if (selectedDays.length === 0) { alert("Selecciona al menos un día."); return; }
-        if (selectedMeals.length === 0) { alert("Selecciona al menos una comida (Desayuno, Almuerzo o Cena)."); return; }
+        if (selectedMeals.length === 0) { alert("Selecciona al menos una comida."); return; }
 
-        setShowModal(false);
+        setAiStep('suggestions');
         setIsGenerating(true);
+        setAiError(null);
+        setSuggestions([]);
 
-        setTimeout(() => {
+        try {
+            // Enviar nombres con cantidades para que la IA sepa cuánto hay
+            const ingredientsWithQty = myInventory
+                .filter(i => selectedIngredients.includes(i.name))
+                .map(i => `${i.name} (${i.quantity} ${i.unit})`);
+            const data = await aiService.suggest(ingredientsWithQty);
+            setSuggestions(data.suggestions || []);
+        } catch (err) {
+            console.error('Error en sugerencias IA:', err);
+            setAiError('No se pudo conectar con la IA. Intenta de nuevo.');
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    // PASO 2: Generar receta completa y asignar al planificador
+    const handlePickSuggestion = async (suggestion) => {
+        setAiStep('generating');
+        setIsGenerating(true);
+        setAiError(null);
+
+        try {
+            // Enviar nombres con cantidades disponibles
+            const ingredientsWithQty = myInventory
+                .filter(i => selectedIngredients.includes(i.name))
+                .map(i => `${i.name} (${i.quantity} ${i.unit})`);
+            const data = await aiService.generate(suggestion.title, ingredientsWithQty);
+            const recipe = data.recipe;
+            const ingList = data.ingredients || [];
+
+            const dish = {
+                name: recipe.title,
+                cal: recipe.calories_per_serving,
+                time: recipe.preparation_time ? `${recipe.preparation_time} min` : 'N/A',
+                img: recipe.image_url || 'https://images.unsplash.com/photo-1546554137-f86b9593a222?w=400',
+                ingredients: ingList.map(i => `${i.name} (${i.quantity} ${i.unit})`),
+                steps: recipe.instructions ? recipe.instructions.split('\n').filter(Boolean) : [],
+                description: recipe.description || '',
+                recipe_id: recipe.recipe_id,
+            };
+
             const newMenu = { ...plannerData };
-
-            // Platos de demo enriquecidos con ingredientes, pasos y tiempo
-            const demoDishes = [
-                { name: "Bowl de Pollo", cal: 450, time: "25 min", img: "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=400", ingredients: ["Pollo desmenuzado", "Arroz integral", "Aguacate", "Tomate cherry", "Maíz"], steps: ["Cocinar el arroz.", "Asar el pollo a la plancha.", "Cortar los vegetales.", "Mezclar todo en un bowl."] },
-                { name: "Pasta Carbonara", cal: 550, time: "20 min", img: "https://images.unsplash.com/photo-1612874742237-6526221588e3?w=400", ingredients: ["Pasta (Spaghetti)", "Panceta o Bacon", "Huevos", "Queso Parmesano", "Pimienta negra"], steps: ["Hervir la pasta.", "Freír la panceta.", "Batir yemas con queso.", "Mezclar pasta caliente con huevo y panceta fuera del fuego."] },
-                { name: "Ensalada César", cal: 300, time: "15 min", img: "https://images.unsplash.com/photo-1550304943-4f24f54ddde9?w=400", ingredients: ["Lechuga romana", "Pollo a la parrilla", "Crutones", "Queso Parmesano", "Aderezo César"], steps: ["Lavar y cortar lechuga.", "Añadir pollo troceado.", "Espolvorear queso y crutones.", "Bañar con aderezo."] },
-                { name: "Tacos de Pescado", cal: 380, time: "30 min", img: "https://images.unsplash.com/photo-1512838243147-84b35363d3db?w=400", ingredients: ["Pescado blanco", "Tortillas de maíz", "Col picada", "Pico de gallo", "Salsa de yogur"], steps: ["Marinar el pescado.", "Cocinar a la plancha.", "Calentar tortillas.", "Servir el pescado con col y salsa."] },
-                { name: "Salmón al Horno", cal: 420, time: "35 min", img: "https://images.unsplash.com/photo-1467003909585-2f8a7270028d?w=400", ingredients: ["Filete de salmón", "Espárragos", "Limón", "Aceite de oliva", "Ajo"], steps: ["Precalentar horno a 200°C.", "Colocar salmón y espárragos en bandeja.", "Aliñar con limón, aceite y ajo.", "Hornear por 20 min."] },
-                { name: "Tortilla Francesa", cal: 250, time: "10 min", img: "https://images.unsplash.com/photo-1587339144367-f1cacbecac82?w=400", ingredients: ["3 Huevos", "Sal y pimienta", "Aceite o mantequilla", "Queso (opcional)"], steps: ["Batir los huevos con sal.", "Calentar sartén con aceite.", "Verter huevos y cocinar 2 min por lado.", "Rellenar con queso y doblar."] },
-                { name: "Tostadas Aguacate", cal: 320, time: "5 min", img: "https://images.unsplash.com/photo-1588137372308-15f75323ca8d?w=400", ingredients: ["Pan integral", "1 Aguacate", "Salmón ahumado (opcional)", "Semillas de sésamo"], steps: ["Tostar el pan.", "Hacer puré el aguacate y untar.", "Colocar salmón encima.", "Espolvorear semillas."] },
-                { name: "Pancakes de Avena", cal: 380, time: "15 min", img: "https://images.unsplash.com/photo-1506084868230-bb9d95c24759?w=400", ingredients: ["Avena en hojuelas", "1 Banana", "1 Huevo", "Chorrito de leche", "Miel"], steps: ["Licuar avena, banana, huevo y leche.", "Verter porciones en sartén caliente.", "Cocinar 2 min por lado.", "Servir con miel."] }
-            ];
-
             weekDays.forEach((d, dayIndex) => {
                 if (selectedDays.includes(d)) {
                     selectedMeals.forEach(type => {
-                        const key = `${dayIndex}-${type}`;
-                        newMenu[key] = demoDishes[Math.floor(Math.random() * demoDishes.length)];
+                        newMenu[`${dayIndex}-${type}`] = { ...dish };
                     });
                 }
             });
-
             setPlannerData(newMenu);
+
+            // --- DESCONTAR INGREDIENTES DEL INVENTARIO ---
+            const familyId = currentFamily?.family_id || currentFamily?.id;
+            if (recipe.recipe_id && familyId) {
+                try {
+                    await inventoryService.deduct(recipe.recipe_id, familyId);
+                    console.log('📦 Inventario descontado correctamente');
+                } catch (deductErr) {
+                    console.error('Error al descontar inventario:', deductErr);
+                    // No bloquear la experiencia si falla el descuento
+                }
+            }
+
+            // Cerrar modal y resetear
+            setShowModal(false);
+            setAiStep('config');
+            setSuggestions([]);
+        } catch (err) {
+            console.error('Error generando receta:', err);
+            setAiError('Error al generar la receta. Intenta con otra opción.');
+            setAiStep('suggestions');
+        } finally {
             setIsGenerating(false);
-        }, 2000);
+        }
+    };
+
+    // Resetear al cerrar modal
+    const handleCloseModal = () => {
+        setShowModal(false);
+        setAiStep('config');
+        setSuggestions([]);
+        setAiError(null);
     };
 
     return (
@@ -168,16 +270,20 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData }) => {
 
             {/* --- MODAL MODERNO DE GENERACIÓN IA --- */}
             {showModal && (
-                <div className="modal-overlay" onClick={() => setShowModal(false)}>
+                <div className="modal-overlay" onClick={handleCloseModal}>
                     <div className="modal-modern" onClick={e => e.stopPropagation()}>
 
                         {/* Header */}
                         <div className="modal-header-modern">
                             <div>
-                                <h2 style={{ margin: 0, fontSize: '1.5rem', color: '#111827', fontWeight: '800' }}>Chef Inteligente</h2>
-                                <p style={{ margin: '4px 0 0', color: '#6B7280', fontSize: '0.95rem' }}>Personaliza tu menú en segundos</p>
+                                <h2 style={{ margin: 0, fontSize: '1.5rem', color: '#111827', fontWeight: '800' }}>
+                                    {aiStep === 'config' ? 'Chef Inteligente' : aiStep === 'suggestions' ? '🍽️ Elige una Receta' : '🍳 Generando...'}
+                                </h2>
+                                <p style={{ margin: '4px 0 0', color: '#6B7280', fontSize: '0.95rem' }}>
+                                    {aiStep === 'config' ? 'Personaliza tu menú con IA' : aiStep === 'suggestions' ? 'La IA sugiere estos platos para ti' : 'Creando tu receta completa...'}
+                                </p>
                             </div>
-                            <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 5 }}>
+                            <button onClick={handleCloseModal} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 5 }}>
                                 <X size={24} color="#9CA3AF" />
                             </button>
                         </div>
@@ -185,68 +291,134 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData }) => {
                         {/* Contenido con Scroll */}
                         <div className="modal-scroll-content">
 
-                            {/* 1. Antojo */}
-                            <div className="section-title"><Sparkle weight="fill" color="#FF9F43" /> ¿Qué se te antoja?</div>
-                            <input
-                                className="modern-input"
-                                placeholder="Ej: Comida italiana, algo ligero, sin gluten..."
-                                value={prompt}
-                                onChange={(e) => setPrompt(e.target.value)}
-                            />
+                            {/* Error */}
+                            {aiError && (
+                                <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, padding: '12px 16px', marginTop: 16, color: '#DC2626', fontSize: '0.9rem' }}>
+                                    ⚠️ {aiError}
+                                </div>
+                            )}
 
-                            {/* 2. Ingredientes */}
-                            <div className="section-title"><ChefHat weight="fill" color="#FF9F43" /> Ingredientes en casa</div>
-                            <div className="chips-container">
-                                {myInventory.map(item => (
-                                    <div
-                                        key={item}
-                                        className={`chip-modern ${selectedIngredients.includes(item) ? 'active' : ''}`}
-                                        onClick={() => toggleSelection(item, selectedIngredients, setSelectedIngredients)}
-                                    >
-                                        {item}
-                                        {selectedIngredients.includes(item) && <Check size={14} weight="bold" />}
-                                    </div>
-                                ))}
-                            </div>
+                            {/* ── PASO 1: CONFIGURACIÓN ── */}
+                            {aiStep === 'config' && (
+                                <>
+                                    {/* 1. Antojo */}
+                                    <div className="section-title"><Sparkle weight="fill" color="#FF9F43" /> ¿Qué se te antoja?</div>
+                                    <input
+                                        className="modern-input"
+                                        placeholder="Ej: Comida italiana, algo ligero, sin gluten..."
+                                        value={prompt}
+                                        onChange={(e) => setPrompt(e.target.value)}
+                                    />
 
-                            {/* 3. Días */}
-                            <div className="section-title"><CalendarBlank weight="fill" color="#FF9F43" /> Días a planificar</div>
-                            <div className="chips-container">
-                                {weekDays.map(d => (
-                                    <div
-                                        key={d}
-                                        className={`chip-modern ${selectedDays.includes(d) ? 'active' : ''}`}
-                                        onClick={() => toggleSelection(d, selectedDays, setSelectedDays)}
-                                    >
-                                        {d.substring(0, 3)}
-                                        {selectedDays.includes(d) && <Check size={14} weight="bold" />}
-                                    </div>
-                                ))}
-                            </div>
+                                    {/* 2. Ingredientes del inventario real */}
+                                    <div className="section-title"><ChefHat weight="fill" color="#FF9F43" /> Ingredientes en tu inventario</div>
+                                    {loadingInventory ? (
+                                        <p style={{ color: '#999', fontSize: '0.9rem' }}>Cargando inventario...</p>
+                                    ) : myInventory.length === 0 ? (
+                                        <p style={{ color: '#999', fontSize: '0.9rem' }}>No tienes ingredientes en el inventario. Agrega algunos primero.</p>
+                                    ) : (
+                                        <div className="chips-container">
+                                            {myInventory.map(item => (
+                                                <div
+                                                    key={item.name}
+                                                    className={`chip-modern ${selectedIngredients.includes(item.name) ? 'active' : ''}`}
+                                                    onClick={() => toggleSelection(item.name, selectedIngredients, setSelectedIngredients)}
+                                                >
+                                                    {item.name} <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>({item.quantity} {item.unit})</span>
+                                                    {selectedIngredients.includes(item.name) && <Check size={14} weight="bold" />}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
 
-                            {/* 4. Tipos de Comida */}
-                            <div className="section-title"><Coffee weight="fill" color="#FF9F43" /> ¿Qué comidas del día?</div>
-                            <p style={{ fontSize: '0.8rem', color: '#888', marginBottom: '10px' }}>Selecciona una, dos o las tres.</p>
-                            <div className="chips-container">
-                                {mealTypesOptions.map(type => (
-                                    <div
-                                        key={type}
-                                        className={`chip-modern ${selectedMeals.includes(type) ? 'active' : ''}`}
-                                        onClick={() => toggleSelection(type, selectedMeals, setSelectedMeals)}
-                                    >
-                                        {type}
-                                        {selectedMeals.includes(type) && <Check size={14} weight="bold" />}
+                                    {/* 3. Días */}
+                                    <div className="section-title"><CalendarBlank weight="fill" color="#FF9F43" /> Días a planificar</div>
+                                    <div className="chips-container">
+                                        {weekDays.map(d => (
+                                            <div
+                                                key={d}
+                                                className={`chip-modern ${selectedDays.includes(d) ? 'active' : ''}`}
+                                                onClick={() => toggleSelection(d, selectedDays, setSelectedDays)}
+                                            >
+                                                {d.substring(0, 3)}
+                                                {selectedDays.includes(d) && <Check size={14} weight="bold" />}
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
-                            </div>
+
+                                    {/* 4. Tipos de Comida */}
+                                    <div className="section-title"><Coffee weight="fill" color="#FF9F43" /> ¿Qué comidas del día?</div>
+                                    <p style={{ fontSize: '0.8rem', color: '#888', marginBottom: '10px' }}>Selecciona una, dos o las tres.</p>
+                                    <div className="chips-container">
+                                        {mealTypesOptions.map(type => (
+                                            <div
+                                                key={type}
+                                                className={`chip-modern ${selectedMeals.includes(type) ? 'active' : ''}`}
+                                                onClick={() => toggleSelection(type, selectedMeals, setSelectedMeals)}
+                                            >
+                                                {type}
+                                                {selectedMeals.includes(type) && <Check size={14} weight="bold" />}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+
+                            {/* ── PASO 2: SUGERENCIAS DE LA IA ── */}
+                            {aiStep === 'suggestions' && (
+                                <>
+                                    {isGenerating ? (
+                                        <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                                            <CircleNotch size={48} className="ph-spin" color="#FF9F43" />
+                                            <p style={{ color: '#6B7280', marginTop: 16, fontWeight: 600 }}>Consultando al Chef IA...</p>
+                                        </div>
+                                    ) : (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
+                                            {suggestions.map((sug, i) => (
+                                                <div
+                                                    key={i}
+                                                    onClick={() => handlePickSuggestion(sug)}
+                                                    style={{
+                                                        background: '#F9FAFB', border: '2px solid #E5E7EB', borderRadius: 16,
+                                                        padding: '18px 20px', cursor: 'pointer', transition: 'all 0.2s',
+                                                    }}
+                                                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#FF9F43'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(255,159,67,0.15)'; }}
+                                                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#E5E7EB'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+                                                >
+                                                    <h4 style={{ margin: '0 0 6px', fontSize: '1.1rem', fontWeight: 700, color: '#1F2937' }}>
+                                                        {sug.title}
+                                                    </h4>
+                                                    <p style={{ margin: 0, color: '#6B7280', fontSize: '0.9rem' }}>
+                                                        {sug.description}
+                                                    </p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {/* ── PASO 3: GENERANDO RECETA ── */}
+                            {aiStep === 'generating' && (
+                                <div style={{ textAlign: 'center', padding: '50px 0' }}>
+                                    <CircleNotch size={56} className="ph-spin" color="#FF9F43" />
+                                    <p style={{ color: '#1F2937', marginTop: 20, fontWeight: 700, fontSize: '1.1rem' }}>Cocinando tu receta...</p>
+                                    <p style={{ color: '#6B7280', fontSize: '0.9rem' }}>Gemini está generando ingredientes, pasos y calorías</p>
+                                </div>
+                            )}
                         </div>
 
                         {/* Footer */}
                         <div className="modal-footer-modern">
-                            <button className="btn-cancel" onClick={() => setShowModal(false)}>Cancelar</button>
-                            <button className="btn-generate" onClick={handleAIGenerate}>
-                                Generar Menú <Sparkle weight="fill" />
-                            </button>
+                            {aiStep === 'suggestions' && !isGenerating && (
+                                <button className="btn-cancel" onClick={() => { setAiStep('config'); setSuggestions([]); }}>← Volver</button>
+                            )}
+                            <button className="btn-cancel" onClick={handleCloseModal}>Cancelar</button>
+                            {aiStep === 'config' && (
+                                <button className="btn-generate" onClick={handleAISuggest} disabled={isGenerating || selectedIngredients.length === 0}>
+                                    {isGenerating ? <><CircleNotch size={18} className="ph-spin" /> Pensando...</> : <>Generar Menú <Sparkle weight="fill" /></>}
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -555,7 +727,7 @@ function App() {
                 )}
 
                 <Routes>
-                    <Route path="/" element={<PlannerPage userProfile={userProfile} plannerData={plannerData} setPlannerData={setPlannerData} currentMenuPlan={currentMenuPlan} />} />
+                    <Route path="/" element={<PlannerPage userProfile={userProfile} plannerData={plannerData} setPlannerData={setPlannerData} currentMenuPlan={currentMenuPlan} currentFamily={currentFamily} />} />
                     <Route path="/recipes" element={<Recipes onAddToPlanner={handleAddToPlanner} currentFamily={currentFamily} userProfile={userProfile} />} />
                     <Route path="/inventory" element={<Inventory currentFamily={currentFamily} />} />
                     <Route path="/shopping-list" element={<ShoppingList />} />

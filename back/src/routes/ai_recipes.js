@@ -92,8 +92,14 @@ router.post('/generate', async (req, res) => {
             Genera la receta completa para: "${selected_title}".
             
             REGLA DE ORO (TESIS):
-            Usa SOLO los ingredientes del inventario: [ ${available_ingredients.join(', ')} ]
-            y básicos de despensa (sal, aceite, especias).
+            El usuario tiene estos ingredientes en su inventario con las cantidades indicadas entre paréntesis:
+            [ ${available_ingredients.join(', ')} ]
+            También tiene básicos de despensa (sal, aceite, especias).
+            
+            REGLA CRÍTICA DE CANTIDADES:
+            NUNCA uses más cantidad de un ingrediente de la que el usuario tiene disponible.
+            Por ejemplo, si tiene "Pan de Molde (3 unidad)", la receta NO puede pedir 4 unidades.
+            Ajusta las porciones de la receta para que se adapten a lo que hay disponible.
             
             Si el título requiere algo que no está, IMPROVISA usando un sustituto del inventario 
             o cambia ligeramente la técnica, pero MANTÉN el título y usa lo que hay.
@@ -104,13 +110,17 @@ router.post('/generate', async (req, res) => {
                     "title": "${selected_title}", 
                     "description": "...", 
                     "instructions": "Paso 1... Paso 2...", 
-                    "difficulty": "media", 
+                    "difficulty": "easy", 
                     "preparation_time": 30, 
                     "servings": 2, 
                     "calories_per_serving": 400 
                 },
-                "ingredients": [{ "name": "...", "quantity": 1, "unit": "...", "category": "..." }]
+                "ingredients": [{ "name": "...", "quantity": 1, "unit": "g", "category": "vegetal", "average_expiry_days": 7 }]
             }
+            IMPORTANTE: El campo "difficulty" SOLO puede ser "easy", "regular" o "hard". No uses otro valor.
+            IMPORTANTE: El campo "unit" de cada ingrediente SOLO puede ser uno de estos valores exactos: "g", "kg", "ml", "l", "cup", "cucharada grande", "cucharada pequeña", "unidad". No uses ningún otro valor.
+            IMPORTANTE: El campo "category" de cada ingrediente SOLO puede ser uno de estos valores exactos: "vegetal", "fruta", "proteína", "lácteo", "grano", "condimento", "grasa", "bebida", "otro". No uses ningún otro valor.
+            IMPORTANTE: El campo "average_expiry_days" es un número entero que representa los días aproximados que tarda el ingrediente en vencerse. Por ejemplo: pollo=5, arroz=365, leche=7, sal=730, frutas frescas=5, enlatados=730.
         `;
 
         const genAI = new GoogleGenerativeAI(apiKey);
@@ -122,13 +132,59 @@ router.post('/generate', async (req, res) => {
         const result = await model.generateContent(systemPrompt);
         const aiData = JSON.parse(result.response.text());
 
+        // --- NORMALIZAR UNIDADES (seguridad extra) ---
+        const validUnits = ['g', 'kg', 'ml', 'l', 'cup', 'cucharada grande', 'cucharada pequeña', 'unidad'];
+        const unitMap = {
+            'gramos': 'g', 'gramo': 'g', 'gr': 'g',
+            'kilogramos': 'kg', 'kilogramo': 'kg', 'kilo': 'kg', 'kilos': 'kg',
+            'mililitros': 'ml', 'mililitro': 'ml',
+            'litros': 'l', 'litro': 'l',
+            'taza': 'cup', 'tazas': 'cup', 'cups': 'cup',
+            'cucharadas': 'cucharada grande', 'cucharada': 'cucharada grande', 'cda': 'cucharada grande', 'tbsp': 'cucharada grande',
+            'cucharadita': 'cucharada pequeña', 'cucharaditas': 'cucharada pequeña', 'cdta': 'cucharada pequeña', 'tsp': 'cucharada pequeña',
+            'unidades': 'unidad', 'u': 'unidad', 'pieza': 'unidad', 'piezas': 'unidad', 'ud': 'unidad',
+        };
+        // --- NORMALIZAR CATEGORÍAS (seguridad extra) ---
+        const validCategories = ['vegetal', 'fruta', 'proteína', 'lácteo', 'grano', 'condimento', 'grasa', 'bebida', 'otro'];
+        const categoryMap = {
+            'vegetales': 'vegetal', 'verdura': 'vegetal', 'verduras': 'vegetal', 'hortaliza': 'vegetal',
+            'frutas': 'fruta',
+            'proteina': 'proteína', 'proteínas': 'proteína', 'carne': 'proteína', 'carnes': 'proteína', 'pescado': 'proteína',
+            'lacteo': 'lácteo', 'lácteos': 'lácteo', 'lacteos': 'lácteo', 'dairy': 'lácteo',
+            'granos': 'grano', 'cereal': 'grano', 'cereales': 'grano', 'carbohidrato': 'grano',
+            'condimentos': 'condimento', 'especia': 'condimento', 'especias': 'condimento', 'sazón': 'condimento', 'sazon': 'condimento',
+            'grasas': 'grasa', 'aceite': 'grasa', 'aceites': 'grasa',
+            'bebidas': 'bebida', 'líquido': 'bebida', 'liquido': 'bebida',
+            'otros': 'otro',
+        };
+
+        if (aiData.ingredients) {
+            for (const ing of aiData.ingredients) {
+                // Normalizar unidad
+                const rawUnit = (ing.unit || 'unidad').toLowerCase().trim();
+                ing.unit = validUnits.includes(rawUnit) ? rawUnit : (unitMap[rawUnit] || 'unidad');
+
+                // Normalizar categoría
+                const rawCat = (ing.category || 'otro').toLowerCase().trim();
+                ing.category = validCategories.includes(rawCat) ? rawCat : (categoryMap[rawCat] || 'otro');
+
+                // Normalizar average_expiry_days (debe ser un entero positivo)
+                ing.average_expiry_days = Math.max(1, Math.round(Number(ing.average_expiry_days) || 7));
+            }
+        }
+
         // --- C. GUARDAR EN BD ---
         await connection.beginTransaction();
+
+        // Sanitizar difficulty: solo aceptar valores válidos del ENUM
+        const validDifficulties = ['easy', 'regular', 'hard'];
+        const rawDiff = (aiData.recipe.difficulty || 'regular').toLowerCase();
+        const difficulty = validDifficulties.includes(rawDiff) ? rawDiff : 'regular';
 
         // 1. Guardar Receta
         const [resReceta] = await connection.query(
             `INSERT INTO recipes (title, description, instructions, difficulty, preparation_time, servings, calories_per_serving, created_by, family_id, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, 'placeholder')`,
-            [aiData.recipe.title, aiData.recipe.description, aiData.recipe.instructions, aiData.recipe.difficulty, aiData.recipe.preparation_time, aiData.recipe.servings, aiData.recipe.calories_per_serving]
+            [aiData.recipe.title, aiData.recipe.description, aiData.recipe.instructions, difficulty, aiData.recipe.preparation_time, aiData.recipe.servings, aiData.recipe.calories_per_serving]
         );
         const recipeId = resReceta.insertId;
 
@@ -156,8 +212,8 @@ router.post('/generate', async (req, res) => {
                     console.log(`✨ Creando nuevo ingrediente: "${formattedName}"`);
 
                     const [newIng] = await connection.query(
-                        'INSERT INTO ingredients (name, unit) VALUES (?, ?)',
-                        [formattedName, ing.unit || 'u']
+                        'INSERT INTO ingredients (name, unit, category, average_expiry_days) VALUES (?, ?, ?, ?)',
+                        [formattedName, ing.unit || 'unidad', ing.category || 'otro', ing.average_expiry_days || 7]
                     );
                     ingId = newIng.insertId;
                 }
@@ -175,7 +231,7 @@ router.post('/generate', async (req, res) => {
 
         res.json({
             source: "ai_generated",
-            recipe: aiData.recipe,
+            recipe: { ...aiData.recipe, recipe_id: recipeId },
             ingredients: aiData.ingredients
         });
 

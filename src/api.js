@@ -127,6 +127,11 @@ export const inventoryService = {
         body: JSON.stringify(data),
     }),
     delete: (id) => fetchAPI(`/inventory/${id}`, { method: 'DELETE' }),
+    /** Descontar ingredientes del inventario al planificar una receta */
+    deduct: (recipeId, familyId) => fetchAPI('/inventory/deduct', {
+        method: 'POST',
+        body: JSON.stringify({ recipe_id: recipeId, family_id: familyId }),
+    }),
 };
 
 export const recipesService = {
@@ -147,6 +152,23 @@ export const menuPlansService = {
     create: (data) => fetchAPI('/menu-plans', {
         method: 'POST',
         body: JSON.stringify(data),
+    }),
+};
+
+export const aiService = {
+    /** Sugiere 3 recetas basadas en ingredientes disponibles */
+    suggest: (ingredients) => fetchAPI('/ai/suggest', {
+        method: 'POST',
+        body: JSON.stringify({ ingredients }),
+    }),
+    /** Genera una receta completa a partir de un título y los ingredientes disponibles */
+    generate: (selectedTitle, availableIngredients, familyId) => fetchAPI('/ai/generate', {
+        method: 'POST',
+        body: JSON.stringify({
+            selected_title: selectedTitle,
+            available_ingredients: availableIngredients,
+            family_id: familyId,
+        }),
     }),
 };
 
