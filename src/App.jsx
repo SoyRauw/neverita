@@ -4,6 +4,7 @@ import { Sparkle, CircleNotch, ShoppingCart, Check, X, ChefHat, CalendarBlank, C
 
 // --- IMPORTACIÓN DE COMPONENTES ---
 import Sidebar from './components/Sidebar';
+import MobileNav from './components/MobileNav';
 import CalendarGrid from './components/CalendarGrid';
 import Inventory from './components/Inventory';
 import Recipes from './components/Recipes';
@@ -18,7 +19,7 @@ const modalStyles = `
   .modal-overlay {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(5px);
-    display: flex; align-items: center; justify-content: center; z-index: 1000;
+    display: flex; align-items: center; justify-content: center; z-index: 2000;
   }
   .modal-modern {
     background: white; width: 90%; max-width: 550px;
@@ -42,7 +43,6 @@ const modalStyles = `
   .chips-container {
     display: flex; flex-wrap: wrap; gap: 10px;
   }
-  /* Estilo base del Chip */
   .chip-modern {
     padding: 10px 18px; border-radius: 50px; font-size: 0.95rem; font-weight: 500;
     cursor: pointer; transition: all 0.2s ease; 
@@ -50,19 +50,15 @@ const modalStyles = `
     display: flex; align-items: center; gap: 8px; user-select: none;
   }
   .chip-modern:hover { background: #F3F4F6; border-color: #D1D5DB; }
-  
-  /* Estilo Chip SELECCIONADO (Naranja Vibrante) */
   .chip-modern.active {
     background: #FF9F43; color: white; border-color: #FF9F43;
     box-shadow: 0 4px 12px rgba(255, 159, 67, 0.35); transform: translateY(-1px);
   }
-  
   .modern-input {
     width: 100%; padding: 16px; border-radius: 16px; border: 2px solid #E5E7EB;
     font-size: 1rem; transition: all 0.2s; outline: none; background: #FCFCFC; color: #1F2937;
   }
   .modern-input:focus { border-color: #FF9F43; background: white; box-shadow: 0 0 0 4px rgba(255, 159, 67, 0.1); }
-  
   .modal-footer-modern {
     padding: 20px 24px; border-top: 1px solid #F3F4F6; background: white;
     display: flex; gap: 12px; justify-content: flex-end;
@@ -72,7 +68,6 @@ const modalStyles = `
     color: #4B5563; font-weight: 600; cursor: pointer; transition: 0.2s;
   }
   .btn-cancel:hover { background: #E5E7EB; color: #1F2937; }
-  
   .btn-generate {
     padding: 12px 28px; border-radius: 14px; border: none; background: #FF9F43;
     color: white; font-weight: 600; cursor: pointer; 
@@ -80,8 +75,39 @@ const modalStyles = `
     display: flex; align-items: center; gap: 8px; transition: all 0.2s;
   }
   .btn-generate:hover { transform: translateY(-2px); box-shadow: 0 20px 25px -5px rgba(255, 159, 67, 0.4); }
-  
-  @keyframes slideUp { from { opacity: 0; transform: translateY(20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+  /* =========================================
+     AJUSTES RESPONSIVE PARA MÓVIL
+     ========================================= */
+  @media (max-width: 900px) {
+    .modal-overlay {
+      align-items: flex-end; /* Pega el modal abajo */
+    }
+    .modal-modern {
+      width: 100%;
+      max-width: none;
+      border-radius: 28px 28px 0 0; /* Redondeado solo arriba */
+      max-height: 92vh;
+      animation: mobileSlideUp 0.4s cubic-bezier(0, 0, 0.2, 1);
+    }
+    .modal-footer-modern {
+      padding-bottom: 30px; /* Espacio extra para pulgares */
+      justify-content: space-between;
+    }
+    .btn-generate, .btn-cancel {
+      flex: 1; /* Los botones ocupan el mismo ancho en móvil */
+      justify-content: center;
+    }
+  }
+
+  @keyframes slideUp { 
+    from { opacity: 0; transform: translateY(20px) scale(0.95); } 
+    to { opacity: 1; transform: translateY(0) scale(1); } 
+  }
+  @keyframes mobileSlideUp { 
+    from { transform: translateY(100%); } 
+    to { transform: translateY(0); } 
+  }
 `;
 
 // ==========================================
@@ -708,11 +734,14 @@ function App() {
     return (
         <HashRouter>
             <div className="app-container">
-                <Sidebar
+                <Sidebar 
                     activeFamily={currentFamily}
                     onOpenManager={() => setShowFamilyManager(true)}
                     onLogout={handleLogout}
                 />
+
+                {/* Esta es la línea que acabas de agregar */}
+                <MobileNav onOpenManager={() => setShowFamilyManager(true)} />
 
                 {showFamilyManager && (
                     <FamilyManager

@@ -5,6 +5,20 @@
   text-align: center;
 }
 
+/* Utilidad global para ocultar elementos en celular */
+@media (max-width: 768px) {
+  .ocultar-en-movil {
+    display: none !important;
+  }
+}
+
+/* Asegurar que el fondo del body nunca haga scroll horizontal */
+html, body {
+  overflow-x: hidden !important;
+  width: 100%;
+  position: relative;
+}
+
 .logo {
   height: 6em;
   padding: 1.5em;
@@ -39,4 +53,31 @@
 
 .read-the-docs {
   color: #888;
+}
+
+/* Agrégalo a tu App.css */
+.bottom-navigation {
+    position: fixed;
+    bottom: 15px;      /* La separa un poco del borde inferior */
+    left: 5%;          /* La centra */
+    right: 5%;
+    width: 90%;        /* No toca los bordes laterales */
+    height: 65px;
+    background: rgba(255, 255, 255, 0.85); /* Transparencia elegante */
+    backdrop-filter: blur(10px);           /* Desenfoque de fondo */
+    border-radius: 25px;                   /* Bordes muy redondeados */
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    z-index: 9999;
+}
+
+.nav-item {
+    transition: all 0.3s ease;
+}
+
+.nav-item:active {
+    transform: scale(0.9); /* Pequeño efecto al tocar */
 }

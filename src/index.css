@@ -1503,58 +1503,278 @@ header {
 }
 
 /* =========================================
-   RESPONSIVE (Siempre al final)
+   SISTEMA RESPONSIVE MÓVIL (ESTILO APP)
    ========================================= */
 @media (max-width: 900px) {
+    /* 1. Ajuste del contenedor principal */
     .app-container {
         padding-left: 0;
-        display: block;
-    }
-
-    .sidebar-modern {
-        display: none;
-    }
-
-    .login-split-screen {
+        display: flex;
         flex-direction: column;
-        overflow-y: auto;
+        min-height: 100vh;
+        background: var(--bg-main);
     }
 
-    .login-banner {
-        display: none;
+    /* 2. El contenido principal debe tener espacio abajo para la barra */
+    .main-content {
+        padding: 20px 15px 100px 15px !important; /* El 100px evita que la barra tape el contenido */
+        margin-left: 0 !important;
     }
 
-    .login-form-container {
-        background: white;
-        align-items: flex-start;
-        padding-top: 4rem;
+    /* 3. Ocultamos el Sidebar clásico */
+    .sidebar-modern {
+        display: none !important;
     }
 
-    .auth-card-glass {
-        box-shadow: none;
-        background: transparent;
-        border: none;
-        padding: 0;
+    /* 4. Estilos de la Barra Inferior (MobileNav) */
+    .mobile-nav {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 75px;
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(15px);
+        border-top: 1px solid rgba(0,0,0,0.05);
+        justify-content: space-around;
+        align-items: center;
+        z-index: 1000;
+        padding-bottom: env(safe-area-inset-bottom); /* Soporte para iPhone notch */
     }
 
-    .calendar-body,
-    .calendar-header {
-        grid-template-columns: 1fr;
+    .mobile-nav-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        color: #94A3B8;
+        text-decoration: none;
+        gap: 4px;
+        flex: 1;
+        transition: all 0.2s ease;
     }
 
-    .calendar-header {
+    .mobile-nav-item span {
+        font-size: 0.7rem;
+        font-weight: 700;
+    }
+
+    .mobile-nav-item.active {
+        color: var(--color-primary-dark);
+        transform: translateY(-5px);
+    }
+
+    /* 5. Ajuste de Cabeceras en Móvil */
+    header {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 15px;
+        margin-bottom: 25px;
+    }
+
+    header .btn-primary {
+        width: 100%; /* Botón de IA a ancho completo en móvil */
+        justify-content: center;
+    }
+}
+
+/* Ocultar barra móvil en desktop */
+/* 1. Esto es para COMPUTADORAS (Déjalo como estaba) */
+@media (min-width: 901px) {
+    .mobile-nav {
         display: none;
     }
 }
 
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
+/* 2. Esto es para CELULARES (Aquí es donde debe ir el arreglo) */
+@media (max-width: 900px) {
+    
+    /* ... aquí ya deberías tener las reglas de .app-container y .sidebar-modern que pusimos antes ... */
+
+    /* --- ARREGLO PARA EL LOGIN EN MÓVIL (PÉGALO AQUÍ) --- */
+    .login-split-screen {
+        flex-direction: column !important;
+        height: 100vh !important;
+        overflow-y: auto !important;
     }
 
-    to {
-        opacity: 1;
-        transform: translateY(0);
+    .login-banner {
+        display: none !important;
+    }
+
+    .login-form-container {
+        width: 100% !important;
+        padding: 30px 20px !important;
+        justify-content: center !important;
+        background: var(--bg-main) !important;
+    }
+
+    .login-card {
+        width: 100% !important;
+        max-width: 400px !important;
+        margin: 0 auto !important;
+        padding: 30px 25px !important;
+    }
+
+    .login-card h1 {
+        font-size: 1.8rem !important;
+    }
+}
+
+/* ============================================================
+   SECCIÓN DE ADAPTACIÓN PARA MÓVILES (MEDIA QUERIES)
+   Pegar esto al final del archivo index.css
+   ============================================================ */
+
+/* 1. Lógica de visibilidad por dispositivo */
+.desktop-only { 
+    display: grid !important; 
+} 
+.mobile-only { 
+    display: none !important; 
+}
+
+@media (max-width: 900px) {
+    /* Ocultar lo de PC y mostrar lo de móvil */
+    .desktop-only { 
+        display: none !important; 
+    }
+    .mobile-only { 
+        display: block !important; 
+    }
+
+    /* 2. Ajuste del Contenedor Principal en Móvil */
+    .app-container {
+        padding-left: 0 !important;
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+    }
+
+    .main-content {
+        padding: 20px 15px 100px 15px !important; /* Espacio para que la barra inferior no tape nada */
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+
+    /* 3. Estilos del Calendario en Móvil (Tarjetas de días) */
+    .mobile-day-card {
+        background: white;
+        border-radius: 20px;
+        padding: 18px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+        border: 1px solid rgba(0,0,0,0.03);
+    }
+
+    .mobile-day-header {
+        font-weight: 800;
+        color: var(--color-primary-dark);
+        margin-bottom: 15px;
+        font-size: 1.1rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        border-bottom: 2px solid var(--bg-main);
+        padding-bottom: 8px;
+    }
+
+    .mobile-meals-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+    }
+
+    .mobile-meal-slot {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .mobile-meal-img {
+        width: 100%;
+        aspect-ratio: 1;
+        background: #f8fafc;
+        border-radius: 14px;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px dashed #cbd5e1;
+    }
+
+    .mobile-meal-img img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .mobile-meal-label {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: var(--text-medium);
+    }
+
+    /* 4. Estilos del Inventario en Móvil (Cartas Modernas) */
+    .inventory-grid-container {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 15px;
+        margin-top: 20px;
+    }
+
+    .inventory-card {
+        background: white;
+        padding: 16px;
+        border-radius: 18px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        position: relative;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+    }
+
+    .card-icon {
+        width: 54px;
+        height: 54px;
+        background: var(--bg-main);
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .card-info h4 {
+        margin: 0;
+        font-size: 1.05rem;
+        color: var(--text-dark);
+    }
+
+    .card-info p {
+        margin: 4px 0;
+        color: var(--text-light);
+        font-size: 0.9rem;
+    }
+
+    .expiry-badge {
+        font-size: 0.7rem;
+        background: #fff4e5;
+        color: #f7b27b;
+        padding: 3px 10px;
+        border-radius: 8px;
+        font-weight: 800;
+        display: inline-block;
+    }
+
+    .btn-delete-icon {
+        position: absolute;
+        right: 15px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: #fff1f1;
+        border: none;
+        color: var(--color-danger);
+        padding: 8px;
+        border-radius: 10px;
     }
 }

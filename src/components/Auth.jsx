@@ -2,15 +2,6 @@ import React, { useState } from 'react';
 import { User, Lock, EnvelopeSimple, ForkKnife, CircleNotch, Eye, EyeSlash, CheckCircle, XCircle } from '@phosphor-icons/react';
 import { authService } from '../api';
 
-// --- Función para cifrar la contraseña con SHA-256 (Web Crypto API) ---
-async function hashPassword(password) {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
 // --- Validaciones de contraseña ---
 function getPasswordRules(password) {
     return [
@@ -31,6 +22,8 @@ const PasswordField = ({ name, placeholder, value, onChange, showPw, onToggleSho
             value={value}
             onChange={onChange}
             required
+            autoCapitalize="none"
+            autoCorrect="off"
             style={{ paddingRight: '44px' }}
         />
         <button
@@ -69,12 +62,10 @@ const Auth = ({ onLogin }) => {
         setErrorMsg('');
 
         if (isRegistering) {
-            // Validar reglas de contraseña
             if (!passwordValid) {
                 setErrorMsg('La contraseña no cumple los requisitos mínimos.');
                 return;
             }
-            // Validar que las contraseñas coincidan
             if (!passwordsMatch) {
                 setErrorMsg('Las contraseñas no coinciden.');
                 return;
@@ -82,21 +73,24 @@ const Auth = ({ onLogin }) => {
         }
 
         setIsLoading(true);
+        
+        // Limpiamos los datos para evitar espacios accidentales
+        const cleanUsername = formData.username.trim().toLowerCase();
+        const cleanPassword = formData.password.trim();
+
         try {
             let userData;
             if (isRegistering) {
-                // Cifrar la contraseña antes de enviarla al backend
-                const hashedPassword = await hashPassword(formData.password);
+                // SOLUCIÓN: Enviamos cleanPassword directamente. Supabase se encarga del cifrado.
                 userData = await authService.register({
-                    username: formData.username,
-                    password: hashedPassword,
-                    name: formData.name,
-                    email: formData.email,
+                    username: cleanUsername,
+                    password: cleanPassword,
+                    name: formData.name.trim(),
+                    email: formData.email.trim().toLowerCase(),
                 });
             } else {
-                // También ciframos al hacer login para que coincida con lo guardado
-                const hashedPassword = await hashPassword(formData.password);
-                userData = await authService.login(formData.username, hashedPassword);
+                // SOLUCIÓN: Enviamos cleanPassword directamente.
+                userData = await authService.login(cleanUsername, cleanPassword);
             }
             onLogin(userData);
         } catch (err) {
@@ -116,7 +110,6 @@ const Auth = ({ onLogin }) => {
 
     return (
         <div className="login-split-screen">
-
             {/* --- LADO IZQUIERDO: BANNER --- */}
             <div className="login-banner">
                 <div className="banner-content">
@@ -160,7 +153,7 @@ const Auth = ({ onLogin }) => {
                                     <label>Nombre de Usuario</label>
                                     <div className="input-wrapper-floating">
                                         <User size={20} className="input-icon-floating" />
-                                        <input type="text" name="username" placeholder="Ej: jperez" value={formData.username} onChange={handleChange} required />
+                                        <input type="text" name="username" placeholder="Ej: jperez" value={formData.username} onChange={handleChange} required autoCapitalize="none" />
                                     </div>
                                 </div>
                                 <div className="form-group-floating">
@@ -196,7 +189,7 @@ const Auth = ({ onLogin }) => {
                                     <label>Nombre de Usuario</label>
                                     <div className="input-wrapper-floating">
                                         <User size={20} className="input-icon-floating" />
-                                        <input type="text" name="username" placeholder="Crea tu usuario" value={formData.username} onChange={handleChange} required />
+                                        <input type="text" name="username" placeholder="Crea tu usuario" value={formData.username} onChange={handleChange} required autoCapitalize="none" />
                                     </div>
                                 </div>
 
@@ -204,7 +197,7 @@ const Auth = ({ onLogin }) => {
                                     <label>Correo Electrónico</label>
                                     <div className="input-wrapper-floating">
                                         <EnvelopeSimple size={20} className="input-icon-floating" />
-                                        <input type="email" name="email" placeholder="tucorreo@ejemplo.com" value={formData.email} onChange={handleChange} required />
+                                        <input type="email" name="email" placeholder="tucorreo@ejemplo.com" value={formData.email} onChange={handleChange} required autoCapitalize="none" />
                                     </div>
                                 </div>
 
@@ -218,7 +211,6 @@ const Auth = ({ onLogin }) => {
                                         showPw={showPw}
                                         onToggleShow={() => setShowPw(v => !v)}
                                     />
-                                    {/* Indicadores de requisitos */}
                                     {formData.password.length > 0 && (
                                         <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                             {passwordRules.map(rule => (
@@ -248,7 +240,6 @@ const Auth = ({ onLogin }) => {
                                         showPw={showConfirmPw}
                                         onToggleShow={() => setShowConfirmPw(v => !v)}
                                     />
-                                    {/* Indicador de coincidencia */}
                                     {formData.confirmPassword.length > 0 && (
                                         <div style={{
                                             marginTop: '6px', display: 'flex', alignItems: 'center', gap: '6px',
@@ -277,7 +268,7 @@ const Auth = ({ onLogin }) => {
 
                     <div className="auth-footer-modern">
                         {isRegistering ? '¿Ya tienes cuenta? ' : '¿Nuevo usuario? '}
-                        <span onClick={switchMode}>
+                        <span onClick={switchMode} style={{cursor: 'pointer', color: 'var(--primary)', fontWeight: '600'}}>
                             {isRegistering ? 'Ingresa aquí' : 'Crea una cuenta'}
                         </span>
                     </div>
