@@ -169,7 +169,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile }) => {
                         <MagnifyingGlass size={18} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#999' }} />
                         <input
                             className="form-input"
-                            style={{ paddingLeft: 40, width: 250 }}
+                            style={{ paddingLeft: 40, width: '100%', maxWidth: 250 }}
                             placeholder="Buscar plato..."
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
@@ -254,7 +254,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile }) => {
                             {viewRecipe.description && (
                                 <p style={{ color: '#555', marginBottom: 20, fontStyle: 'italic' }}>{viewRecipe.description}</p>
                             )}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                            <div className="detail-grid-responsive" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                                 <div className="detail-card-section">
                                     <h4><ChefHat size={24} weight="duotone" /> Ingredientes</h4>
                                     <ul className="detail-list">
@@ -299,7 +299,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile }) => {
                             <button onClick={() => setIsAdding(false)} className="btn-secondary" style={{ padding: 8, border: 'none' }}><X size={24} /></button>
                         </div>
                         <div className="modal-body">
-                            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: 15, marginBottom: 20 }}>
+                            <div className="create-recipe-top-grid" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: 15, marginBottom: 20 }}>
                                 <div>
                                     <label className="ia-label">Nombre del plato</label>
                                     <input className="form-input" placeholder="Ej. Lasaña" value={newRecipe.name} onChange={e => setNewRecipe({ ...newRecipe, name: e.target.value })} />
@@ -343,7 +343,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile }) => {
                                 )}
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                            <div className="create-recipe-bottom-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                                 <div>
                                     <label className="ia-label">Ingredientes (Uno por línea)</label>
                                     <textarea className="form-textarea" rows="4" placeholder="Tomate&#10;Cebolla..." value={newRecipe.ingredients} onChange={e => setNewRecipe({ ...newRecipe, ingredients: e.target.value })}></textarea>
@@ -379,7 +379,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile }) => {
                             <button onClick={() => setPlanRecipe(null)} className="btn-secondary" style={{ padding: 8, border: 'none', alignSelf: 'flex-start' }}><X size={24} /></button>
                         </div>
                         <div className="modal-body" style={{ overflowX: 'auto', paddingBottom: '10px' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '70px repeat(7, 1fr)', gap: 8, minWidth: '450px' }}>
+                            <div className="plan-mini-grid" style={{ display: 'grid', gridTemplateColumns: '70px repeat(7, 1fr)', gap: 8, minWidth: '450px' }}>
                                 <div></div>
                                 {weekDays.map(d => (
                                     <div key={d} style={{ textAlign: 'center', fontSize: '0.75rem', fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase' }}>

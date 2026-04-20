@@ -1502,45 +1502,79 @@ header {
     color: #333;
 }
 
-/* =========================================
-   SISTEMA RESPONSIVE MÓVIL (ESTILO APP)
-   ========================================= */
-@media (max-width: 900px) {
-    /* 1. Ajuste del contenedor principal */
+/* ============================================================
+   SISTEMA RESPONSIVE UNIFICADO
+   ============================================================ */
+
+/* --- Utilidades de visibilidad --- */
+.desktop-only {
+    display: grid !important;
+}
+
+.mobile-only {
+    display: none !important;
+}
+
+/* --- DESKTOP (769px+) --- */
+@media (min-width: 769px) {
+    .mobile-nav {
+        display: none !important;
+    }
+}
+
+/* --- MÓVIL (768px o menos) --- */
+@media (max-width: 768px) {
+
+    /* Visibilidad */
+    .desktop-only {
+        display: none !important;
+    }
+
+    .mobile-only {
+        display: block !important;
+    }
+
+    /* =====================
+       LAYOUT PRINCIPAL
+       ===================== */
     .app-container {
-        padding-left: 0;
+        padding-left: 0 !important;
         display: flex;
         flex-direction: column;
         min-height: 100vh;
         background: var(--bg-main);
     }
 
-    /* 2. El contenido principal debe tener espacio abajo para la barra */
     .main-content {
-        padding: 20px 15px 100px 15px !important; /* El 100px evita que la barra tape el contenido */
+        padding: 16px 14px 100px 14px !important;
         margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
     }
 
-    /* 3. Ocultamos el Sidebar clásico */
+    /* Ocultar Sidebar */
     .sidebar-modern {
         display: none !important;
     }
 
-    /* 4. Estilos de la Barra Inferior (MobileNav) */
+    /* =====================
+       BARRA INFERIOR MÓVIL
+       ===================== */
     .mobile-nav {
         display: flex;
         position: fixed;
         bottom: 0;
         left: 0;
         right: 0;
-        height: 75px;
-        background: rgba(255, 255, 255, 0.9);
+        height: 70px;
+        background: rgba(255, 255, 255, 0.92);
         backdrop-filter: blur(15px);
-        border-top: 1px solid rgba(0,0,0,0.05);
+        -webkit-backdrop-filter: blur(15px);
+        border-top: 1px solid rgba(0, 0, 0, 0.06);
         justify-content: space-around;
         align-items: center;
         z-index: 1000;
-        padding-bottom: env(safe-area-inset-bottom); /* Soporte para iPhone notch */
+        padding-bottom: env(safe-area-inset-bottom);
     }
 
     .mobile-nav-item {
@@ -1549,49 +1583,288 @@ header {
         align-items: center;
         color: #94A3B8;
         text-decoration: none;
-        gap: 4px;
+        gap: 3px;
         flex: 1;
         transition: all 0.2s ease;
+        font-size: 0.95rem;
     }
 
     .mobile-nav-item span {
-        font-size: 0.7rem;
+        font-size: 0.65rem;
         font-weight: 700;
     }
 
     .mobile-nav-item.active {
         color: var(--color-primary-dark);
-        transform: translateY(-5px);
+        transform: translateY(-3px);
     }
 
-    /* 5. Ajuste de Cabeceras en Móvil */
+    /* =====================
+       HEADERS
+       ===================== */
     header {
         flex-direction: column;
-        align-items: flex-start !important;
-        gap: 15px;
-        margin-bottom: 25px;
+        align-items: stretch !important;
+        gap: 12px;
+        margin-bottom: 20px;
+        padding: 12px !important;
     }
 
-    header .btn-primary {
-        width: 100%; /* Botón de IA a ancho completo en móvil */
+    .header-title h1 {
+        font-size: 1.5rem;
+    }
+
+    .header-title p {
+        font-size: 0.9rem;
+    }
+
+    .header-actions {
+        flex-direction: column;
+        gap: 10px;
+        width: 100%;
+    }
+
+    header .btn-primary,
+    header .btn-new {
+        width: 100%;
         justify-content: center;
     }
-}
 
-/* Ocultar barra móvil en desktop */
-/* 1. Esto es para COMPUTADORAS (Déjalo como estaba) */
-@media (min-width: 901px) {
-    .mobile-nav {
-        display: none;
+    /* =====================
+       CALENDARIO WRAPPER
+       ===================== */
+    .calendar-wrapper {
+        padding: 12px;
+        border-radius: var(--radius-md);
     }
-}
 
-/* 2. Esto es para CELULARES (Aquí es donde debe ir el arreglo) */
-@media (max-width: 900px) {
-    
-    /* ... aquí ya deberías tener las reglas de .app-container y .sidebar-modern que pusimos antes ... */
+    .calendar-header {
+        display: none !important;
+    }
 
-    /* --- ARREGLO PARA EL LOGIN EN MÓVIL (PÉGALO AQUÍ) --- */
+    /* --- Tarjetas de día móvil --- */
+    .mobile-day-card {
+        background: white;
+        border-radius: 18px;
+        padding: 15px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .mobile-day-header {
+        font-weight: 800;
+        text-transform: uppercase;
+        color: #FF9F43;
+        margin-bottom: 12px;
+        font-size: 0.85rem;
+        letter-spacing: 1px;
+        border-bottom: 1px solid #fff5ed;
+        padding-bottom: 5px;
+    }
+
+    .mobile-meals-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        width: 100%;
+    }
+
+    .mobile-meal-slot {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+        cursor: pointer;
+    }
+
+    .mobile-meal-img-container {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background: #fafafa;
+        border: 1.5px dashed #e5e7eb;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+
+    .filled-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .mobile-meal-label {
+        font-size: 0.65rem;
+        color: #888;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+
+    /* =====================
+       INVENTARIO (TABLA → CARDS)
+       ===================== */
+    .inventory-table {
+        display: none !important;
+    }
+
+    .inventory-mobile-list {
+        display: flex !important;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .inv-card {
+        background: white;
+        padding: 16px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+        border: 1px solid rgba(0, 0, 0, 0.04);
+        position: relative;
+    }
+
+    .inv-card-icon {
+        width: 48px;
+        height: 48px;
+        background: var(--bg-main);
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+        flex-shrink: 0;
+    }
+
+    .inv-card-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .inv-card-info h4 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--text-dark);
+    }
+
+    .inv-card-info p {
+        margin: 3px 0 0;
+        color: var(--text-light);
+        font-size: 0.85rem;
+    }
+
+    .inv-card-expiry {
+        font-size: 0.7rem;
+        background: #FFF4E5;
+        color: #F7B27B;
+        padding: 3px 10px;
+        border-radius: 8px;
+        font-weight: 800;
+        display: inline-block;
+        margin-top: 4px;
+    }
+
+    .inv-card-delete {
+        background: #FFF1F1;
+        border: none;
+        color: var(--color-danger);
+        padding: 10px;
+        border-radius: 12px;
+        cursor: pointer;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* =====================
+       RECETAS
+       ===================== */
+    .recipes-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
+        gap: 14px !important;
+    }
+
+    .recipe-img {
+        height: 120px !important;
+    }
+
+    .recipe-content {
+        padding: 12px !important;
+    }
+
+    .recipe-title {
+        font-size: 0.95rem !important;
+    }
+
+    /* Header de Recetas */
+    .search-wrapper {
+        width: 100% !important;
+    }
+
+    .search-wrapper .form-input {
+        width: 100% !important;
+    }
+
+    /* Modales de Recetas (detalle, crear, planificar) */
+    .detail-grid-responsive {
+        grid-template-columns: 1fr !important;
+    }
+
+    .create-recipe-top-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .create-recipe-bottom-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .plan-mini-grid {
+        grid-template-columns: 50px repeat(7, 1fr) !important;
+        gap: 5px !important;
+        min-width: 320px !important;
+        font-size: 0.8rem;
+    }
+
+    /* =====================
+       LISTA DE COMPRAS
+       ===================== */
+    .shopping-form-row {
+        flex-direction: column !important;
+        gap: 10px !important;
+    }
+
+    .shopping-form-row input[type="text"] {
+        width: 100% !important;
+        min-width: unset !important;
+        flex: unset !important;
+    }
+
+    .shopping-form-row input[type="number"] {
+        width: 100% !important;
+    }
+
+    .shopping-form-row select {
+        width: 100% !important;
+    }
+
+    .shopping-form-row button {
+        width: 100% !important;
+    }
+
+    .shopping-card-container {
+        max-width: 100% !important;
+    }
+
+    /* =====================
+       LOGIN / REGISTRO
+       ===================== */
     .login-split-screen {
         flex-direction: column !important;
         height: 100vh !important;
@@ -1604,177 +1877,127 @@ header {
 
     .login-form-container {
         width: 100% !important;
-        padding: 30px 20px !important;
+        padding: 24px 16px !important;
         justify-content: center !important;
         background: var(--bg-main) !important;
     }
 
-    .login-card {
-        width: 100% !important;
-        max-width: 400px !important;
-        margin: 0 auto !important;
-        padding: 30px 25px !important;
+    .auth-card-glass {
+        padding: 1.5rem !important;
+        border-radius: 24px !important;
+        max-width: 100% !important;
     }
 
-    .login-card h1 {
-        font-size: 1.8rem !important;
-    }
-}
-
-/* ============================================================
-   SECCIÓN DE ADAPTACIÓN PARA MÓVILES (MEDIA QUERIES)
-   Pegar esto al final del archivo index.css
-   ============================================================ */
-
-/* 1. Lógica de visibilidad por dispositivo */
-.desktop-only { 
-    display: grid !important; 
-} 
-.mobile-only { 
-    display: none !important; 
-}
-
-@media (max-width: 900px) {
-    /* Ocultar lo de PC y mostrar lo de móvil */
-    .desktop-only { 
-        display: none !important; 
-    }
-    .mobile-only { 
-        display: block !important; 
+    .form-header h2 {
+        font-size: 1.6rem !important;
     }
 
-    /* 2. Ajuste del Contenedor Principal en Móvil */
-    .app-container {
-        padding-left: 0 !important;
-        display: flex;
-        flex-direction: column;
-        min-height: 100vh;
+    .btn-floating-primary {
+        padding: 14px !important;
+        font-size: 1rem !important;
     }
 
-    .main-content {
-        padding: 20px 15px 100px 15px !important; /* Espacio para que la barra inferior no tape nada */
-        margin-left: 0 !important;
-        width: 100% !important;
+    /* =====================
+       SELECCIÓN DE FAMILIA
+       ===================== */
+    .family-content-wrapper {
+        padding: 1rem !important;
     }
 
-    /* 3. Estilos del Calendario en Móvil (Tarjetas de días) */
-    .mobile-day-card {
-        background: white;
-        border-radius: 20px;
-        padding: 18px;
-        margin-bottom: 20px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.06);
-        border: 1px solid rgba(0,0,0,0.03);
+    .family-title {
+        font-size: 1.5rem !important;
     }
 
-    .mobile-day-header {
-        font-weight: 800;
-        color: var(--color-primary-dark);
-        margin-bottom: 15px;
-        font-size: 1.1rem;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        border-bottom: 2px solid var(--bg-main);
-        padding-bottom: 8px;
+    .family-subtitle {
+        font-size: 1rem !important;
+        margin-bottom: 1.5rem !important;
     }
 
-    .mobile-meals-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 12px;
+    .family-logo {
+        font-size: 1.5rem !important;
+        position: static !important;
+        transform: none !important;
+        margin-bottom: 1rem !important;
     }
 
-    .mobile-meal-slot {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 8px;
+    .form-container-glass {
+        padding: 1.5rem !important;
+        border-radius: 20px !important;
+        max-width: 100% !important;
     }
 
-    .mobile-meal-img {
-        width: 100%;
-        aspect-ratio: 1;
-        background: #f8fafc;
-        border-radius: 14px;
-        overflow: hidden;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border: 1px dashed #cbd5e1;
+    .input-group-huge input {
+        font-size: 1.3rem !important;
     }
 
-    .mobile-meal-img img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
+    /* =====================
+       FAMILY MANAGER MODAL
+       ===================== */
+    .family-manager-modal {
+        width: 95% !important;
+        max-width: 450px !important;
     }
 
-    .mobile-meal-label {
-        font-size: 0.75rem;
-        font-weight: 700;
-        color: var(--text-medium);
+    /* =====================
+       MODALES GENÉRICOS
+       ===================== */
+    .modal-content,
+    .modal-modern {
+        width: 95% !important;
+        max-width: none !important;
+        max-height: 90vh !important;
+        border-radius: 20px 20px 0 0 !important;
     }
 
-    /* 4. Estilos del Inventario en Móvil (Cartas Modernas) */
-    .inventory-grid-container {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 15px;
-        margin-top: 20px;
+    .modal-overlay {
+        align-items: flex-end !important;
     }
 
-    .inventory-card {
-        background: white;
-        padding: 16px;
-        border-radius: 18px;
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        position: relative;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+    .modal-header {
+        padding: 16px 18px !important;
     }
 
-    .card-icon {
-        width: 54px;
-        height: 54px;
-        background: var(--bg-main);
-        border-radius: 14px;
-        display: flex;
-        align-items: center;
+    .modal-body {
+        padding: 18px !important;
+        max-height: 60vh !important;
+    }
+
+    .modal-footer {
+        padding: 14px 18px !important;
+        flex-wrap: wrap;
+    }
+
+    .modal-footer .btn-primary,
+    .modal-footer .btn-secondary {
+        flex: 1;
+        min-width: 120px;
         justify-content: center;
     }
 
-    .card-info h4 {
-        margin: 0;
-        font-size: 1.05rem;
-        color: var(--text-dark);
+    /* =====================
+       DETALLE DEL PLATO (Planificador)
+       ===================== */
+    .planner-detail-cols {
+        flex-direction: column !important;
     }
 
-    .card-info p {
-        margin: 4px 0;
-        color: var(--text-light);
-        font-size: 0.9rem;
+    .planner-detail-cols > div {
+        min-width: unset !important;
+        width: 100% !important;
     }
 
-    .expiry-badge {
-        font-size: 0.7rem;
-        background: #fff4e5;
-        color: #f7b27b;
-        padding: 3px 10px;
-        border-radius: 8px;
-        font-weight: 800;
-        display: inline-block;
+    .planner-detail-pill {
+        flex-direction: row;
+        gap: 12px !important;
+        padding: 8px 16px !important;
+        font-size: 0.85rem !important;
     }
 
-    .btn-delete-icon {
-        position: absolute;
-        right: 15px;
-        top: 50%;
-        transform: translateY(-50%);
-        background: #fff1f1;
-        border: none;
-        color: var(--color-danger);
-        padding: 8px;
-        border-radius: 10px;
+    /* =====================
+       ANIMACIONES
+       ===================== */
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
     }
 }

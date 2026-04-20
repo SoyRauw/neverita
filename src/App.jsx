@@ -465,7 +465,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentFamily }
                             </button>
 
                             {/* Píldora de Kcal y Tiempo */}
-                            <div style={{ position: 'absolute', bottom: '-20px', left: '50%', transform: 'translateX(-50%)', background: 'white', padding: '10px 24px', borderRadius: '50px', display: 'flex', gap: '20px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', whiteSpace: 'nowrap' }}>
+                            <div className="planner-detail-pill" style={{ position: 'absolute', bottom: '-20px', left: '50%', transform: 'translateX(-50%)', background: 'white', padding: '10px 24px', borderRadius: '50px', display: 'flex', gap: '20px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', whiteSpace: 'nowrap' }}>
                                 <span style={{ fontWeight: '700', color: '#4B5563', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '6px' }}>🔥 {selectedMealDetails.cal || 'N/A'} kcal</span>
                                 <span style={{ fontWeight: '700', color: '#4B5563', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '6px' }}>⏱️ {selectedMealDetails.time || '30 min'}</span>
                             </div>
@@ -475,7 +475,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentFamily }
                         <div className="modal-scroll-content" style={{ padding: '45px 30px 30px', marginTop: '10px' }}>
                             <h2 style={{ textAlign: 'center', marginTop: 0, color: '#1F2937', fontSize: '1.8rem', fontWeight: '800' }}>{selectedMealDetails.name}</h2>
 
-                            <div style={{ display: 'flex', gap: '24px', marginTop: '24px', flexWrap: 'wrap' }}>
+                            <div className="planner-detail-cols" style={{ display: 'flex', gap: '24px', marginTop: '24px', flexWrap: 'wrap' }}>
 
                                 {/* Caja Ingredientes */}
                                 <div style={{ flex: 1, minWidth: '220px', background: '#F9FAFB', padding: '24px', borderRadius: '20px', border: '1px solid #F3F4F6' }}>
@@ -516,7 +516,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentFamily }
             )}
 
             <div className="calendar-wrapper">
-                <div className="calendar-header">
+                <div className="calendar-header desktop-only">
                     <div style={{ width: 100 }}></div>
                     {weekDays.map(d => <div key={d} className="day-label">{d}</div>)}
                 </div>

@@ -29,7 +29,7 @@ const FamilyManager = ({
 
     return (
         <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content" onClick={e => e.stopPropagation()} style={{ padding: 0, overflow: 'hidden', width: '450px' }}>
+            <div className="modal-content family-manager-modal" onClick={e => e.stopPropagation()} style={{ padding: 0, overflow: 'hidden', width: '95%', maxWidth: '450px' }}>
                 
                 {/* HEADER DEL MODAL */}
                 <div style={{ padding: '20px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff' }}>

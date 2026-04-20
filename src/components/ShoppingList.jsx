@@ -55,10 +55,10 @@ const ShoppingList = () => {
                 </div>
             </header>
 
-            <div style={{ background: 'white', padding: '24px', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', maxWidth: '750px' }}>
+            <div className="shopping-card-container" style={{ background: 'white', padding: '24px', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', maxWidth: '750px' }}>
                 
                 {/* --- ZONA DE AÑADIR PRODUCTO --- */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px', flexWrap: 'wrap', borderBottom: '2px solid #F3F4F6', paddingBottom: '20px' }}>
+                <div className="shopping-form-row" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px', flexWrap: 'wrap', borderBottom: '2px solid #F3F4F6', paddingBottom: '20px' }}>
                     <ShoppingCart size={24} color="#FF9F43" weight="bold" />
                     
                     {/* Input del Nombre */}

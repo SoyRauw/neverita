@@ -63,95 +63,15 @@ const CalendarGrid = ({ data, onMealClick }) => {
                 ))}
             </div>
 
-            {/* --- ESTILOS PARA ARREGLAR EL DESBORDAMIENTO --- */}
-            <style jsx>{`
+            {/* --- ESTILOS MÍNIMOS (el responsive completo está en index.css) --- */}
+            <style>{`
                 .calendar-responsive-wrapper {
                     width: 100%;
                     max-width: 100vw;
                     margin: 0 auto;
-                    overflow: hidden; /* CRÍTICO: Corta todo lo que intente salirse */
-                    padding: 0 10px;
+                    overflow: hidden;
+                    padding: 0;
                     box-sizing: border-box;
-                }
-
-                /* Reglas para Móvil */
-                @media (max-width: 768px) {
-                    .desktop-only { 
-                        display: none !important; 
-                    }
-                    
-                    .mobile-only { 
-                        display: block !important; 
-                        width: 100%;
-                    }
-
-                    .mobile-day-card {
-                        background: white;
-                        border-radius: 18px;
-                        padding: 15px;
-                        margin-bottom: 15px;
-                        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-                        width: 100%;
-                        box-sizing: border-box;
-                    }
-
-                    .mobile-day-header {
-                        font-weight: 800;
-                        text-transform: uppercase;
-                        color: #FF9F43;
-                        margin-bottom: 12px;
-                        font-size: 0.85rem;
-                        letter-spacing: 1px;
-                        border-bottom: 1px solid #fff5ed;
-                        padding-bottom: 5px;
-                    }
-
-                    .mobile-meals-grid {
-                        display: grid;
-                        grid-template-columns: repeat(3, 1fr);
-                        gap: 12px;
-                        width: 100%;
-                    }
-
-                    .mobile-meal-slot {
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        gap: 6px;
-                    }
-
-                    .mobile-meal-img-container {
-                        width: 100%;
-                        aspect-ratio: 1 / 1;
-                        background: #fafafa;
-                        border: 1.5px dashed #e5e7eb;
-                        border-radius: 12px;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        overflow: hidden;
-                    }
-
-                    .filled-img {
-                        width: 100%;
-                        height: 100%;
-                        object-fit: cover;
-                    }
-
-                    .mobile-meal-label {
-                        font-size: 0.65rem;
-                        color: #888;
-                        font-weight: 700;
-                        text-transform: uppercase;
-                    }
-                }
-
-                /* Reglas para PC */
-                @media (min-width: 769px) {
-                    .mobile-only { display: none !important; }
-                    /* Si en tu PC usas grid o flex, asegúrate de mantener esa clase en tu padre, 
-                       aquí solo devolvemos la visibilidad */
-                    .desktop-only { display: contents; } 
                 }
             `}</style>
         </div>

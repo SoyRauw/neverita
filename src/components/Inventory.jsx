@@ -120,54 +120,88 @@ const Inventory = ({ currentFamily }) => {
                 {error && <p style={{ color: '#e74c3c', textAlign: 'center', padding: '2rem' }}>{error}</p>}
 
                 {!loading && !error && (
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead>
-                            <tr style={{ textAlign: 'left', borderBottom: '2px solid #eee' }}>
-                                <th style={{ padding: '1rem' }}>Producto</th>
-                                <th>Cantidad</th>
-                                <th>Vencimiento</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {items.length === 0 ? (
-                                <tr>
-                                    <td colSpan={4} style={{ padding: '2rem', textAlign: 'center', color: '#999' }}>
-                                        No hay ítems en el inventario. ¡Agrega uno!
-                                    </td>
+                    <>
+                        {/* VISTA DESKTOP: Tabla */}
+                        <table className="inventory-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead>
+                                <tr style={{ textAlign: 'left', borderBottom: '2px solid #eee' }}>
+                                    <th style={{ padding: '1rem' }}>Producto</th>
+                                    <th>Cantidad</th>
+                                    <th>Vencimiento</th>
+                                    <th>Acciones</th>
                                 </tr>
-                            ) : (
-                                items.map((item) => (
-                                    <tr key={item.inventory_id} style={{ borderBottom: '1px solid #eee' }}>
-                                        <td style={{ padding: '1rem', fontWeight: 'bold' }}>{item.name}</td>
-                                        <td>{item.quantity} {item.unit}</td>
-                                        <td>
-                                            <span style={{
-                                                backgroundColor: '#FFF4E5',
-                                                color: '#F7B27B',
-                                                padding: '4px 8px',
-                                                borderRadius: '8px',
-                                                fontSize: '0.9rem'
-                                            }}>
-                                                {item.expiration_date
-                                                    ? new Date(item.expiration_date).toLocaleDateString()
-                                                    : '—'}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <button
-                                                onClick={() => handleDelete(item.inventory_id)}
-                                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#FA7070' }}
-                                                title="Eliminar"
-                                            >
-                                                <Trash size={20} />
-                                            </button>
+                            </thead>
+                            <tbody>
+                                {items.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={4} style={{ padding: '2rem', textAlign: 'center', color: '#999' }}>
+                                            No hay ítems en el inventario. ¡Agrega uno!
                                         </td>
                                     </tr>
+                                ) : (
+                                    items.map((item) => (
+                                        <tr key={item.inventory_id} style={{ borderBottom: '1px solid #eee' }}>
+                                            <td style={{ padding: '1rem', fontWeight: 'bold' }}>{item.name}</td>
+                                            <td>{item.quantity} {item.unit}</td>
+                                            <td>
+                                                <span style={{
+                                                    backgroundColor: '#FFF4E5',
+                                                    color: '#F7B27B',
+                                                    padding: '4px 8px',
+                                                    borderRadius: '8px',
+                                                    fontSize: '0.9rem'
+                                                }}>
+                                                    {item.expiration_date
+                                                        ? new Date(item.expiration_date).toLocaleDateString()
+                                                        : '—'}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <button
+                                                    onClick={() => handleDelete(item.inventory_id)}
+                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#FA7070' }}
+                                                    title="Eliminar"
+                                                >
+                                                    <Trash size={20} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+
+                        {/* VISTA MÓVIL: Cards */}
+                        <div className="inventory-mobile-list" style={{ display: 'none' }}>
+                            {items.length === 0 ? (
+                                <p style={{ textAlign: 'center', color: '#999', padding: '2rem' }}>
+                                    No hay ítems en el inventario. ¡Agrega uno!
+                                </p>
+                            ) : (
+                                items.map((item) => (
+                                    <div key={item.inventory_id} className="inv-card">
+                                        <div className="inv-card-icon">📦</div>
+                                        <div className="inv-card-info">
+                                            <h4>{item.name}</h4>
+                                            <p>{item.quantity} {item.unit}</p>
+                                            {item.expiration_date && (
+                                                <span className="inv-card-expiry">
+                                                    Vence: {new Date(item.expiration_date).toLocaleDateString()}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <button
+                                            className="inv-card-delete"
+                                            onClick={() => handleDelete(item.inventory_id)}
+                                            title="Eliminar"
+                                        >
+                                            <Trash size={18} />
+                                        </button>
+                                    </div>
                                 ))
                             )}
-                        </tbody>
-                    </table>
+                        </div>
+                    </>
                 )}
             </div>
 
