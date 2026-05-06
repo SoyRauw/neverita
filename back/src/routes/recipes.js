@@ -73,7 +73,17 @@ router.post('/', async (req, res, next) => {
       'INSERT INTO recipes (title, description, instructions, difficulty, preparation_time, servings, image_url, calories_per_serving, created_by, family_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [title, description || '', instructions || '', difficulty || 'regular', preparation_time || 0, servings || 1, image_url || '', calories_per_serving || null, created_by || null, family_id || null]
     );
-    res.status(201).json({ recipe_id: result.insertId, title, description, instructions, difficulty, preparation_time, servings: servings || 1, image_url, calories_per_serving, created_by: created_by || null, family_id: family_id || null, ingredients: [] });
+    const recipe_id = result.insertId;
+    
+    // Si hay una familia asociada, vinculamos la receta a la familia en la tabla intermedia
+    if (family_id) {
+       await db.query(
+          'INSERT INTO family_recipes (family_id, recipe_id) VALUES (?, ?)',
+          [family_id, recipe_id]
+       );
+    }
+    
+    res.status(201).json({ recipe_id: recipe_id, title, description, instructions, difficulty, preparation_time, servings: servings || 1, image_url, calories_per_serving, created_by: created_by || null, family_id: family_id || null, ingredients: [] });
   } catch (err) { next(err); }
 });
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { Sparkle, CircleNotch, ShoppingCart, Check, X, ChefHat, CalendarBlank, Coffee } from '@phosphor-icons/react';
 
@@ -113,13 +113,12 @@ const modalStyles = `
 // ==========================================
 // PÁGINA DEL PLANIFICADOR
 // ==========================================
-const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentFamily }) => {
+const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan, currentFamily, weekLabel, userRole }) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [selectedMealDetails, setSelectedMealDetails] = useState(null);
 
     // --- ESTADOS DE LA IA ---
-    const [prompt, setPrompt] = useState("");
     const [myInventory, setMyInventory] = useState([]);
     const [loadingInventory, setLoadingInventory] = useState(false);
     const weekDays = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
@@ -127,8 +126,14 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentFamily }
 
     // Estados de selección
     const [selectedIngredients, setSelectedIngredients] = useState([]);
-    const [selectedDays, setSelectedDays] = useState(['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']);
-    const [selectedMeals, setSelectedMeals] = useState(['Almuerzo', 'Cena']);
+    const [selectedSlots, setSelectedSlots] = useState([]);
+
+    const toggleSlot = (dayIndex, meal) => {
+        const slotKey = `${dayIndex}-${meal}`;
+        setSelectedSlots(prev =>
+            prev.includes(slotKey) ? prev.filter(k => k !== slotKey) : [...prev, slotKey]
+        );
+    };
 
     // --- ESTADOS PARA FLUJO DE 2 PASOS ---
     const [aiStep, setAiStep] = useState('config'); // 'config' | 'suggestions' | 'generating'
@@ -185,8 +190,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentFamily }
     // PASO 1: Pedir sugerencias a la IA
     const handleAISuggest = async () => {
         if (selectedIngredients.length === 0) { alert("Selecciona al menos un ingrediente."); return; }
-        if (selectedDays.length === 0) { alert("Selecciona al menos un día."); return; }
-        if (selectedMeals.length === 0) { alert("Selecciona al menos una comida."); return; }
+        if (selectedSlots.length === 0) { alert("Selecciona al menos un cuadro en el calendario."); return; }
 
         setAiStep('suggestions');
         setIsGenerating(true);
@@ -235,14 +239,36 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentFamily }
             };
 
             const newMenu = { ...plannerData };
-            weekDays.forEach((d, dayIndex) => {
-                if (selectedDays.includes(d)) {
-                    selectedMeals.forEach(type => {
-                        newMenu[`${dayIndex}-${type}`] = { ...dish };
-                    });
-                }
+            const DAY_ENUM = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+            const MEAL_ENUM = { 'Desayuno': 'desayuno', 'Almuerzo': 'almuerzo', 'Cena': 'cena' };
+
+            selectedSlots.forEach(slot => {
+                newMenu[slot] = { ...dish };
             });
             setPlannerData(newMenu);
+
+            // --- PERSISTIR EN BASE DE DATOS ---
+            if (currentMenuPlan) {
+                for (const slot of selectedSlots) {
+                    const [dayIndexStr, type] = slot.split('-');
+                    const dayIndex = parseInt(dayIndexStr, 10);
+                    try {
+                        const saved = await dailyMealsService.save({
+                            menu_plan_id: currentMenuPlan.menu_plan_id,
+                            recipe_id: recipe.recipe_id,
+                            meal_type: MEAL_ENUM[type] || type.toLowerCase(),
+                            day_of_week: DAY_ENUM[dayIndex],
+                        });
+                        setPlannerData(prev => ({
+                            ...prev,
+                            [slot]: { ...prev[slot], daily_meal_id: saved.daily_meal_id },
+                        }));
+                    } catch (saveErr) {
+                        console.error('Error guardando meal en BD:', saveErr);
+                    }
+                }
+                console.log('✅ Receta IA guardada en el planificador (BD)');
+            }
 
             // --- DESCONTAR INGREDIENTES DEL INVENTARIO ---
             const familyId = currentFamily?.family_id || currentFamily?.id;
@@ -287,12 +313,27 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentFamily }
                     <p>Hola, <strong>{userProfile.name}</strong> 👋 Organiza tu semana.</p>
                 </div>
                 <div className="header-actions">
-                    <button className="btn-primary" onClick={() => setShowModal(true)} disabled={isGenerating}>
-                        {isGenerating ? <CircleNotch size={20} className="ph-spin" /> : <Sparkle size={20} weight="fill" />}
-                        {isGenerating ? "Cocinando..." : "Asistente IA"}
-                    </button>
+                    {userRole !== 'ayudante' && (
+                        <button className="btn-primary" onClick={() => setShowModal(true)} disabled={isGenerating}>
+                            {isGenerating ? <CircleNotch size={20} className="ph-spin" /> : <Sparkle size={20} weight="fill" />}
+                            {isGenerating ? "Cocinando..." : "Asistente IA"}
+                        </button>
+                    )}
                 </div>
             </header>
+
+            {/* Etiqueta de semana */}
+            {weekLabel && (
+                <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    gap: 10, padding: '10px 20px', margin: '0 0 16px',
+                    background: 'linear-gradient(135deg, #FFF7ED, #FEF3C7)',
+                    borderRadius: 14, border: '1px solid #FFE4B5'
+                }}>
+                    <CalendarBlank size={20} weight="fill" color="#FF9F43" />
+                    <span style={{ fontWeight: 700, fontSize: '1rem', color: '#92400E' }}>{weekLabel}</span>
+                </div>
+            )}
 
             {/* --- MODAL MODERNO DE GENERACIÓN IA --- */}
             {showModal && (
@@ -327,16 +368,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentFamily }
                             {/* ── PASO 1: CONFIGURACIÓN ── */}
                             {aiStep === 'config' && (
                                 <>
-                                    {/* 1. Antojo */}
-                                    <div className="section-title"><Sparkle weight="fill" color="#FF9F43" /> ¿Qué se te antoja?</div>
-                                    <input
-                                        className="modern-input"
-                                        placeholder="Ej: Comida italiana, algo ligero, sin gluten..."
-                                        value={prompt}
-                                        onChange={(e) => setPrompt(e.target.value)}
-                                    />
-
-                                    {/* 2. Ingredientes del inventario real */}
+                                    {/* 1. Ingredientes del inventario real */}
                                     <div className="section-title"><ChefHat weight="fill" color="#FF9F43" /> Ingredientes en tu inventario</div>
                                     {loadingInventory ? (
                                         <p style={{ color: '#999', fontSize: '0.9rem' }}>Cargando inventario...</p>
@@ -357,34 +389,38 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentFamily }
                                         </div>
                                     )}
 
-                                    {/* 3. Días */}
-                                    <div className="section-title"><CalendarBlank weight="fill" color="#FF9F43" /> Días a planificar</div>
-                                    <div className="chips-container">
+                                    {/* 3. Cuadrícula de Planificación */}
+                                    <div className="section-title" style={{ marginTop: '20px' }}><CalendarBlank weight="fill" color="#FF9F43" /> ¿Dónde quieres agregar la receta?</div>
+                                    <p style={{ fontSize: '0.85rem', color: '#888', marginBottom: '15px' }}>Toca los cuadros para elegir los días y comidas.</p>
+                                    
+                                    <div className="plan-mini-grid" style={{ display: 'grid', gridTemplateColumns: '70px repeat(7, 1fr)', gap: 8, overflowX: 'auto', paddingBottom: '10px' }}>
+                                        <div></div>
                                         {weekDays.map(d => (
-                                            <div
-                                                key={d}
-                                                className={`chip-modern ${selectedDays.includes(d) ? 'active' : ''}`}
-                                                onClick={() => toggleSelection(d, selectedDays, setSelectedDays)}
-                                            >
+                                            <div key={d} style={{ textAlign: 'center', fontSize: '0.75rem', fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase' }}>
                                                 {d.substring(0, 3)}
-                                                {selectedDays.includes(d) && <Check size={14} weight="bold" />}
                                             </div>
                                         ))}
-                                    </div>
-
-                                    {/* 4. Tipos de Comida */}
-                                    <div className="section-title"><Coffee weight="fill" color="#FF9F43" /> ¿Qué comidas del día?</div>
-                                    <p style={{ fontSize: '0.8rem', color: '#888', marginBottom: '10px' }}>Selecciona una, dos o las tres.</p>
-                                    <div className="chips-container">
-                                        {mealTypesOptions.map(type => (
-                                            <div
-                                                key={type}
-                                                className={`chip-modern ${selectedMeals.includes(type) ? 'active' : ''}`}
-                                                onClick={() => toggleSelection(type, selectedMeals, setSelectedMeals)}
-                                            >
-                                                {type}
-                                                {selectedMeals.includes(type) && <Check size={14} weight="bold" />}
-                                            </div>
+                                        {mealTypesOptions.map(meal => (
+                                            <React.Fragment key={meal}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', fontSize: '0.85rem', fontWeight: 700, color: '#4a5568', paddingRight: 8 }}>
+                                                    {meal}
+                                                </div>
+                                                {weekDays.map((_, dayIndex) => {
+                                                    const slotKey = `${dayIndex}-${meal}`;
+                                                    const isSelected = selectedSlots.includes(slotKey);
+                                                    return (
+                                                        <div key={slotKey} onClick={() => toggleSlot(dayIndex, meal)} style={{
+                                                            aspectRatio: '1', borderRadius: '8px',
+                                                            border: isSelected ? '2px solid #FF9F43' : '2px dashed #e2e8f0',
+                                                            background: isSelected ? '#fffaf0' : 'transparent',
+                                                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                            transition: 'all 0.2s', minWidth: '40px'
+                                                        }}>
+                                                            {isSelected && <Check size={18} weight="bold" color="#FF9F43" />}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </React.Fragment>
                                         ))}
                                     </div>
                                 </>
@@ -496,8 +532,12 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentFamily }
                                         <Check weight="bold" size={24} /> Pasos
                                     </h3>
                                     <ol style={{ paddingLeft: '20px', color: '#4B5563', lineHeight: '1.8', margin: 0, fontSize: '1rem' }}>
-                                        {selectedMealDetails.steps ?
-                                            selectedMealDetails.steps.map((step, i) => <li key={i} style={{ marginBottom: '8px' }}>{step}</li>)
+                                        {selectedMealDetails.steps && selectedMealDetails.steps.length > 0 ?
+                                            selectedMealDetails.steps.map((step, i) => (
+                                                <li key={i} style={{ marginBottom: '8px' }}>
+                                                    {step.replace(/^\d+[\.\-]?\s*/, '')}
+                                                </li>
+                                            ))
                                             : <li style={{ color: '#9CA3AF' }}>No hay instrucciones para este plato.</li>
                                         }
                                     </ol>
@@ -555,6 +595,7 @@ function App() {
     });
 
     const [userFamilies, setUserFamilies] = useState([]);
+    const [userRole, setUserRole] = useState('ayudante');
 
     // Fetch families for the authenticated user
     useEffect(() => {
@@ -565,10 +606,16 @@ function App() {
                 const mappedFamilies = data.map(fam => ({
                     ...fam,
                     id: fam.family_id,
-                    role: "Admin",
+                    role: fam.role || 'ayudante',
                     members: fam.members || 1
                 }));
                 setUserFamilies(mappedFamilies);
+
+                // Si hay una familia activa, actualizar el rol
+                if (currentFamily) {
+                    const match = mappedFamilies.find(f => f.family_id === (currentFamily.family_id || currentFamily.id));
+                    if (match) setUserRole(match.role);
+                }
             } catch (error) {
                 console.error("Error al cargar familias:", error);
             }
@@ -614,12 +661,13 @@ function App() {
                 ...newFam,
                 id: response.family_id,
                 family_id: response.family_id,
-                role: "Admin",
+                role: 'creador',
                 members: 1
             };
 
             setUserFamilies(prev => [...prev, fam]);
             setCurrentFamily(fam);
+            setUserRole('creador');
         } catch (error) {
             console.error("Error al crear familia:", error);
             alert("Ocurrió un error al crear la familia en el servidor.");
@@ -628,6 +676,7 @@ function App() {
 
     const handleSwitchFamily = (fam) => {
         setCurrentFamily(fam);
+        setUserRole(fam.role || 'ayudante');
         localStorage.setItem('neverita_family', JSON.stringify(fam));
         setShowFamilyManager(false);
     };
@@ -635,13 +684,29 @@ function App() {
     const handleJoinByCode = async (code) => {
         const family = await userFamilyService.joinByCode(userProfile.user_id, code);
         // Añadir la familia a la lista local
-        const mapped = { ...family, id: family.family_id, role: "Miembro", members: 1 };
+        const mapped = { ...family, id: family.family_id, role: 'ayudante', members: 1 };
         setUserFamilies(prev => [...prev, mapped]);
         return family;
     };
 
     const [plannerData, setPlannerData] = useState({});
     const [currentMenuPlan, setCurrentMenuPlan] = useState(null);
+    const [weekLabel, setWeekLabel] = useState('');
+
+    // Obtener el lunes de la semana actual
+    const getMonday = (d) => {
+        const date = new Date(d);
+        const day = date.getDay();
+        const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(date.setDate(diff));
+    };
+
+    const formatWeekLabel = (monday) => {
+        const sunday = new Date(monday);
+        sunday.setDate(sunday.getDate() + 6);
+        const fmt = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+        return `Semana ${fmt(monday)} — ${fmt(sunday)}`;
+    };
 
     // Mapeo entre índice de día (0=Lunes) y el enum de la BD
     const DAY_ENUM = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
@@ -654,15 +719,30 @@ function App() {
 
         const loadMenuPlan = async () => {
             try {
+                const currentMonday = getMonday(new Date());
+                currentMonday.setHours(0, 0, 0, 0);
+                setWeekLabel(formatWeekLabel(currentMonday));
+
                 // 1. Buscar si ya existe un plan para esta familia
                 const plans = await menuPlansService.getByFamily(currentFamily.family_id || currentFamily.id);
                 let plan = plans[0]; // Tomar el más reciente
 
-                // 2. Si no existe, crear uno nuevo
+                // 2. Si existe, verificar si es de la semana actual
+                if (plan) {
+                    const planMonday = getMonday(new Date(plan.start_date));
+                    planMonday.setHours(0, 0, 0, 0);
+                    if (planMonday.getTime() < currentMonday.getTime()) {
+                        // El plan es de una semana anterior → crear uno nuevo
+                        console.log('📅 Semana anterior detectada. Creando nuevo plan semanal...');
+                        plan = null;
+                    }
+                }
+
+                // 3. Si no existe o es de otra semana, crear uno nuevo
                 if (!plan) {
                     plan = await menuPlansService.create({
                         plan_name: `Menú de ${currentFamily.name}`,
-                        start_date: new Date().toISOString().split('T')[0],
+                        start_date: currentMonday.toISOString().split('T')[0],
                         created_by: userProfile.user_id,
                         family_id: currentFamily.family_id || currentFamily.id,
                     });
@@ -686,7 +766,7 @@ function App() {
                         cal: meal.calories_per_serving,
                         time: meal.preparation_time ? `${meal.preparation_time} min` : 'N/A',
                         img: meal.image_url || 'https://images.unsplash.com/photo-1546554137-f86b9593a222?w=400',
-                        ingredients: [],
+                        ingredients: Array.isArray(meal.ingredients) ? meal.ingredients : [],
                         steps: meal.instructions ? meal.instructions.split('\n').filter(Boolean) : [],
                         description: meal.description || '',
                         category: ['Almuerzo'],
@@ -748,17 +828,19 @@ function App() {
                         activeFamily={currentFamily}
                         userFamilies={userFamilies}
                         currentUser={userProfile}
+                        userRole={userRole}
                         onUpdateUser={setUserProfile}
                         onClose={() => setShowFamilyManager(false)}
                         onSwitchFamily={handleSwitchFamily}
                         onCreateNew={() => { setShowFamilyManager(false); setCurrentFamily(null); }}
+                        onLogout={handleLogout}
                     />
                 )}
 
                 <Routes>
-                    <Route path="/" element={<PlannerPage userProfile={userProfile} plannerData={plannerData} setPlannerData={setPlannerData} currentMenuPlan={currentMenuPlan} currentFamily={currentFamily} />} />
-                    <Route path="/recipes" element={<Recipes onAddToPlanner={handleAddToPlanner} currentFamily={currentFamily} userProfile={userProfile} />} />
-                    <Route path="/inventory" element={<Inventory currentFamily={currentFamily} />} />
+                    <Route path="/" element={<PlannerPage userProfile={userProfile} plannerData={plannerData} setPlannerData={setPlannerData} currentMenuPlan={currentMenuPlan} currentFamily={currentFamily} weekLabel={weekLabel} userRole={userRole} />} />
+                    <Route path="/recipes" element={<Recipes onAddToPlanner={handleAddToPlanner} currentFamily={currentFamily} userProfile={userProfile} userRole={userRole} />} />
+                    <Route path="/inventory" element={<Inventory currentFamily={currentFamily} userRole={userRole} />} />
                     <Route path="/shopping-list" element={<ShoppingList />} />
                 </Routes>
             </div>

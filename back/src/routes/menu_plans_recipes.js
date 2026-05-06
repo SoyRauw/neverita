@@ -19,6 +19,28 @@ router.get('/', async (req, res, next) => {
        WHERE dm.menu_plan_id = ?`,
       [menu_plan_id]
     );
+
+    // Traer ingredientes de las recetas del plan
+    if (rows.length > 0) {
+      const recipeIds = [...new Set(rows.map(r => r.recipe_id))];
+      const [ingredientRows] = await db.query(
+        `SELECT ri.recipe_id, i.name, ri.quantity, i.unit
+         FROM recipe_ingredients ri
+         JOIN ingredients i ON ri.ingredient_id = i.ingredient_id
+         WHERE ri.recipe_id IN (?)`,
+        [recipeIds]
+      );
+      const ingredientsByRecipe = {};
+      for (const row of ingredientRows) {
+        if (!ingredientsByRecipe[row.recipe_id]) ingredientsByRecipe[row.recipe_id] = [];
+        const qty = row.quantity ? `${row.quantity} ${row.unit || ''}`.trim() : row.unit || '';
+        ingredientsByRecipe[row.recipe_id].push(qty ? `${row.name} (${qty})` : row.name);
+      }
+      for (const meal of rows) {
+        meal.ingredients = ingredientsByRecipe[meal.recipe_id] || [];
+      }
+    }
+
     res.json(rows);
   } catch (err) { next(err); }
 });

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Trash, PlusCircle, X } from '@phosphor-icons/react';
 import { inventoryService, ingredientsService } from '../api';
 
-const Inventory = ({ currentFamily }) => {
+const Inventory = ({ currentFamily, userRole }) => {
     const [items, setItems] = useState([]);
     const [ingredients, setIngredients] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -17,6 +17,8 @@ const Inventory = ({ currentFamily }) => {
         expiration_date: '',
     });
     const [saving, setSaving] = useState(false);
+    const [creatingNew, setCreatingNew] = useState(false);
+    const [newIngredient, setNewIngredient] = useState({ name: '', unit: 'unidad', category: 'otro' });
 
     const units = ['unidades', 'gr', 'kg', 'ml', 'litros', 'paquetes'];
 
@@ -100,6 +102,29 @@ const Inventory = ({ currentFamily }) => {
         }
     };
 
+    // ---------- Crear ingrediente nuevo ----------
+    const handleCreateIngredient = async () => {
+        if (!newIngredient.name.trim()) {
+            alert('Escribe el nombre del ingrediente.');
+            return;
+        }
+        try {
+            const created = await ingredientsService.create({
+                name: newIngredient.name.trim(),
+                unit: newIngredient.unit,
+                category: newIngredient.category,
+            });
+            // Agregar a la lista local y seleccionarlo
+            setIngredients(prev => [...prev, created]);
+            setForm(prev => ({ ...prev, ingredient_id: String(created.ingredient_id) }));
+            setCreatingNew(false);
+            setNewIngredient({ name: '', unit: 'unidad', category: 'otro' });
+        } catch (err) {
+            alert('Error al crear el ingrediente.');
+            console.error(err);
+        }
+    };
+
     // ---------- Render ----------
     return (
         <div className="main-content">
@@ -157,13 +182,15 @@ const Inventory = ({ currentFamily }) => {
                                                 </span>
                                             </td>
                                             <td>
-                                                <button
-                                                    onClick={() => handleDelete(item.inventory_id)}
-                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#FA7070' }}
-                                                    title="Eliminar"
-                                                >
-                                                    <Trash size={20} />
-                                                </button>
+                                                {userRole !== 'ayudante' && (
+                                                    <button
+                                                        onClick={() => handleDelete(item.inventory_id)}
+                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#FA7070' }}
+                                                        title="Eliminar"
+                                                    >
+                                                        <Trash size={20} />
+                                                    </button>
+                                                )}
                                             </td>
                                         </tr>
                                     ))
@@ -190,13 +217,15 @@ const Inventory = ({ currentFamily }) => {
                                                 </span>
                                             )}
                                         </div>
-                                        <button
-                                            className="inv-card-delete"
-                                            onClick={() => handleDelete(item.inventory_id)}
-                                            title="Eliminar"
-                                        >
-                                            <Trash size={18} />
-                                        </button>
+                                        {userRole !== 'ayudante' && (
+                                            <button
+                                                className="inv-card-delete"
+                                                onClick={() => handleDelete(item.inventory_id)}
+                                                title="Eliminar"
+                                            >
+                                                <Trash size={18} />
+                                            </button>
+                                        )}
                                     </div>
                                 ))
                             )}
@@ -218,21 +247,87 @@ const Inventory = ({ currentFamily }) => {
 
                         <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
                             <div>
-                                <label style={{ fontWeight: 600, fontSize: '0.9rem', color: '#555', display: 'block', marginBottom: 6 }}>
-                                    Ingrediente
-                                </label>
-                                <select
-                                    value={form.ingredient_id}
-                                    onChange={e => setForm({ ...form, ingredient_id: e.target.value })}
-                                    style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: '2px solid #E5E7EB', fontSize: '1rem', outline: 'none' }}
-                                >
-                                    <option value="">— Selecciona un ingrediente —</option>
-                                    {ingredients.map(ing => (
-                                        <option key={ing.ingredient_id} value={ing.ingredient_id}>
-                                            {ing.name}
-                                        </option>
-                                    ))}
-                                </select>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                    <label style={{ fontWeight: 600, fontSize: '0.9rem', color: '#555' }}>
+                                        Ingrediente
+                                    </label>
+                                    <button
+                                        onClick={() => setCreatingNew(!creatingNew)}
+                                        style={{
+                                            background: creatingNew ? '#FEF2F2' : '#FFF7ED',
+                                            color: creatingNew ? '#DC2626' : '#FF9F43',
+                                            border: 'none', borderRadius: 8,
+                                            padding: '4px 12px', fontSize: '0.8rem',
+                                            fontWeight: 700, cursor: 'pointer'
+                                        }}
+                                    >
+                                        {creatingNew ? '✕ Cancelar' : '+ Nuevo Producto'}
+                                    </button>
+                                </div>
+
+                                {creatingNew ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, background: '#FFFBF5', border: '2px dashed #FFD9A0', borderRadius: 12, padding: 14 }}>
+                                        <input
+                                            type="text"
+                                            placeholder="Nombre del ingrediente (Ej: Harina Pan)"
+                                            value={newIngredient.name}
+                                            onChange={e => setNewIngredient({ ...newIngredient, name: e.target.value })}
+                                            style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '2px solid #E5E7EB', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }}
+                                        />
+                                        <div style={{ display: 'flex', gap: 8 }}>
+                                            <select
+                                                value={newIngredient.unit}
+                                                onChange={e => setNewIngredient({ ...newIngredient, unit: e.target.value })}
+                                                style={{ flex: 1, padding: '8px 10px', borderRadius: 10, border: '2px solid #E5E7EB', fontSize: '0.9rem' }}
+                                            >
+                                                <option value="unidad">Unidad</option>
+                                                <option value="g">Gramos (g)</option>
+                                                <option value="kg">Kilogramos (kg)</option>
+                                                <option value="ml">Mililitros (ml)</option>
+                                                <option value="l">Litros (l)</option>
+                                                <option value="cup">Taza</option>
+                                            </select>
+                                            <select
+                                                value={newIngredient.category}
+                                                onChange={e => setNewIngredient({ ...newIngredient, category: e.target.value })}
+                                                style={{ flex: 1, padding: '8px 10px', borderRadius: 10, border: '2px solid #E5E7EB', fontSize: '0.9rem' }}
+                                            >
+                                                <option value="vegetal">Vegetal</option>
+                                                <option value="fruta">Fruta</option>
+                                                <option value="proteína">Proteína</option>
+                                                <option value="lácteo">Lácteo</option>
+                                                <option value="grano">Grano</option>
+                                                <option value="condimento">Condimento</option>
+                                                <option value="grasa">Grasa</option>
+                                                <option value="bebida">Bebida</option>
+                                                <option value="otro">Otro</option>
+                                            </select>
+                                        </div>
+                                        <button
+                                            onClick={handleCreateIngredient}
+                                            style={{
+                                                background: '#FF9F43', color: 'white', border: 'none',
+                                                borderRadius: 10, padding: '8px 16px', fontWeight: 700,
+                                                cursor: 'pointer', fontSize: '0.9rem'
+                                            }}
+                                        >
+                                            Crear y seleccionar
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <select
+                                        value={form.ingredient_id}
+                                        onChange={e => setForm({ ...form, ingredient_id: e.target.value })}
+                                        style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: '2px solid #E5E7EB', fontSize: '1rem', outline: 'none' }}
+                                    >
+                                        <option value="">— Selecciona un ingrediente —</option>
+                                        {ingredients.map(ing => (
+                                            <option key={ing.ingredient_id} value={ing.ingredient_id}>
+                                                {ing.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
                             </div>
 
                             <div style={{ display: 'flex', gap: 10 }}>
@@ -276,8 +371,8 @@ const Inventory = ({ currentFamily }) => {
                         </div>
 
                         <div style={{ padding: '16px 24px 24px', display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-                            <button className="btn-cancel" onClick={() => setShowModal(false)}>Cancelar</button>
-                            <button className="btn-generate" onClick={handleAdd} disabled={saving}>
+                            <button className="btn-secondary" onClick={() => setShowModal(false)}>Cancelar</button>
+                            <button className="btn-primary" onClick={handleAdd} disabled={saving}>
                                 {saving ? 'Guardando...' : 'Agregar'}
                             </button>
                         </div>

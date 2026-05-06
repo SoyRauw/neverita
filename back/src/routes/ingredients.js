@@ -20,12 +20,12 @@ router.get('/:id', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { name, category, image_url, average_expiry_days } = req.body;
+    const { name, category, unit, image_url, average_expiry_days } = req.body;
     const [result] = await db.query(
-      'INSERT INTO ingredients (name, category, image_url, average_expiry_days) VALUES (?, ?, ?, ?)',
-      [name, category || 'otro', image_url, average_expiry_days]
+      'INSERT INTO ingredients (name, category, unit, image_url, average_expiry_days) VALUES (?, ?, ?, ?, ?)',
+      [name, category || 'otro', unit || 'unidad', image_url || null, average_expiry_days || 7]
     );
-    res.status(201).json({ ingredient_id: result.insertId, name, category: category || 'otro', image_url, average_expiry_days });
+    res.status(201).json({ ingredient_id: result.insertId, name, category: category || 'otro', unit: unit || 'unidad', image_url, average_expiry_days: average_expiry_days || 7 });
   } catch (err) { next(err); }
 });
 

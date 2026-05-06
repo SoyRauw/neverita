@@ -67,7 +67,7 @@ const CalendarGrid = ({ data, onMealClick }) => {
             <style>{`
                 .calendar-responsive-wrapper {
                     width: 100%;
-                    max-width: 100vw;
+                    max-width: 100%;
                     margin: 0 auto;
                     overflow: hidden;
                     padding: 0;

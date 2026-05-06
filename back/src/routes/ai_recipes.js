@@ -59,7 +59,7 @@ router.post('/suggest', async (req, res) => {
 router.post('/generate', async (req, res) => {
     const connection = await db.getConnection();
     try {
-        const { selected_title, available_ingredients } = req.body;
+        const { selected_title, available_ingredients, family_id } = req.body;
 
         if (!selected_title) return res.status(400).json({ error: "Falta título" });
 
@@ -75,6 +75,14 @@ router.post('/generate', async (req, res) => {
                 SELECT i.name, ri.quantity, i.unit 
                 FROM ingredients i JOIN recipe_ingredients ri ON i.ingredient_id = ri.ingredient_id
                 WHERE ri.recipe_id = ?`, [existing[0].recipe_id]);
+
+            // Si la receta ya estaba en DB, igual la vinculamos a la familia actual si no lo estaba
+            if (family_id) {
+                await connection.query(
+                    'INSERT IGNORE INTO family_recipes (family_id, recipe_id) VALUES (?, ?)',
+                    [family_id, existing[0].recipe_id]
+                );
+            }
 
             connection.release();
             return res.json({
@@ -181,12 +189,46 @@ router.post('/generate', async (req, res) => {
         const rawDiff = (aiData.recipe.difficulty || 'regular').toLowerCase();
         const difficulty = validDifficulties.includes(rawDiff) ? rawDiff : 'regular';
 
+        // --- B.5 OBTENER IMAGEN CON SERPAPI (Google Images) ---
+        let imageUrl = 'https://images.unsplash.com/photo-1546554137-f86b9593a222?w=400'; // Fallback por defecto
+
+        const serpApiKey = process.env.SERPAPI_KEY;
+
+        if (serpApiKey) {
+            try {
+                console.log(`📸 Buscando imagen en Google Images para: ${aiData.recipe.title}`);
+                const query = encodeURIComponent(`${aiData.recipe.title} receta -tiktok -instagram -facebook`);
+                const serpUrl = `https://serpapi.com/search.json?engine=google_images&q=${query}&num=1&api_key=${serpApiKey}`;
+                
+                const serpResponse = await fetch(serpUrl);
+                const serpData = await serpResponse.json();
+
+                if (serpData.images_results && serpData.images_results.length > 0) {
+                    imageUrl = serpData.images_results[0].original;
+                    console.log(`✅ Imagen encontrada: ${imageUrl}`);
+                } else {
+                    console.log('⚠️ No se encontraron imágenes, usando fallback.');
+                }
+            } catch (err) {
+                console.error("❌ Error conectando con SerpAPI:", err.message);
+            }
+        } else {
+            console.log('⚠️ Falta SERPAPI_KEY. Usando imagen genérica.');
+        }
+
         // 1. Guardar Receta
+        const validFamilyId = family_id || 1;
         const [resReceta] = await connection.query(
-            `INSERT INTO recipes (title, description, instructions, difficulty, preparation_time, servings, calories_per_serving, created_by, family_id, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, 'placeholder')`,
-            [aiData.recipe.title, aiData.recipe.description, aiData.recipe.instructions, difficulty, aiData.recipe.preparation_time, aiData.recipe.servings, aiData.recipe.calories_per_serving]
+            `INSERT INTO recipes (title, description, instructions, difficulty, preparation_time, servings, calories_per_serving, created_by, family_id, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+            [aiData.recipe.title, aiData.recipe.description, aiData.recipe.instructions, difficulty, aiData.recipe.preparation_time, aiData.recipe.servings, aiData.recipe.calories_per_serving, validFamilyId, imageUrl]
         );
         const recipeId = resReceta.insertId;
+        
+        // 1.b Guardar relación con familia
+        await connection.query(
+            'INSERT IGNORE INTO family_recipes (family_id, recipe_id) VALUES (?, ?)',
+            [validFamilyId, recipeId]
+        );
 
         // 2. Guardar Ingredientes (LÓGICA ANTI-DUPLICADOS MEJORADA)
         if (aiData.ingredients) {
@@ -231,7 +273,7 @@ router.post('/generate', async (req, res) => {
 
         res.json({
             source: "ai_generated",
-            recipe: { ...aiData.recipe, recipe_id: recipeId },
+            recipe: { ...aiData.recipe, recipe_id: recipeId, image_url: imageUrl },
             ingredients: aiData.ingredients
         });
 

@@ -3,7 +3,7 @@ import {
     Plus, Fire, Clock, X, MagnifyingGlass,
     ChefHat, ListNumbers, Check, ArrowRight, Trash
 } from '@phosphor-icons/react';
-import { recipesService } from '../api';
+import { recipesService, familyRecipesService } from '../api';
 
 // --- COLORES SEGÚN COMIDA ---
 const getMealColor = (type) => {
@@ -33,7 +33,7 @@ const mapRecipe = (r) => ({
 const mealTypes = ['Desayuno', 'Almuerzo', 'Cena'];
 const weekDays = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
-const Recipes = ({ onAddToPlanner, currentFamily, userProfile }) => {
+const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
     const [recipes, setRecipes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -41,6 +41,8 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile }) => {
 
     const [viewRecipe, setViewRecipe] = useState(null);
     const [isAdding, setIsAdding] = useState(false);
+    const [isAddingExisting, setIsAddingExisting] = useState(false);
+    const [availableRecipes, setAvailableRecipes] = useState([]);
     const [planRecipe, setPlanRecipe] = useState(null);
     const [selectedSlots, setSelectedSlots] = useState([]);
 
@@ -54,10 +56,13 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile }) => {
     // ---------- Cargar recetas ----------
     useEffect(() => {
         const load = async () => {
+            const fid = currentFamily?.family_id || currentFamily?.id;
+            if (!fid) return;
+            
             setLoading(true);
             setError(null);
             try {
-                const data = await recipesService.getAll();
+                const data = await familyRecipesService.getByFamily(fid);
                 setRecipes(data.map(mapRecipe));
             } catch (err) {
                 setError('No se pudo cargar las recetas. ¿Está el backend corriendo?');
@@ -67,19 +72,49 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile }) => {
             }
         };
         load();
-    }, []);
+    }, [currentFamily]);
 
     // ---------- Eliminar ----------
     const handleDelete = async (recipeId, e) => {
         e.stopPropagation();
-        if (!window.confirm('¿Eliminar esta receta?')) return;
+        if (!window.confirm('¿Remover esta receta de tu familia? (No se borrará del sistema)')) return;
         try {
-            await recipesService.delete(recipeId);
+            const fid = currentFamily?.family_id || currentFamily?.id;
+            await familyRecipesService.remove(fid, recipeId);
             setRecipes(prev => prev.filter(r => r.id !== recipeId));
             if (viewRecipe?.id === recipeId) setViewRecipe(null);
         } catch (err) {
-            alert('Error al eliminar la receta.');
+            alert('Error al remover la receta.');
             console.error(err);
+        }
+    };
+    
+    // ---------- Importar Existente ----------
+    const handleOpenAddExisting = async () => {
+        const fid = currentFamily?.family_id || currentFamily?.id;
+        if (!fid) return;
+        setIsAddingExisting(true);
+        try {
+            const data = await familyRecipesService.getAvailable(fid);
+            setAvailableRecipes(data.map(mapRecipe));
+        } catch (error) {
+            console.error('Error al obtener recetas disponibles:', error);
+        }
+    };
+
+    const handleAddExistingRecipe = async (recipeId) => {
+        const fid = currentFamily?.family_id || currentFamily?.id;
+        if (!fid) return;
+        try {
+            await familyRecipesService.add(fid, recipeId);
+            const addedRecipe = availableRecipes.find(r => r.id === recipeId);
+            if (addedRecipe) {
+                setRecipes(prev => [...prev, addedRecipe]);
+                setAvailableRecipes(prev => prev.filter(r => r.id !== recipeId));
+            }
+        } catch (error) {
+            console.error('Error al vincular receta:', error);
+            alert('Error al agregar receta a la familia');
         }
     };
 
@@ -175,9 +210,18 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile }) => {
                             onChange={e => setSearchTerm(e.target.value)}
                         />
                     </div>
-                    <button className="btn-primary" onClick={() => setIsAdding(true)}>
-                        <Plus size={20} weight="bold" /> Nueva Receta
-                    </button>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                        {userRole !== 'ayudante' && (
+                            <>
+                                <button className="btn-secondary" style={{ flex: 1, minWidth: '140px' }} onClick={handleOpenAddExisting}>
+                                    Importar Existente
+                                </button>
+                                <button className="btn-primary" style={{ flex: 1, minWidth: '140px' }} onClick={() => setIsAdding(true)}>
+                                    <Plus size={20} weight="bold" /> Nueva Receta
+                                </button>
+                            </>
+                        )}
+                    </div>
                 </div>
             </header>
 
@@ -193,20 +237,22 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile }) => {
                             <div key={recipe.id} className="recipe-card" onClick={() => setViewRecipe(recipe)} style={{ position: 'relative' }}>
                                 <img src={recipe.img} alt={recipe.name} className="recipe-img" />
 
-                                <button
-                                    onClick={(e) => handleDelete(recipe.id, e)}
-                                    style={{
-                                        position: 'absolute', top: 8, right: 8,
-                                        background: 'rgba(255,255,255,0.9)', border: 'none',
-                                        borderRadius: '50%', width: 32, height: 32,
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        cursor: 'pointer', color: '#e74c3c',
-                                        boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
-                                    }}
-                                    title="Eliminar receta"
-                                >
-                                    <Trash size={16} />
-                                </button>
+                                {userRole !== 'ayudante' && (
+                                    <button
+                                        onClick={(e) => handleDelete(recipe.id, e)}
+                                        style={{
+                                            position: 'absolute', top: 8, right: 8,
+                                            background: 'rgba(255,255,255,0.9)', border: 'none',
+                                            borderRadius: '50%', width: 32, height: 32,
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            cursor: 'pointer', color: '#e74c3c',
+                                            boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
+                                        }}
+                                        title="Eliminar receta"
+                                    >
+                                        <Trash size={16} />
+                                    </button>
+                                )}
 
                                 <div className="recipe-content">
                                     <div className="recipe-badges">
@@ -226,66 +272,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile }) => {
                 </div>
             )}
 
-            {/* MODAL 1: DETALLE */}
-            {viewRecipe && (
-                <div className="modal-overlay" onClick={() => setViewRecipe(null)}>
-                    <div className="modal-modern" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h3 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 800, color: '#2d3436' }}>{viewRecipe.name}</h3>
-                            <button onClick={() => setViewRecipe(null)} className="btn-secondary" style={{ padding: 8, border: 'none' }}><X size={24} /></button>
-                        </div>
-                        <div className="modal-body">
-                            <div className="recipe-hero-wrapper">
-                                <img src={viewRecipe.img} className="recipe-hero-img" alt={viewRecipe.name} />
-                                <div className="hero-badges-overlay">
-                                    {viewRecipe.category.map(cat => (
-                                        <span key={cat} className="mini-badge" style={{ background: 'rgba(255,255,255,0.95)', color: getMealColor(cat), boxShadow: '0 4px 10px rgba(0,0,0,0.2)' }}>{cat}</span>
-                                    ))}
-                                </div>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'center', gap: 30, marginBottom: 30, padding: '10px 0', borderBottom: '1px dashed #eee' }}>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', color: '#555', fontWeight: 700 }}>
-                                    <Fire weight="fill" color="#F7B27B" size={22} /> {viewRecipe.cal || '—'} kcal
-                                </span>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', color: '#555', fontWeight: 700 }}>
-                                    <Clock weight="fill" color="#F7B27B" size={22} /> {viewRecipe.time}
-                                </span>
-                            </div>
-                            {viewRecipe.description && (
-                                <p style={{ color: '#555', marginBottom: 20, fontStyle: 'italic' }}>{viewRecipe.description}</p>
-                            )}
-                            <div className="detail-grid-responsive" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                                <div className="detail-card-section">
-                                    <h4><ChefHat size={24} weight="duotone" /> Ingredientes</h4>
-                                    <ul className="detail-list">
-                                        {viewRecipe.ingredients && viewRecipe.ingredients.length > 0
-                                            ? viewRecipe.ingredients.map((ing, i) => <li key={i}>{ing}</li>)
-                                            : <li style={{ color: '#aaa' }}>Sin ingredientes registrados</li>}
-                                    </ul>
-                                </div>
-                                <div className="detail-card-section">
-                                    <h4><ListNumbers size={24} weight="duotone" /> Pasos</h4>
-                                    <ol className="detail-list" style={{ listStyle: 'none', padding: 0 }}>
-                                        {viewRecipe.steps && viewRecipe.steps.length > 0
-                                            ? viewRecipe.steps.map((step, i) => (
-                                                <li key={i} style={{ marginBottom: 15 }}>
-                                                    <span style={{ fontWeight: '800', color: '#F7B27B', marginRight: 5 }}>{i + 1}.</span> {step}
-                                                </li>
-                                            ))
-                                            : <li style={{ color: '#aaa' }}>Sin instrucciones registradas</li>}
-                                    </ol>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="modal-footer">
-                            <button className="btn-secondary" onClick={() => setViewRecipe(null)}>Cerrar</button>
-                            <button className="btn-primary" onClick={() => { setPlanRecipe(viewRecipe); setSelectedSlots([]); }}>
-                                Planificar <ArrowRight weight="bold" />
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* MODAL MUEVE ABAJO PARA PERMITIR Z-INDEX CORRECTO SOBRE EL PREVIO */}
 
             {/* MODAL 2: CREAR */}
             {isAdding && (
@@ -415,6 +402,121 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile }) => {
                             <button className="btn-primary" onClick={handleConfirmPlan} style={{ opacity: selectedSlots.length === 0 ? 0.5 : 1, cursor: selectedSlots.length === 0 ? 'not-allowed' : 'pointer' }} disabled={selectedSlots.length === 0}>
                                 Confirmar <Check weight="bold" />
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* MODAL 4: AGREGAR EXISTENTE */}
+            {isAddingExisting && (
+                <div className="modal-overlay" onClick={() => setIsAddingExisting(false)}>
+                    <div className="modal-modern" onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <div>
+                                <h3 style={{ margin: 0, fontWeight: 800 }}>Importar Receta</h3>
+                                <p style={{ margin: 0, color: '#999', fontSize: '0.9rem' }}>Agrega recetas del sistema a tu familia</p>
+                            </div>
+                            <button onClick={() => setIsAddingExisting(false)} className="btn-secondary" style={{ padding: 8, border: 'none' }}><X size={24} /></button>
+                        </div>
+                        <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+                            {availableRecipes.length === 0 ? (
+                                <p style={{ color: '#999', textAlign: 'center', padding: '2rem' }}>No hay recetas adicionales disponibles en el sistema.</p>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                    {availableRecipes.map(recipe => (
+                                        <div key={recipe.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 10, border: '1px solid #eee', borderRadius: 10 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                <img src={recipe.img} alt={recipe.name} style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover' }} />
+                                                <div>
+                                                    <span style={{ fontWeight: 600, display: 'block' }}>{recipe.name}</span>
+                                                    <span style={{ fontSize: '0.8rem', color: '#888' }}><Fire size={12} style={{verticalAlign: 'middle'}}/> {recipe.cal || '—'} kcal | <Clock size={12} style={{verticalAlign: 'middle'}}/> {recipe.time}</span>
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 10 }}>
+                                                <button className="btn-secondary" style={{ padding: '5px 15px', fontSize: '0.85rem' }} onClick={() => setViewRecipe(recipe)}>
+                                                    Ver
+                                                </button>
+                                                <button className="btn-primary" style={{ padding: '5px 15px', fontSize: '0.85rem' }} onClick={() => handleAddExistingRecipe(recipe.id)}>
+                                                    Añadir
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL 1: DETALLE (MOVIDO AL FINAL PARA QUE APAREZCA POR ENCIMA CUANDO ESTÁ IMPORTANDO) */}
+            {viewRecipe && (
+                <div className="modal-overlay" style={{ zIndex: 6000 }} onClick={() => setViewRecipe(null)}>
+                    <div className="modal-modern" onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 800, color: '#2d3436' }}>{viewRecipe.name}</h3>
+                            <button onClick={() => setViewRecipe(null)} className="btn-secondary" style={{ padding: 8, border: 'none' }}><X size={24} /></button>
+                        </div>
+                        <div className="modal-body">
+                            <div className="recipe-hero-wrapper">
+                                <img src={viewRecipe.img} className="recipe-hero-img" alt={viewRecipe.name} />
+                                <div className="hero-badges-overlay">
+                                    {viewRecipe.category.map(cat => (
+                                        <span key={cat} className="mini-badge" style={{ background: 'rgba(255,255,255,0.95)', color: getMealColor(cat), boxShadow: '0 4px 10px rgba(0,0,0,0.2)' }}>{cat}</span>
+                                    ))}
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'center', gap: 30, marginBottom: 30, padding: '10px 0', borderBottom: '1px dashed #eee' }}>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', color: '#555', fontWeight: 700 }}>
+                                    <Fire weight="fill" color="#F7B27B" size={22} /> {viewRecipe.cal || '—'} kcal
+                                </span>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', color: '#555', fontWeight: 700 }}>
+                                    <Clock weight="fill" color="#F7B27B" size={22} /> {viewRecipe.time}
+                                </span>
+                            </div>
+                            {viewRecipe.description && (
+                                <p style={{ color: '#555', marginBottom: 20, fontStyle: 'italic' }}>{viewRecipe.description}</p>
+                            )}
+                            <div className="detail-grid-responsive" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                                <div className="detail-card-section">
+                                    <h4><ChefHat size={24} weight="duotone" /> Ingredientes</h4>
+                                    <ul className="detail-list">
+                                        {viewRecipe.ingredients && viewRecipe.ingredients.length > 0
+                                            ? viewRecipe.ingredients.map((ing, i) => <li key={i}>{ing}</li>)
+                                            : <li style={{ color: '#aaa' }}>Sin ingredientes registrados</li>}
+                                    </ul>
+                                </div>
+                                <div className="detail-card-section">
+                                    <h4><ListNumbers size={24} weight="duotone" /> Pasos</h4>
+                                    <ol className="detail-list" style={{ listStyle: 'none', padding: 0 }}>
+                                        {viewRecipe.steps && viewRecipe.steps.length > 0
+                                            ? viewRecipe.steps.map((step, i) => (
+                                                <li key={i} style={{ marginBottom: 15 }}>
+                                                    <span style={{ fontWeight: '800', color: '#F7B27B', marginRight: 5 }}>{i + 1}.</span> {step.replace(/^\d+[\.\-]?\s*/, '')}
+                                                </li>
+                                            ))
+                                            : <li style={{ color: '#aaa' }}>Sin instrucciones registradas</li>}
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="modal-footer">
+                            <button className="btn-secondary" onClick={() => setViewRecipe(null)}>Cerrar</button>
+                            {userRole !== 'ayudante' && (
+                                <>
+                                    {availableRecipes.some(r => r.id === viewRecipe.id) ? (
+                                        <button className="btn-primary" onClick={() => {
+                                            handleAddExistingRecipe(viewRecipe.id);
+                                            setViewRecipe(null);
+                                        }}>
+                                            Importar Receta <Plus weight="bold" />
+                                        </button>
+                                    ) : (
+                                        <button className="btn-primary" onClick={() => { setPlanRecipe(viewRecipe); setSelectedSlots([]); }}>
+                                            Planificar <ArrowRight weight="bold" />
+                                        </button>
+                                    )}
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>

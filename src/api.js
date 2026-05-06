@@ -1,4 +1,5 @@
 const API_BASE_URL = 'https://neverita.onrender.com';
+// const API_BASE_URL = 'http://localhost:3000';
 
 /**
  * Función genérica para hacer peticiones al backend.
@@ -98,6 +99,14 @@ export const authService = {
         method: 'POST',
         body: JSON.stringify(userData),
     }),
+    requestPasswordReset: (email) => fetchAPI('/password-reset/request', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+    }),
+    verifyPasswordReset: (email, code, new_password) => fetchAPI('/password-reset/verify', {
+        method: 'POST',
+        body: JSON.stringify({ email, code, new_password }),
+    }),
 };
 
 export const userFamilyService = {
@@ -113,10 +122,35 @@ export const userFamilyService = {
         method: 'POST',
         body: JSON.stringify({ user_id: userId, code }),
     }),
+
+    /**
+     * Obtiene los miembros de una familia con sus roles
+     */
+    getMembers: (familyId) => fetchAPI(`/user-family/members/${familyId}`),
+
+    /**
+     * Cambiar el rol de un miembro (solo creador)
+     */
+    updateRole: (requesterId, targetUserId, familyId, newRole) => fetchAPI('/user-family/role', {
+        method: 'PUT',
+        body: JSON.stringify({ requester_id: requesterId, target_user_id: targetUserId, family_id: familyId, new_role: newRole }),
+    }),
+
+    /**
+     * Expulsar a un miembro de la familia (solo creador)
+     */
+    kick: (requesterId, targetUserId, familyId) => fetchAPI('/user-family/kick', {
+        method: 'DELETE',
+        body: JSON.stringify({ requester_id: requesterId, target_user_id: targetUserId, family_id: familyId }),
+    }),
 };
 
 export const ingredientsService = {
     getAll: () => fetchAPI('/ingredients'),
+    create: (data) => fetchAPI('/ingredients', {
+        method: 'POST',
+        body: JSON.stringify(data),
+    }),
 };
 
 export const inventoryService = {
@@ -141,6 +175,18 @@ export const recipesService = {
         body: JSON.stringify(data),
     }),
     delete: (id) => fetchAPI(`/recipes/${id}`, { method: 'DELETE' }),
+};
+
+export const familyRecipesService = {
+    getByFamily: (familyId) => fetchAPI(`/family-recipes/${familyId}`),
+    add: (familyId, recipeId) => fetchAPI('/family-recipes', {
+        method: 'POST',
+        body: JSON.stringify({ family_id: familyId, recipe_id: recipeId }),
+    }),
+    remove: (familyId, recipeId) => fetchAPI(`/family-recipes/${familyId}/${recipeId}`, {
+        method: 'DELETE',
+    }),
+    getAvailable: (familyId) => fetchAPI(`/family-recipes/${familyId}/available`),
 };
 
 export const menuPlansService = {
