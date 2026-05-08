@@ -12,7 +12,7 @@ import Auth from './components/Auth';
 import FamilySelect from './components/FamilySelect';
 import FamilyManager from './components/FamilyManager';
 import ShoppingList from './components/ShoppingList';
-import { familiesService, userFamilyService, menuPlansService, dailyMealsService, aiService, inventoryService, ingredientsService } from './api';
+import { familiesService, userFamilyService, menuPlansService, dailyMealsService, aiService, inventoryService, ingredientsService, recipesService } from './api';
 
 // --- ESTILOS CSS INYECTADOS (MODAL MODERNO) ---
 const modalStyles = `
@@ -154,20 +154,22 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                 const familyId = currentFamily?.family_id || currentFamily?.id;
                 const filtered = familyId ? inv.filter(i => i.family_id === familyId) : inv;
 
-                // Agrupar cantidades por ingrediente (puede haber varias entradas del mismo)
-                const grouped = {};
-                for (const item of filtered) {
+                // Map to individual items instead of grouping them
+                const inventoryItems = filtered.map(item => {
                     const ing = allIngredients.find(i => i.ingredient_id === item.ingredient_id);
                     const name = ing ? ing.name : `Ingrediente #${item.ingredient_id}`;
                     const unit = ing ? ing.unit : '';
-                    if (!grouped[name]) {
-                        grouped[name] = { name, quantity: 0, unit };
-                    }
-                    grouped[name].quantity += Number(item.quantity) || 0;
-                }
-                const inventoryItems = Object.values(grouped);
+                    return {
+                        id: item.inventory_id,
+                        name,
+                        quantity: Number(item.quantity) || 0,
+                        unit,
+                        expiration_date: item.expiration_date
+                    };
+                });
+                
                 setMyInventory(inventoryItems);
-                setSelectedIngredients(inventoryItems.map(i => i.name)); // pre-seleccionar todos
+                setSelectedIngredients(inventoryItems.map(i => i.id)); // pre-seleccionar todos por ID
             } catch (err) {
                 console.error('Error cargando inventario:', err);
                 setMyInventory([]);
@@ -200,7 +202,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         try {
             // Enviar nombres con cantidades para que la IA sepa cuánto hay
             const ingredientsWithQty = myInventory
-                .filter(i => selectedIngredients.includes(i.name))
+                .filter(i => selectedIngredients.includes(i.id))
                 .map(i => `${i.name} (${i.quantity} ${i.unit})`);
             const data = await aiService.suggest(ingredientsWithQty);
             setSuggestions(data.suggestions || []);
@@ -221,7 +223,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         try {
             // Enviar nombres con cantidades disponibles
             const ingredientsWithQty = myInventory
-                .filter(i => selectedIngredients.includes(i.name))
+                .filter(i => selectedIngredients.includes(i.id))
                 .map(i => `${i.name} (${i.quantity} ${i.unit})`);
             const data = await aiService.generate(suggestion.title, ingredientsWithQty);
             const recipe = data.recipe;
@@ -241,6 +243,35 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
             const newMenu = { ...plannerData };
             const DAY_ENUM = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
             const MEAL_ENUM = { 'Desayuno': 'desayuno', 'Almuerzo': 'almuerzo', 'Cena': 'cena' };
+
+            // -- VALIDAR CADUCIDAD PARA LOS SLOTS --
+            if (currentMenuPlan) {
+                for (const slot of selectedSlots) {
+                    const [dayIndexStr] = slot.split('-');
+                    const dayIndex = parseInt(dayIndexStr, 10);
+                    
+                    const scheduledDate = new Date(currentMenuPlan.start_date);
+                    scheduledDate.setHours(12, 0, 0, 0); 
+                    scheduledDate.setDate(scheduledDate.getDate() + dayIndex);
+
+                    try {
+                        const validation = await recipesService.validateExpiration({
+                            recipe_id: recipe.recipe_id,
+                            family_id: currentFamily.family_id || currentFamily.id,
+                            scheduled_date: scheduledDate.toISOString().split('T')[0]
+                        });
+
+                        if (!validation.valid) {
+                            alert(`⚠️ No puedes planificar para el día ${DAY_ENUM[dayIndex]}.\n\nLos siguientes ingredientes estarán vencidos:\n- ${validation.expiredIngredients.join('\n- ')}`);
+                            setAiStep('config');
+                            setIsGenerating(false);
+                            return; // Bloquear flujo
+                        }
+                    } catch (err) {
+                        console.error('Error validando caducidad IA', err);
+                    }
+                }
+            }
 
             selectedSlots.forEach(slot => {
                 newMenu[slot] = { ...dish };
@@ -376,16 +407,20 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                         <p style={{ color: '#999', fontSize: '0.9rem' }}>No tienes ingredientes en el inventario. Agrega algunos primero.</p>
                                     ) : (
                                         <div className="chips-container">
-                                            {myInventory.map(item => (
+                                            {myInventory.map(item => {
+                                                const isExpiring = item.expiration_date && (new Date(item.expiration_date).getTime() - new Date().setHours(0,0,0,0)) / (1000 * 60 * 60 * 24) <= 3;
+                                                return (
                                                 <div
-                                                    key={item.name}
-                                                    className={`chip-modern ${selectedIngredients.includes(item.name) ? 'active' : ''}`}
-                                                    onClick={() => toggleSelection(item.name, selectedIngredients, setSelectedIngredients)}
+                                                    key={item.id}
+                                                    className={`chip-modern ${selectedIngredients.includes(item.id) ? 'active' : ''}`}
+                                                    onClick={() => toggleSelection(item.id, selectedIngredients, setSelectedIngredients)}
+                                                    title={item.expiration_date ? `Vence: ${new Date(item.expiration_date).toLocaleDateString()}` : 'Sin fecha de vencimiento'}
                                                 >
+                                                    {isExpiring && <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444', marginRight: 6, display: 'inline-block' }} title="Por vencer"></div>}
                                                     {item.name} <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>({item.quantity} {item.unit})</span>
-                                                    {selectedIngredients.includes(item.name) && <Check size={14} weight="bold" />}
+                                                    {selectedIngredients.includes(item.id) && <Check size={14} weight="bold" style={{marginLeft: 4}} />}
                                                 </div>
-                                            ))}
+                                            )})}
                                         </div>
                                     )}
 
@@ -723,26 +758,26 @@ function App() {
                 currentMonday.setHours(0, 0, 0, 0);
                 setWeekLabel(formatWeekLabel(currentMonday));
 
+                // Formato YYYY-MM-DD para comparación sin timezone
+                const currentMondayStr = currentMonday.toLocaleDateString('en-CA'); // 'YYYY-MM-DD'
+
                 // 1. Buscar si ya existe un plan para esta familia
                 const plans = await menuPlansService.getByFamily(currentFamily.family_id || currentFamily.id);
-                let plan = plans[0]; // Tomar el más reciente
+                
+                // 2. Buscar un plan que sea de ESTA semana
+                let plan = plans.find(p => {
+                    const pDate = new Date(p.start_date);
+                    const pMonday = getMonday(pDate);
+                    const pMondayStr = pMonday.toLocaleDateString('en-CA');
+                    return pMondayStr === currentMondayStr;
+                });
 
-                // 2. Si existe, verificar si es de la semana actual
-                if (plan) {
-                    const planMonday = getMonday(new Date(plan.start_date));
-                    planMonday.setHours(0, 0, 0, 0);
-                    if (planMonday.getTime() < currentMonday.getTime()) {
-                        // El plan es de una semana anterior → crear uno nuevo
-                        console.log('📅 Semana anterior detectada. Creando nuevo plan semanal...');
-                        plan = null;
-                    }
-                }
-
-                // 3. Si no existe o es de otra semana, crear uno nuevo
+                // 3. Si no existe plan para esta semana, crear uno nuevo
                 if (!plan) {
+                    console.log('📅 No hay plan para esta semana. Creando nuevo...');
                     plan = await menuPlansService.create({
                         plan_name: `Menú de ${currentFamily.name}`,
-                        start_date: currentMonday.toISOString().split('T')[0],
+                        start_date: currentMondayStr,
                         created_by: userProfile.user_id,
                         family_id: currentFamily.family_id || currentFamily.id,
                     });
@@ -784,6 +819,29 @@ function App() {
 
     // Guardar en BD cuando se asigna una receta al planificador
     const handleAddToPlanner = async (recipe, dayIndex, mealType) => {
+        if (!currentMenuPlan) return;
+
+        // Calcular la fecha exacta en la que se planifica
+        const scheduledDate = new Date(currentMenuPlan.start_date);
+        scheduledDate.setHours(12, 0, 0, 0); // Mitad del día para evitar problemas de zona horaria
+        scheduledDate.setDate(scheduledDate.getDate() + dayIndex);
+
+        try {
+            // Validar que no haya ingredientes vencidos para esa fecha
+            const validation = await recipesService.validateExpiration({
+                recipe_id: recipe.recipe_id || recipe.id,
+                family_id: currentFamily.family_id || currentFamily.id,
+                scheduled_date: scheduledDate.toISOString().split('T')[0]
+            });
+
+            if (!validation.valid) {
+                alert(`⚠️ No puedes planificar esta receta para ese día.\n\nLos siguientes ingredientes estarán vencidos:\n- ${validation.expiredIngredients.join('\n- ')}`);
+                return; // Bloquear flujo
+            }
+        } catch (err) {
+            console.error('Error validando caducidad', err);
+        }
+
         const key = `${dayIndex}-${mealType}`;
         // Actualizar UI inmediatamente (optimistic update)
         setPlannerData(prev => ({ ...prev, [key]: recipe }));

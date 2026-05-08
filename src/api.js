@@ -175,6 +175,10 @@ export const recipesService = {
         body: JSON.stringify(data),
     }),
     delete: (id) => fetchAPI(`/recipes/${id}`, { method: 'DELETE' }),
+    validateExpiration: (data) => fetchAPI('/recipes/validate-expiration', {
+        method: 'POST',
+        body: JSON.stringify(data),
+    }),
 };
 
 export const familyRecipesService = {

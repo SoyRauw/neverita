@@ -86,6 +86,66 @@ router.post('/', async (req, res, next) => {
     res.status(201).json({ recipe_id: recipe_id, title, description, instructions, difficulty, preparation_time, servings: servings || 1, image_url, calories_per_serving, created_by: created_by || null, family_id: family_id || null, ingredients: [] });
   } catch (err) { next(err); }
 });
+// POST /recipes/validate-expiration — valida que los ingredientes de una receta no estén vencidos para la fecha planificada
+router.post('/validate-expiration', async (req, res, next) => {
+  try {
+    const { recipe_id, family_id, scheduled_date } = req.body;
+    if (!recipe_id || !family_id || !scheduled_date) {
+      return res.status(400).json({ error: 'Faltan parámetros requeridos.' });
+    }
+
+    // 1. Obtener los ingredientes requeridos por la receta
+    const [recipeIngs] = await db.query(
+      `SELECT ri.ingredient_id, i.name 
+       FROM recipe_ingredients ri 
+       JOIN ingredients i ON ri.ingredient_id = i.ingredient_id 
+       WHERE ri.recipe_id = ?`,
+      [recipe_id]
+    );
+
+    if (!recipeIngs.length) return res.json({ valid: true });
+
+    // 2. Obtener el inventario de la familia para esos ingredientes
+    const ingredientIds = recipeIngs.map(i => i.ingredient_id);
+    const [inventory] = await db.query(
+      `SELECT ingredient_id, expiration_date 
+       FROM inventory 
+       WHERE family_id = ? AND ingredient_id IN (?)`,
+      [family_id, ingredientIds]
+    );
+
+    // 3. Validar caducidad
+    const scheduledDateObj = new Date(scheduled_date);
+    scheduledDateObj.setHours(0, 0, 0, 0);
+    const expiredIngredients = [];
+
+    for (const reqIng of recipeIngs) {
+      const invItems = inventory.filter(item => item.ingredient_id === reqIng.ingredient_id);
+      
+      // Si no lo tiene en el inventario, asumimos que lo va a comprar, así que no lo bloqueamos
+      if (invItems.length === 0) continue;
+
+      // Buscar si hay AL MENOS UN ítem que NO esté vencido para la fecha
+      const hasValidItem = invItems.some(item => {
+        if (!item.expiration_date) return true; // No tiene fecha de caducidad = no se vence
+        const expDate = new Date(item.expiration_date);
+        expDate.setHours(0, 0, 0, 0);
+        return expDate.getTime() >= scheduledDateObj.getTime();
+      });
+
+      // Si TODOS los ítems de este ingrediente están vencidos para esa fecha, es un error
+      if (!hasValidItem) {
+        expiredIngredients.push(reqIng.name);
+      }
+    }
+
+    if (expiredIngredients.length > 0) {
+      return res.json({ valid: false, expiredIngredients });
+    }
+
+    res.json({ valid: true });
+  } catch (err) { next(err); }
+});
 
 router.put('/:id', async (req, res, next) => {
   try {
