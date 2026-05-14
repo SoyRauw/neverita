@@ -147,6 +147,50 @@ router.post('/validate-expiration', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// POST /recipes/validate-ingredients — verifica que la familia tenga todos los ingredientes de la receta en inventario
+router.post('/validate-ingredients', async (req, res, next) => {
+  try {
+    const { recipe_id, family_id } = req.body;
+    if (!recipe_id || !family_id) {
+      return res.status(400).json({ error: 'Faltan parámetros requeridos.' });
+    }
+
+    // 1. Obtener ingredientes requeridos por la receta
+    const [recipeIngs] = await db.query(
+      `SELECT ri.ingredient_id, i.name 
+       FROM recipe_ingredients ri 
+       JOIN ingredients i ON ri.ingredient_id = i.ingredient_id 
+       WHERE ri.recipe_id = ?`,
+      [recipe_id]
+    );
+
+    if (!recipeIngs.length) return res.json({ valid: true }); // sin ingredientes registrados, permitir
+
+    // 2. Obtener ingredientes disponibles en el inventario de la familia (con cantidad > 0)
+    const ingredientIds = recipeIngs.map(i => i.ingredient_id);
+    const [inventory] = await db.query(
+      `SELECT ingredient_id, SUM(quantity) AS total 
+       FROM inventory 
+       WHERE family_id = ? AND ingredient_id IN (?) 
+       GROUP BY ingredient_id`,
+      [family_id, ingredientIds]
+    );
+
+    const inStockIds = new Set(inventory.filter(i => i.total > 0).map(i => i.ingredient_id));
+
+    // 3. Detectar cuáles faltan
+    const missingIngredients = recipeIngs
+      .filter(i => !inStockIds.has(i.ingredient_id))
+      .map(i => i.name);
+
+    if (missingIngredients.length > 0) {
+      return res.json({ valid: false, missingIngredients });
+    }
+
+    res.json({ valid: true });
+  } catch (err) { next(err); }
+});
+
 router.put('/:id', async (req, res, next) => {
   try {
     const { title, description, instructions, difficulty, preparation_time, servings, image_url, calories_per_serving, created_by, family_id } = req.body;

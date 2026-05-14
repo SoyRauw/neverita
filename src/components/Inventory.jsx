@@ -1,6 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { Trash, PlusCircle, X } from '@phosphor-icons/react';
+import { Trash, PlusCircle, X, Warning, WarningOctagon, CheckCircle } from '@phosphor-icons/react';
 import { inventoryService, ingredientsService } from '../api';
+
+// Devuelve el estado de caducidad de un item
+// 'expired' | 'critical' | 'warning' | 'ok' | 'none'
+const getExpiryStatus = (expiration_date) => {
+    if (!expiration_date) return 'none';
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const exp = new Date(expiration_date);
+    exp.setHours(0, 0, 0, 0);
+    const diffDays = Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0)  return 'expired';   // Ya vencido
+    if (diffDays === 0) return 'critical';  // Vence HOY
+    if (diffDays <= 3)  return 'warning';   // Vence en 1-3 días
+    return 'ok';
+};
+
+const EXPIRY_STYLES = {
+    expired:  { bg: '#FEF2F2', color: '#DC2626', badgeBg: '#FEE2E2', badgeColor: '#DC2626', label: 'Vencido',      icon: <WarningOctagon size={15} weight="fill" /> },
+    critical: { bg: '#FFF7ED', color: '#EA580C', badgeBg: '#FFEDD5', badgeColor: '#EA580C', label: 'Vence hoy',   icon: <Warning size={15} weight="fill" /> },
+    warning:  { bg: '#FEFCE8', color: '#CA8A04', badgeBg: '#FEF9C3', badgeColor: '#CA8A04', label: 'Por vencer',  icon: <Warning size={15} weight="fill" /> },
+    ok:       { bg: 'transparent', color: '#16A34A', badgeBg: '#DCFCE7', badgeColor: '#16A34A', label: null,      icon: null },
+    none:     { bg: 'transparent', color: '#9CA3AF', badgeBg: '#F3F4F6', badgeColor: '#9CA3AF', label: null,      icon: null },
+};
 
 const Inventory = ({ currentFamily, userRole }) => {
     const [items, setItems] = useState([]);
@@ -164,17 +187,31 @@ const Inventory = ({ currentFamily, userRole }) => {
                                         </td>
                                     </tr>
                                 ) : (
-                                    items.map((item) => (
-                                        <tr key={item.inventory_id} style={{ borderBottom: '1px solid #eee' }}>
-                                            <td style={{ padding: '1rem', fontWeight: 'bold' }}>{item.name}</td>
-                                            <td>{item.quantity} {item.unit}</td>
+                                    items.map((item) => {
+                                        const status = getExpiryStatus(item.expiration_date);
+                                        const style = EXPIRY_STYLES[status];
+                                        return (
+                                        <tr key={item.inventory_id} style={{ borderBottom: '1px solid #eee', background: style.bg, transition: 'background 0.3s' }}>
+                                            <td style={{ padding: '1rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                {style.icon && <span style={{ color: style.color }}>{style.icon}</span>}
+                                                <span style={{ color: status === 'expired' ? '#DC2626' : 'inherit', textDecoration: status === 'expired' ? 'line-through' : 'none' }}>
+                                                    {item.name}
+                                                </span>
+                                                {style.label && (
+                                                    <span style={{ background: style.badgeBg, color: style.badgeColor, fontSize: '0.72rem', fontWeight: 700, padding: '2px 7px', borderRadius: 20 }}>
+                                                        {style.label}
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td style={{ color: status === 'expired' ? '#9CA3AF' : 'inherit' }}>{item.quantity} {item.unit}</td>
                                             <td>
                                                 <span style={{
-                                                    backgroundColor: '#FFF4E5',
-                                                    color: '#F7B27B',
+                                                    backgroundColor: style.badgeBg,
+                                                    color: style.badgeColor,
                                                     padding: '4px 8px',
                                                     borderRadius: '8px',
-                                                    fontSize: '0.9rem'
+                                                    fontSize: '0.9rem',
+                                                    fontWeight: status !== 'ok' && status !== 'none' ? 700 : 400,
                                                 }}>
                                                     {item.expiration_date
                                                         ? new Date(item.expiration_date).toLocaleDateString()
@@ -193,7 +230,8 @@ const Inventory = ({ currentFamily, userRole }) => {
                                                 )}
                                             </td>
                                         </tr>
-                                    ))
+                                        );
+                                    })
                                 )}
                             </tbody>
                         </table>
@@ -205,15 +243,25 @@ const Inventory = ({ currentFamily, userRole }) => {
                                     No hay ítems en el inventario. ¡Agrega uno!
                                 </p>
                             ) : (
-                                items.map((item) => (
-                                    <div key={item.inventory_id} className="inv-card">
-                                        <div className="inv-card-icon">📦</div>
+                                items.map((item) => {
+                                    const status = getExpiryStatus(item.expiration_date);
+                                    const style = EXPIRY_STYLES[status];
+                                    return (
+                                    <div key={item.inventory_id} className="inv-card" style={{ background: style.bg, borderLeft: status !== 'ok' && status !== 'none' ? `3px solid ${style.color}` : undefined }}>
+                                        <div className="inv-card-icon">{status === 'expired' ? '🗑️' : status === 'critical' ? '⚠️' : status === 'warning' ? '⏳' : '📦'}</div>
                                         <div className="inv-card-info">
-                                            <h4>{item.name}</h4>
-                                            <p>{item.quantity} {item.unit}</p>
+                                            <h4 style={{ color: status === 'expired' ? '#DC2626' : 'inherit', textDecoration: status === 'expired' ? 'line-through' : 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                {item.name}
+                                                {style.label && (
+                                                    <span style={{ background: style.badgeBg, color: style.badgeColor, fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: 20 }}>
+                                                        {style.label}
+                                                    </span>
+                                                )}
+                                            </h4>
+                                            <p style={{ color: status === 'expired' ? '#9CA3AF' : 'inherit' }}>{item.quantity} {item.unit}</p>
                                             {item.expiration_date && (
-                                                <span className="inv-card-expiry">
-                                                    Vence: {new Date(item.expiration_date).toLocaleDateString()}
+                                                <span className="inv-card-expiry" style={{ color: style.badgeColor, fontWeight: status !== 'ok' && status !== 'none' ? 700 : 400 }}>
+                                                    {status === 'expired' ? 'Venció: ' : 'Vence: '}{new Date(item.expiration_date).toLocaleDateString()}
                                                 </span>
                                             )}
                                         </div>
@@ -227,7 +275,8 @@ const Inventory = ({ currentFamily, userRole }) => {
                                             </button>
                                         )}
                                     </div>
-                                ))
+                                    );
+                                })
                             )}
                         </div>
                     </>

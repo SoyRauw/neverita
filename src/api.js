@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://neverita.onrender.com';
-// const API_BASE_URL = 'http://localhost:3000';
+//const API_BASE_URL = 'http://localhost:3000';
 
 /**
  * Función genérica para hacer peticiones al backend.
@@ -176,6 +176,10 @@ export const recipesService = {
     }),
     delete: (id) => fetchAPI(`/recipes/${id}`, { method: 'DELETE' }),
     validateExpiration: (data) => fetchAPI('/recipes/validate-expiration', {
+        method: 'POST',
+        body: JSON.stringify(data),
+    }),
+    validateIngredients: (data) => fetchAPI('/recipes/validate-ingredients', {
         method: 'POST',
         body: JSON.stringify(data),
     }),

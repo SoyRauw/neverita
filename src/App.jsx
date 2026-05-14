@@ -19,7 +19,7 @@ const modalStyles = `
   .modal-overlay {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(5px);
-    display: flex; align-items: center; justify-content: center; z-index: 2000;
+    display: flex; align-items: center; justify-content: center;
   }
   .modal-modern {
     background: white; width: 90%; max-width: 550px;
@@ -108,15 +108,39 @@ const modalStyles = `
     from { transform: translateY(100%); } 
     to { transform: translateY(0); } 
   }
+
+  /* Animaciones de navegación entre semanas */
+  @keyframes weekSlideInFromRight {
+    from { opacity: 0; transform: translateX(60px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes weekSlideInFromLeft {
+    from { opacity: 0; transform: translateX(-60px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  .week-slide-right {
+    animation: weekSlideInFromRight 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+  }
+  .week-slide-left {
+    animation: weekSlideInFromLeft 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+  }
 `;
 
 // ==========================================
 // PÁGINA DEL PLANIFICADOR
 // ==========================================
-const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan, currentFamily, weekLabel, userRole }) => {
+const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan, currentFamily, weekLabel, userRole, weekOffset, onNavigateWeek }) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [selectedMealDetails, setSelectedMealDetails] = useState(null);
+    const [slideDir, setSlideDir] = useState(''); // '' | 'left' | 'right'
+
+    const handleNavigate = (dir) => {
+        setSlideDir(dir > 0 ? 'right' : 'left');
+        onNavigateWeek(dir);
+        // Limpiar clase después de la animación
+        setTimeout(() => setSlideDir(''), 400);
+    };
 
     // --- ESTADOS DE LA IA ---
     const [myInventory, setMyInventory] = useState([]);
@@ -130,10 +154,46 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
 
     const toggleSlot = (dayIndex, meal) => {
         const slotKey = `${dayIndex}-${meal}`;
+        // No permitir selección en días con ingredientes vencidos
+        if (expiredDayIndexes.has(dayIndex)) return;
         setSelectedSlots(prev =>
             prev.includes(slotKey) ? prev.filter(k => k !== slotKey) : [...prev, slotKey]
         );
     };
+
+    // Calcula qué días de la semana tienen al menos un ingrediente seleccionado vencido.
+    // Devuelve un Set con los dayIndex (0=Lun ... 6=Dom) bloqueados.
+    const expiredDayIndexes = React.useMemo(() => {
+        const blocked = new Set();
+        if (!currentMenuPlan?.start_date) return blocked;
+
+        // Ingredientes seleccionados que tienen fecha de caducidad
+        const selectedItems = myInventory.filter(i => selectedIngredients.includes(i.id) && i.expiration_date);
+        if (selectedItems.length === 0) return blocked;
+
+        for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+            const scheduledDate = new Date(currentMenuPlan.start_date);
+            scheduledDate.setHours(12, 0, 0, 0);
+            scheduledDate.setDate(scheduledDate.getDate() + dayIndex);
+            const scheduledStr = scheduledDate.toISOString().split('T')[0];
+
+            // Agrupar por nombre de ingrediente para verificar si TODOS los lotes están vencidos
+            const byName = {};
+            for (const item of selectedItems) {
+                if (!byName[item.name]) byName[item.name] = [];
+                byName[item.name].push(item.expiration_date);
+            }
+
+            // Si para algún ingrediente, TODOS sus lotes vencen antes de ese día → bloquear
+            const hasBlocker = Object.values(byName).some(dates =>
+                dates.every(d => d.split('T')[0] < scheduledStr)
+            );
+
+            if (hasBlocker) blocked.add(dayIndex);
+        }
+        return blocked;
+    }, [myInventory, selectedIngredients, currentMenuPlan]);
+
 
     // --- ESTADOS PARA FLUJO DE 2 PASOS ---
     const [aiStep, setAiStep] = useState('config'); // 'config' | 'suggestions' | 'generating'
@@ -344,7 +404,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                     <p>Hola, <strong>{userProfile.name}</strong> 👋 Organiza tu semana.</p>
                 </div>
                 <div className="header-actions">
-                    {userRole !== 'ayudante' && (
+                    {userRole !== 'ayudante' && weekOffset === 0 && (
                         <button className="btn-primary" onClick={() => setShowModal(true)} disabled={isGenerating}>
                             {isGenerating ? <CircleNotch size={20} className="ph-spin" /> : <Sparkle size={20} weight="fill" />}
                             {isGenerating ? "Cocinando..." : "Asistente IA"}
@@ -353,18 +413,48 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                 </div>
             </header>
 
-            {/* Etiqueta de semana */}
+            {/* Navegador de semanas */}
             {weekLabel && (
                 <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    gap: 10, padding: '10px 20px', margin: '0 0 16px',
-                    background: 'linear-gradient(135deg, #FFF7ED, #FEF3C7)',
-                    borderRadius: 14, border: '1px solid #FFE4B5'
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    gap: 10, padding: '10px 16px', margin: '0 0 16px',
+                    background: weekOffset < 0 ? 'linear-gradient(135deg, #F0F4FF, #E8EFFE)' : weekOffset > 0 ? 'linear-gradient(135deg, #F0FFF4, #E8FEEF)' : 'linear-gradient(135deg, #FFF7ED, #FEF3C7)',
+                    borderRadius: 14,
+                    border: weekOffset < 0 ? '1px solid #C7D7FE' : weekOffset > 0 ? '1px solid #BBF7D0' : '1px solid #FFE4B5',
                 }}>
-                    <CalendarBlank size={20} weight="fill" color="#FF9F43" />
-                    <span style={{ fontWeight: 700, fontSize: '1rem', color: '#92400E' }}>{weekLabel}</span>
+                    <button
+                    onClick={() => handleNavigate(-1)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 8, fontSize: '1.3rem', color: weekOffset < 0 ? '#4F46E5' : '#92400E', transition: 'background 0.2s' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.07)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                        title="Semana anterior"
+                    >
+                        ‹
+                    </button>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <CalendarBlank size={18} weight="fill" color={weekOffset < 0 ? '#4F46E5' : weekOffset > 0 ? '#16A34A' : '#FF9F43'} />
+                            <span style={{ fontWeight: 700, fontSize: '1rem', color: weekOffset < 0 ? '#3730A3' : weekOffset > 0 ? '#15803D' : '#92400E' }}>{weekLabel}</span>
+                        </div>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: weekOffset < 0 ? '#6366F1' : weekOffset > 0 ? '#22C55E' : '#D97706' }}>
+                            {weekOffset === 0 ? '✅ Esta semana' : weekOffset === -1 ? '📜 Semana pasada' : weekOffset < 0 ? `📜 Hace ${Math.abs(weekOffset)} semanas` : weekOffset === 1 ? '🔮 Próxima semana' : `🔮 En ${weekOffset} semanas`}
+                        </span>
+                    </div>
+
+                    <button
+                    onClick={() => handleNavigate(1)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 8, fontSize: '1.3rem', color: weekOffset > 0 ? '#15803D' : '#92400E', transition: 'background 0.2s' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.07)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                        title="Semana siguiente"
+                    >
+                        ›
+                    </button>
                 </div>
             )}
+
+
 
             {/* --- MODAL MODERNO DE GENERACIÓN IA --- */}
             {showModal && (
@@ -428,13 +518,23 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                     <div className="section-title" style={{ marginTop: '20px' }}><CalendarBlank weight="fill" color="#FF9F43" /> ¿Dónde quieres agregar la receta?</div>
                                     <p style={{ fontSize: '0.85rem', color: '#888', marginBottom: '15px' }}>Toca los cuadros para elegir los días y comidas.</p>
                                     
+                                    {expiredDayIndexes.size > 0 && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '8px 12px', marginBottom: 12, fontSize: '0.82rem', color: '#DC2626' }}>
+                                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444', flexShrink: 0 }} />
+                                            Los días en rojo tienen ingredientes vencidos y no están disponibles.
+                                        </div>
+                                    )}
+
                                     <div className="plan-mini-grid" style={{ display: 'grid', gridTemplateColumns: '70px repeat(7, 1fr)', gap: 8, overflowX: 'auto', paddingBottom: '10px' }}>
                                         <div></div>
-                                        {weekDays.map(d => (
-                                            <div key={d} style={{ textAlign: 'center', fontSize: '0.75rem', fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase' }}>
-                                                {d.substring(0, 3)}
-                                            </div>
-                                        ))}
+                                        {weekDays.map((d, dayIndex) => {
+                                            const isBlocked = expiredDayIndexes.has(dayIndex);
+                                            return (
+                                                <div key={d} style={{ textAlign: 'center', fontSize: '0.75rem', fontWeight: 800, color: isBlocked ? '#EF4444' : '#a0aec0', textTransform: 'uppercase' }} title={isBlocked ? 'Ingrediente vencido este día' : ''}>
+                                                    {d.substring(0, 3)}{isBlocked && ' 🚫'}
+                                                </div>
+                                            );
+                                        })}
                                         {mealTypesOptions.map(meal => (
                                             <React.Fragment key={meal}>
                                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', fontSize: '0.85rem', fontWeight: 700, color: '#4a5568', paddingRight: 8 }}>
@@ -443,15 +543,19 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                                 {weekDays.map((_, dayIndex) => {
                                                     const slotKey = `${dayIndex}-${meal}`;
                                                     const isSelected = selectedSlots.includes(slotKey);
+                                                    const isBlocked = expiredDayIndexes.has(dayIndex);
                                                     return (
                                                         <div key={slotKey} onClick={() => toggleSlot(dayIndex, meal)} style={{
                                                             aspectRatio: '1', borderRadius: '8px',
-                                                            border: isSelected ? '2px solid #FF9F43' : '2px dashed #e2e8f0',
-                                                            background: isSelected ? '#fffaf0' : 'transparent',
-                                                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                            transition: 'all 0.2s', minWidth: '40px'
-                                                        }}>
-                                                            {isSelected && <Check size={18} weight="bold" color="#FF9F43" />}
+                                                            border: isBlocked ? '2px solid #FECACA' : isSelected ? '2px solid #FF9F43' : '2px dashed #e2e8f0',
+                                                            background: isBlocked ? '#FEF2F2' : isSelected ? '#fffaf0' : 'transparent',
+                                                            cursor: isBlocked ? 'not-allowed' : 'pointer',
+                                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                            transition: 'all 0.2s', minWidth: '40px',
+                                                            opacity: isBlocked ? 0.6 : 1,
+                                                        }} title={isBlocked ? 'Ingrediente vencido este día' : ''}>
+                                                            {isBlocked && <span style={{ fontSize: '0.8rem' }}>✕</span>}
+                                                            {!isBlocked && isSelected && <Check size={18} weight="bold" color="#FF9F43" />}
                                                         </div>
                                                     );
                                                 })}
@@ -590,13 +694,19 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                 </div>
             )}
 
-            <div className="calendar-wrapper">
-                <div className="calendar-header desktop-only">
-                    <div style={{ width: 100 }}></div>
-                    {weekDays.map(d => <div key={d} className="day-label">{d}</div>)}
+            <div
+                key={weekOffset}
+                className={slideDir === 'right' ? 'week-slide-right' : slideDir === 'left' ? 'week-slide-left' : ''}
+                style={{ overflow: 'hidden' }}
+            >
+                <div className="calendar-wrapper">
+                    <div className="calendar-header desktop-only">
+                        <div style={{ width: 100 }}></div>
+                        {weekDays.map(d => <div key={d} className="day-label">{d}</div>)}
+                    </div>
+                    {/* AQUÍ SE PASA LA FUNCIÓN AL CALENDARIO */}
+                    <CalendarGrid data={plannerData} onMealClick={setSelectedMealDetails} />
                 </div>
-                {/* AQUÍ SE PASA LA FUNCIÓN AL CALENDARIO */}
-                <CalendarGrid data={plannerData} onMealClick={setSelectedMealDetails} />
             </div>
         </div>
     );
@@ -727,6 +837,7 @@ function App() {
     const [plannerData, setPlannerData] = useState({});
     const [currentMenuPlan, setCurrentMenuPlan] = useState(null);
     const [weekLabel, setWeekLabel] = useState('');
+    const [weekOffset, setWeekOffset] = useState(0); // 0 = esta semana, -1 = semana anterior, +1 = próxima, etc.
 
     // Obtener el lunes de la semana actual
     const getMonday = (d) => {
@@ -752,42 +863,50 @@ function App() {
     useEffect(() => {
         if (!currentFamily || !userProfile?.user_id) return;
 
-        const loadMenuPlan = async () => {
+        const loadMenuPlan = async (offset = 0) => {
             try {
-                const currentMonday = getMonday(new Date());
-                currentMonday.setHours(0, 0, 0, 0);
-                setWeekLabel(formatWeekLabel(currentMonday));
+                const baseMonday = getMonday(new Date());
+                baseMonday.setHours(0, 0, 0, 0);
+                baseMonday.setDate(baseMonday.getDate() + offset * 7);
+                setWeekLabel(formatWeekLabel(baseMonday));
 
                 // Formato YYYY-MM-DD para comparación sin timezone
-                const currentMondayStr = currentMonday.toLocaleDateString('en-CA'); // 'YYYY-MM-DD'
+                const targetMondayStr = baseMonday.toLocaleDateString('en-CA'); // 'YYYY-MM-DD'
 
                 // 1. Buscar si ya existe un plan para esta familia
                 const plans = await menuPlansService.getByFamily(currentFamily.family_id || currentFamily.id);
                 
-                // 2. Buscar un plan que sea de ESTA semana
+                // 2. Buscar un plan que sea de ESA semana
                 let plan = plans.find(p => {
                     const pDate = new Date(p.start_date);
                     const pMonday = getMonday(pDate);
                     const pMondayStr = pMonday.toLocaleDateString('en-CA');
-                    return pMondayStr === currentMondayStr;
+                    return pMondayStr === targetMondayStr;
                 });
 
-                // 3. Si no existe plan para esta semana, crear uno nuevo
-                if (!plan) {
+                // 3. Si no existe plan para esa semana Y es la semana actual o futura, crear uno nuevo
+                if (!plan && offset >= 0) {
                     console.log('📅 No hay plan para esta semana. Creando nuevo...');
                     plan = await menuPlansService.create({
                         plan_name: `Menú de ${currentFamily.name}`,
-                        start_date: currentMondayStr,
+                        start_date: targetMondayStr,
                         created_by: userProfile.user_id,
                         family_id: currentFamily.family_id || currentFamily.id,
                     });
                 }
-                setCurrentMenuPlan(plan);
 
-                // 3. Cargar los daily_meals de ese plan
+                // Si es semana pasada y no hay plan, no hay nada que mostrar
+                setCurrentMenuPlan(plan || null);
+
+                if (!plan) {
+                    setPlannerData({});
+                    return;
+                }
+
+                // 4. Cargar los daily_meals de ese plan
                 const meals = await dailyMealsService.getByPlan(plan.menu_plan_id);
 
-                // 4. Reconstruir plannerData a partir de los daily_meals
+                // 5. Reconstruir plannerData a partir de los daily_meals
                 const rebuilt = {};
                 for (const meal of meals) {
                     const dayIndex = DAY_ENUM.indexOf(meal.day_of_week);
@@ -813,9 +932,15 @@ function App() {
             }
         };
 
-        loadMenuPlan();
+        loadMenuPlan(weekOffset);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentFamily]);
+    }, [currentFamily, weekOffset]);
+
+    const handleNavigateWeek = (direction) => {
+        setWeekOffset(prev => prev + direction);
+        setPlannerData({});
+        setCurrentMenuPlan(null);
+    };
 
     // Guardar en BD cuando se asigna una receta al planificador
     const handleAddToPlanner = async (recipe, dayIndex, mealType) => {
@@ -896,7 +1021,7 @@ function App() {
                 )}
 
                 <Routes>
-                    <Route path="/" element={<PlannerPage userProfile={userProfile} plannerData={plannerData} setPlannerData={setPlannerData} currentMenuPlan={currentMenuPlan} currentFamily={currentFamily} weekLabel={weekLabel} userRole={userRole} />} />
+                    <Route path="/" element={<PlannerPage userProfile={userProfile} plannerData={plannerData} setPlannerData={setPlannerData} currentMenuPlan={currentMenuPlan} currentFamily={currentFamily} weekLabel={weekLabel} userRole={userRole} weekOffset={weekOffset} onNavigateWeek={handleNavigateWeek} />} />
                     <Route path="/recipes" element={<Recipes onAddToPlanner={handleAddToPlanner} currentFamily={currentFamily} userProfile={userProfile} userRole={userRole} />} />
                     <Route path="/inventory" element={<Inventory currentFamily={currentFamily} userRole={userRole} />} />
                     <Route path="/shopping-list" element={<ShoppingList />} />

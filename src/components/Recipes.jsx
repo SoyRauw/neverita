@@ -45,6 +45,8 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
     const [availableRecipes, setAvailableRecipes] = useState([]);
     const [planRecipe, setPlanRecipe] = useState(null);
     const [selectedSlots, setSelectedSlots] = useState([]);
+    const [missingIngredients, setMissingIngredients] = useState(null);
+    const [isCheckingIngredients, setIsCheckingIngredients] = useState(false);
 
     const [newRecipe, setNewRecipe] = useState({
         name: "", cal: "", time: "", category: [],
@@ -188,6 +190,31 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
         });
         setPlanRecipe(null);
         setViewRecipe(null);
+    };
+
+    const handlePlanClick = async (recipe) => {
+        setIsCheckingIngredients(true);
+        try {
+            const fid = currentFamily?.family_id || currentFamily?.id;
+            const ingCheck = await recipesService.validateIngredients({
+                recipe_id: recipe.recipe_id || recipe.id,
+                family_id: fid,
+            });
+
+            if (!ingCheck.valid) {
+                setMissingIngredients(ingCheck.missingIngredients);
+            } else {
+                setPlanRecipe(recipe);
+                setSelectedSlots([]);
+            }
+        } catch (err) {
+            console.error("Error al validar ingredientes:", err);
+            // Si hay error en la validación, le permitimos abrir el planificador de todos modos
+            setPlanRecipe(recipe);
+            setSelectedSlots([]);
+        } finally {
+            setIsCheckingIngredients(false);
+        }
     };
 
     const filtered = recipes.filter(r => r.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -353,7 +380,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
 
             {/* MODAL 3: PLANIFICAR */}
             {planRecipe && (
-                <div className="modal-overlay" onClick={() => setPlanRecipe(null)}>
+                <div className="modal-overlay" style={{ zIndex: 6500 }} onClick={() => setPlanRecipe(null)}>
                     <div className="modal-modern" style={{ maxWidth: 600 }} onClick={e => e.stopPropagation()}>
                         <div className="modal-header" style={{ borderBottom: '1px solid #eee', paddingBottom: 15, marginBottom: 20 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 15 }}>
@@ -511,13 +538,38 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                                             Importar Receta <Plus weight="bold" />
                                         </button>
                                     ) : (
-                                        <button className="btn-primary" onClick={() => { setPlanRecipe(viewRecipe); setSelectedSlots([]); }}>
-                                            Planificar <ArrowRight weight="bold" />
+                                        <button className="btn-primary" onClick={() => handlePlanClick(viewRecipe)} disabled={isCheckingIngredients}>
+                                            {isCheckingIngredients ? "Revisando despensa..." : "Planificar"} {!isCheckingIngredients && <ArrowRight weight="bold" />}
                                         </button>
                                     )}
                                 </>
                             )}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL FALTAN INGREDIENTES */}
+            {missingIngredients && (
+                <div className="modal-overlay" style={{ zIndex: 7000 }} onClick={() => setMissingIngredients(null)}>
+                    <div className="modal-modern" onClick={e => e.stopPropagation()} style={{ maxWidth: 400, textAlign: 'center', padding: '30px 20px' }}>
+                        <div style={{ width: 64, height: 64, background: '#FEF2F2', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', color: '#EF4444' }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 256 256"><path fill="currentColor" d="M236.8 188.09L149.35 36.22a24.76 24.76 0 0 0-42.7 0L19.2 188.09a23.51 23.51 0 0 0 0 23.72A24.35 24.35 0 0 0 40.55 224h174.9a24.35 24.35 0 0 0 21.35-12.19a23.51 23.51 0 0 0 0-23.72Zm-13.6 15.68A8.32 8.32 0 0 1 215.45 208H40.55a8.32 8.32 0 0 1-7.75-4.23a7.51 7.51 0 0 1 0-7.86l87.45-151.87a8.75 8.75 0 0 1 15.5 0l87.45 151.87a7.51 7.51 0 0 1 0 7.86ZM128 136a8 8 0 0 1-8-8v-32a8 8 0 0 1 16 0v32a8 8 0 0 1-8 8Zm0 48a12 12 0 1 1 12-12a12 12 0 0 1-12 12Z"/></svg>
+                        </div>
+                        <h3 style={{ margin: '0 0 10px', fontSize: '1.4rem', color: '#1F2937' }}>Faltan ingredientes</h3>
+                        <p style={{ margin: '0 0 20px', color: '#6B7280', fontSize: '0.95rem' }}>Para preparar esta receta, necesitas agregar lo siguiente a tu inventario:</p>
+                        
+                        <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 12, padding: '15px', textAlign: 'left', marginBottom: 25, maxHeight: 150, overflowY: 'auto' }}>
+                            <ul style={{ margin: 0, paddingLeft: 20, color: '#4B5563', lineHeight: 1.6 }}>
+                                {missingIngredients.map((ing, i) => (
+                                    <li key={i}>{ing}</li>
+                                ))}
+                            </ul>
+                        </div>
+
+                        <button className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setMissingIngredients(null)}>
+                            Entendido
+                        </button>
                     </div>
                 </div>
             )}
