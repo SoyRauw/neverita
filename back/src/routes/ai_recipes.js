@@ -22,7 +22,7 @@ router.post('/suggest', async (req, res) => {
         if (!ingredients || ingredients.length === 0) return res.status(400).json({ error: "Faltan ingredientes" });
         if (!apiKey) return res.status(500).json({ error: "Falta API KEY" });
 
-        console.log("🔍 Buscando ideas para:", ingredients);
+        console.log('🔍 Buscando ideas con:', ingredients);
 
         const systemPrompt = `
             Eres un Chef experto en "Cocina de Aprovechamiento".
@@ -39,7 +39,7 @@ router.post('/suggest', async (req, res) => {
 
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({
-            model: "gemini-2.5-flash",
+            model: "gemini-3.1-flash-lite",
             generationConfig: { responseMimeType: "application/json" }
         });
 
@@ -48,7 +48,7 @@ router.post('/suggest', async (req, res) => {
         res.json(content);
 
     } catch (error) {
-        console.error("❌ Error en suggest:", error);
+        console.error('❌ Error en suggest:', error);
         res.status(500).json({ error: "Error al sugerir recetas" });
     }
 });
@@ -60,23 +60,24 @@ router.post('/generate', async (req, res) => {
     const connection = await db.getConnection();
     try {
         const { selected_title, available_ingredients, family_id } = req.body;
+        // La receta SIEMPRE se genera para 1 persona. El escalado ocurre en el frontend al planificar.
 
         if (!selected_title) return res.status(400).json({ error: "Falta título" });
 
         console.log("🍳 Usuario eligió:", selected_title);
 
-        // --- A. VERIFICAR SI YA EXISTE EN BD ---
+        // --- A. VERIFICAR SI YA EXISTE EN BD (solo si servings = 1) ---
+        // Recetas antiguas generadas con porciones para varias personas se regeneran.
         const [existing] = await connection.query('SELECT * FROM recipes WHERE title = ? LIMIT 1', [selected_title]);
 
-        if (existing.length > 0) {
-            console.log("⚡ ¡Receta encontrada en caché (BD)!");
-            // Recuperamos ingredientes de la BD
+        if (existing.length > 0 && existing[0].servings === 1) {
+            console.log('⚡ ¡Receta encontrada en caché (BD) con 1 porción! (Bypass temporal por corrección de prompt)');
+            /*
             const [dbIngredients] = await connection.query(`
                 SELECT i.name, ri.quantity, i.unit 
                 FROM ingredients i JOIN recipe_ingredients ri ON i.ingredient_id = ri.ingredient_id
                 WHERE ri.recipe_id = ?`, [existing[0].recipe_id]);
 
-            // Si la receta ya estaba en DB, igual la vinculamos a la familia actual si no lo estaba
             if (family_id) {
                 await connection.query(
                     'INSERT IGNORE INTO family_recipes (family_id, recipe_id) VALUES (?, ?)',
@@ -90,6 +91,11 @@ router.post('/generate', async (req, res) => {
                 recipe: existing[0],
                 ingredients: dbIngredients
             });
+            */
+        }
+
+        if (existing.length > 0 && existing[0].servings !== 1) {
+            console.log('🔄 Receta en caché tiene', existing[0].servings, 'porciones → regenerando para 1 persona...');
         }
 
         // --- B. NO EXISTE -> GENERAR CON IA ---
@@ -98,42 +104,73 @@ router.post('/generate', async (req, res) => {
 
         const systemPrompt = `
             Genera la receta completa para: "${selected_title}".
-            
-            REGLA DE ORO (TESIS):
-            El usuario tiene estos ingredientes en su inventario con las cantidades indicadas entre paréntesis:
+
+            =============================================================
+            REGLA #1 — PORCIONES PARA 1 PERSONA (MÁXIMOS ABSOLUTOS):
+            La receta es para UNA sola persona. Estos son los límites máximos
+            que NO PUEDES superar bajo ninguna circunstancia:
+
+              • Carnes (pollo, cerdo, res, pescado): MÁXIMO 200 g
+              • Arroz, pasta, cereales (crudos): MÁXIMO 80 g
+              • Legumbres crudas (caraotas, lentejas, arvejas): MÁXIMO 80 g
+              • Huevos: MÁXIMO 2 unidades
+              • Papa, yuca u otros alméidos: MÁXIMO 150 g
+              • Verduras / vegetales: MÁXIMO 150 g
+              • Aceite, mantequilla, grasa: MÁXIMO 1 cucharada grande
+              • Leche o líquidos de cocina: MÁXIMO 200 ml
+              • Sal, pimienta, especias: MÁXIMO 1 cucharada pequeña
+              • Agua para cocción: MÁXIMO 400 ml
+
+            ESTA ES UNA APLICACIÓN ANTI-DESPERDICIO. Usa cantidades justas.
+            Si el resultado de escalar x4 parece una comida familiar, reducíla.
+            El campo "servings" del JSON DEBE ser 1.
+            =============================================================
+
+            REGLA #2 — INVENTARIO DISPONIBLE Y CANTIDADES A USAR:
+            El usuario tiene estos ingredientes (las cantidades totales en su nevera están entre paréntesis):
             [ ${available_ingredients.join(', ')} ]
-            También tiene básicos de despensa (sal, aceite, especias).
-            
-            REGLA CRÍTICA DE CANTIDADES:
-            NUNCA uses más cantidad de un ingrediente de la que el usuario tiene disponible.
-            Por ejemplo, si tiene "Pan de Molde (3 unidad)", la receta NO puede pedir 4 unidades.
-            Ajusta las porciones de la receta para que se adapten a lo que hay disponible.
-            
-            Si el título requiere algo que no está, IMPROVISA usando un sustituto del inventario 
-            o cambia ligeramente la técnica, pero MANTÉN el título y usa lo que hay.
+            También tiene básicos: sal, aceite, agua, especias.
+            ⚠️ MUY IMPORTANTE: NO USES TODA LA CANTIDAD QUE TIENE EL USUARIO.
+            Ese es su INVENTARIO TOTAL. Tú solo debes tomar la porción necesaria para 1 SOLA PERSONA,
+            siguiendo los límites de la REGLA #1.
+            NUNCA pidas más cantidad de la que el usuario tiene disponible.
+            =============================================================
+
+            REGLA #3 — IMPROVISA:
+            Si el título requiere algo que no está en el inventario,
+            usa un sustituto disponible o ajusta la técnica.
+            Mantén el título.
+            =============================================================
+
+            *** EJEMPLO DE CÓMO HACERLO BIEN ***
+            Si el inventario dice: "Arroz (2000 g), Chuleta de cerdo (1000 g), Huevo (12 unidad)"
+            MAL (cantidades muy altas): Arroz (400 g), Chuleta (600 g), Huevo (4 unidad)
+            BIEN (cantidades para 1 persona): Arroz (80 g), Chuleta (150 g), Huevo (1 unidad)
+            =============================================================
 
             Responde SOLO JSON:
             {
                 "recipe": { 
                     "title": "${selected_title}", 
                     "description": "...", 
-                    "instructions": "Paso 1... Paso 2...", 
+                    "instructions": "1. Haz esto...\\n2. Luego esto...\\n3. Finalmente esto...", 
                     "difficulty": "easy", 
                     "preparation_time": 30, 
-                    "servings": 2, 
+                    "servings": 1, 
                     "calories_per_serving": 400 
                 },
                 "ingredients": [{ "name": "...", "quantity": 1, "unit": "g", "category": "vegetal", "average_expiry_days": 7 }]
             }
-            IMPORTANTE: El campo "difficulty" SOLO puede ser "easy", "regular" o "hard". No uses otro valor.
-            IMPORTANTE: El campo "unit" de cada ingrediente SOLO puede ser uno de estos valores exactos: "g", "kg", "ml", "l", "cup", "cucharada grande", "cucharada pequeña", "unidad". No uses ningún otro valor.
-            IMPORTANTE: El campo "category" de cada ingrediente SOLO puede ser uno de estos valores exactos: "vegetal", "fruta", "proteína", "lácteo", "grano", "condimento", "grasa", "bebida", "otro". No uses ningún otro valor.
-            IMPORTANTE: El campo "average_expiry_days" es un número entero que representa los días aproximados que tarda el ingrediente en vencerse. Por ejemplo: pollo=5, arroz=365, leche=7, sal=730, frutas frescas=5, enlatados=730.
+            IMPORTANTE: "difficulty" único en: "easy", "regular", "hard".
+            IMPORTANTE: "unit" único en: "g", "kg", "ml", "l", "cup", "cucharada grande", "cucharada pequeña", "unidad".
+            IMPORTANTE: "category" único en: "vegetal", "fruta", "proteína", "lácteo", "grano", "condimento", "grasa", "bebida", "otro".
+            IMPORTANTE: "average_expiry_days" entero positivo (pollo=5, arroz=365, leche=7, sal=730).
+            IMPORTANTE: En "instructions", usa saltos de línea (\\n\\n) para separar los pasos visualmente. No escribas todo en un solo bloque de texto.
         `;
 
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({
-            model: "gemini-2.5-flash",
+            model: "gemini-3.1-flash-lite",
             generationConfig: { responseMimeType: "application/json" }
         });
 

@@ -158,19 +158,19 @@ const FamilyManager = ({
                                     </div>
                                 </button>
 
-                                {/* Botón de miembros - Solo visible para el creador */}
-                                {userRole === 'creador' && (
+                                {/* Botón de miembros - solo activo para el creador */}
+                                <div className="btn-locked-wrapper" style={{ width: '100%' }} data-tooltip={userRole !== 'creador' ? '🔒 Solo el creador puede gestionar miembros' : undefined}>
                                     <button 
-                                        className="btn-secondary" 
-                                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px' }}
-                                        onClick={() => setMode('members')}
+                                        className={`btn-secondary${userRole !== 'creador' ? ' btn-locked' : ''}`}
+                                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', width: '100%' }}
+                                        onClick={userRole === 'creador' ? () => setMode('members') : undefined}
                                     >
                                         <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                             👥 Gestionar Miembros
                                         </span>
                                         <CaretRight size={18} />
                                     </button>
-                                )}
+                                </div>
                                 
                                 <button 
                                     className="btn-secondary" 

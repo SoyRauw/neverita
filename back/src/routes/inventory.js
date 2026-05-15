@@ -78,10 +78,12 @@ router.delete('/:id', async (req, res, next) => {
 router.post('/deduct', async (req, res, next) => {
   const connection = await db.getConnection();
   try {
-    const { recipe_id, family_id } = req.body;
+    const { recipe_id, family_id, multiplier } = req.body;
     if (!recipe_id || !family_id) {
       return res.status(400).json({ error: 'Faltan recipe_id o family_id' });
     }
+    // multiplier = personas / servings_base (default 1 = sin escalar)
+    const scale = Math.max(0.01, Number(multiplier) || 1);
 
     // 1. Obtener los ingredientes que necesita la receta
     const [recipeIngs] = await connection.query(
@@ -98,7 +100,7 @@ router.post('/deduct', async (req, res, next) => {
     const deducted = [];
 
     for (const ri of recipeIngs) {
-      let needed = Number(ri.quantity) || 0;
+      let needed = Math.round((Number(ri.quantity) || 0) * scale * 100) / 100;
       if (needed <= 0) continue;
 
       // 2. Buscar entradas del inventario de esta familia para este ingrediente

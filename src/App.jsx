@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
-import { Sparkle, CircleNotch, ShoppingCart, Check, X, ChefHat, CalendarBlank, Coffee } from '@phosphor-icons/react';
+import { Sparkle, CircleNotch, ShoppingCart, Check, X, ChefHat, CalendarBlank, Coffee, UsersThree } from '@phosphor-icons/react';
 
 // --- IMPORTACIÓN DE COMPONENTES ---
 import Sidebar from './components/Sidebar';
@@ -124,7 +124,42 @@ const modalStyles = `
   .week-slide-left {
     animation: weekSlideInFromLeft 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
   }
+
+  /* =========================================
+     BOTONES BLOQUEADOS POR ROL
+     ========================================= */
+  .btn-locked {
+    opacity: 0.35 !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+    filter: grayscale(0.4);
+    position: relative;
+  }
+  .btn-locked-wrapper {
+    position: relative;
+    display: inline-flex;
+  }
+  .btn-locked-wrapper[data-tooltip] {
+    cursor: not-allowed;
+  }
+  .btn-locked-wrapper[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(17,24,39,0.9);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 9999;
+    font-weight: 600;
+  }
 `;
+
 
 // ==========================================
 // PÁGINA DEL PLANIFICADOR
@@ -195,10 +230,14 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
     }, [myInventory, selectedIngredients, currentMenuPlan]);
 
 
-    // --- ESTADOS PARA FLUJO DE 2 PASOS ---
-    const [aiStep, setAiStep] = useState('config'); // 'config' | 'suggestions' | 'generating'
+    // --- ESTADOS PARA FLUJO DE 3 PASOS ---
+    // 'config' → 'suggestions' → 'generating' → 'servings' → planner
+    const [aiStep, setAiStep] = useState('config');
     const [suggestions, setSuggestions] = useState([]);
     const [aiError, setAiError] = useState(null);
+    // Receta generada por IA esperando confirmación de personas
+    const [aiDish, setAiDish] = useState(null);
+    const [aiPlanServings, setAiPlanServings] = useState(1);
 
     // Cargar inventario real CADA VEZ que se abre el modal
     useEffect(() => {
@@ -260,7 +299,6 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         setSuggestions([]);
 
         try {
-            // Enviar nombres con cantidades para que la IA sepa cuánto hay
             const ingredientsWithQty = myInventory
                 .filter(i => selectedIngredients.includes(i.id))
                 .map(i => `${i.name} (${i.quantity} ${i.unit})`);
@@ -274,18 +312,18 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         }
     };
 
-    // PASO 2: Generar receta completa y asignar al planificador
+    // PASO 2: Generar receta (para 1 persona) y pasar al paso de personas
     const handlePickSuggestion = async (suggestion) => {
         setAiStep('generating');
         setIsGenerating(true);
         setAiError(null);
 
         try {
-            // Enviar nombres con cantidades disponibles
             const ingredientsWithQty = myInventory
                 .filter(i => selectedIngredients.includes(i.id))
                 .map(i => `${i.name} (${i.quantity} ${i.unit})`);
-            const data = await aiService.generate(suggestion.title, ingredientsWithQty);
+            // La IA genera para 1 persona. El escalado ocurre en handleConfirmAIServings.
+            const data = await aiService.generate(suggestion.title, ingredientsWithQty, currentFamily?.family_id || currentFamily?.id);
             const recipe = data.recipe;
             const ingList = data.ingredients || [];
 
@@ -294,89 +332,17 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                 cal: recipe.calories_per_serving,
                 time: recipe.preparation_time ? `${recipe.preparation_time} min` : 'N/A',
                 img: recipe.image_url || 'https://images.unsplash.com/photo-1546554137-f86b9593a222?w=400',
+                // Ingredientes como strings para escalar en frontend
                 ingredients: ingList.map(i => `${i.name} (${i.quantity} ${i.unit})`),
                 steps: recipe.instructions ? recipe.instructions.split('\n').filter(Boolean) : [],
                 description: recipe.description || '',
                 recipe_id: recipe.recipe_id,
+                servings: 1, // siempre 1, el escalado es responsabilidad del planificador
             };
 
-            const newMenu = { ...plannerData };
-            const DAY_ENUM = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
-            const MEAL_ENUM = { 'Desayuno': 'desayuno', 'Almuerzo': 'almuerzo', 'Cena': 'cena' };
-
-            // -- VALIDAR CADUCIDAD PARA LOS SLOTS --
-            if (currentMenuPlan) {
-                for (const slot of selectedSlots) {
-                    const [dayIndexStr] = slot.split('-');
-                    const dayIndex = parseInt(dayIndexStr, 10);
-                    
-                    const scheduledDate = new Date(currentMenuPlan.start_date);
-                    scheduledDate.setHours(12, 0, 0, 0); 
-                    scheduledDate.setDate(scheduledDate.getDate() + dayIndex);
-
-                    try {
-                        const validation = await recipesService.validateExpiration({
-                            recipe_id: recipe.recipe_id,
-                            family_id: currentFamily.family_id || currentFamily.id,
-                            scheduled_date: scheduledDate.toISOString().split('T')[0]
-                        });
-
-                        if (!validation.valid) {
-                            alert(`⚠️ No puedes planificar para el día ${DAY_ENUM[dayIndex]}.\n\nLos siguientes ingredientes estarán vencidos:\n- ${validation.expiredIngredients.join('\n- ')}`);
-                            setAiStep('config');
-                            setIsGenerating(false);
-                            return; // Bloquear flujo
-                        }
-                    } catch (err) {
-                        console.error('Error validando caducidad IA', err);
-                    }
-                }
-            }
-
-            selectedSlots.forEach(slot => {
-                newMenu[slot] = { ...dish };
-            });
-            setPlannerData(newMenu);
-
-            // --- PERSISTIR EN BASE DE DATOS ---
-            if (currentMenuPlan) {
-                for (const slot of selectedSlots) {
-                    const [dayIndexStr, type] = slot.split('-');
-                    const dayIndex = parseInt(dayIndexStr, 10);
-                    try {
-                        const saved = await dailyMealsService.save({
-                            menu_plan_id: currentMenuPlan.menu_plan_id,
-                            recipe_id: recipe.recipe_id,
-                            meal_type: MEAL_ENUM[type] || type.toLowerCase(),
-                            day_of_week: DAY_ENUM[dayIndex],
-                        });
-                        setPlannerData(prev => ({
-                            ...prev,
-                            [slot]: { ...prev[slot], daily_meal_id: saved.daily_meal_id },
-                        }));
-                    } catch (saveErr) {
-                        console.error('Error guardando meal en BD:', saveErr);
-                    }
-                }
-                console.log('✅ Receta IA guardada en el planificador (BD)');
-            }
-
-            // --- DESCONTAR INGREDIENTES DEL INVENTARIO ---
-            const familyId = currentFamily?.family_id || currentFamily?.id;
-            if (recipe.recipe_id && familyId) {
-                try {
-                    await inventoryService.deduct(recipe.recipe_id, familyId);
-                    console.log('📦 Inventario descontado correctamente');
-                } catch (deductErr) {
-                    console.error('Error al descontar inventario:', deductErr);
-                    // No bloquear la experiencia si falla el descuento
-                }
-            }
-
-            // Cerrar modal y resetear
-            setShowModal(false);
-            setAiStep('config');
-            setSuggestions([]);
+            setAiDish(dish);
+            setAiPlanServings(1);
+            setAiStep('servings'); // paso intermedio: elegir cuántas personas
         } catch (err) {
             console.error('Error generando receta:', err);
             setAiError('Error al generar la receta. Intenta con otra opción.');
@@ -386,12 +352,108 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         }
     };
 
+    // Escalar ingredientes de una receta IA (formato "Nombre (qty unit)")
+    const scaleAIDish = (dish, persons) => {
+        if (persons === 1 || !dish.ingredients || dish.ingredients.length === 0) return dish.ingredients;
+        return dish.ingredients.map(ing => {
+            const match = ing.match(/^(.+?)\s*\(([\d.]+)\s*(.+?)\)$/);
+            if (!match) return ing;
+            const name = match[1].trim();
+            const qty = parseFloat(match[2]);
+            const unit = match[3].trim();
+            return `${name} (${Math.round(qty * persons * 100) / 100} ${unit})`;
+        });
+    };
+
+    // PASO 3: Confirmar personas y agregar al planificador
+    const handleConfirmAIServings = async () => {
+        if (!aiDish) return;
+        const DAY_ENUM = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+        const MEAL_ENUM = { 'Desayuno': 'desayuno', 'Almuerzo': 'almuerzo', 'Cena': 'cena' };
+
+        // Crear la versión escalada para mostrar en el planner
+        const scaledDish = {
+            ...aiDish,
+            ingredients: scaleAIDish(aiDish, aiPlanServings),
+        };
+
+        // -- VALIDAR CADUCIDAD PARA LOS SLOTS --
+        if (currentMenuPlan && aiDish.recipe_id) {
+            for (const slot of selectedSlots) {
+                const [dayIndexStr] = slot.split('-');
+                const dayIndex = parseInt(dayIndexStr, 10);
+                const scheduledDate = new Date(`${currentMenuPlan.start_date}T12:00:00`);
+                scheduledDate.setDate(scheduledDate.getDate() + dayIndex);
+
+                try {
+                    const validation = await recipesService.validateExpiration({
+                        recipe_id: aiDish.recipe_id,
+                        family_id: currentFamily.family_id || currentFamily.id,
+                        scheduled_date: scheduledDate.toISOString().split('T')[0]
+                    });
+                    if (!validation.valid) {
+                        alert(`⚠️ No puedes planificar para el día ${DAY_ENUM[dayIndex]}.\n\nIngredientes vencidos:\n- ${validation.expiredIngredients.join('\n- ')}`);
+                        return;
+                    }
+                } catch (err) {
+                    console.error('Error validando caducidad IA', err);
+                }
+            }
+        }
+
+        // Agregar al planner UI
+        const newMenu = { ...plannerData };
+        selectedSlots.forEach(slot => { newMenu[slot] = { ...scaledDish }; });
+        setPlannerData(newMenu);
+
+        // Persistir en BD
+        if (currentMenuPlan && aiDish.recipe_id) {
+            for (const slot of selectedSlots) {
+                const [dayIndexStr, type] = slot.split('-');
+                const dayIndex = parseInt(dayIndexStr, 10);
+                try {
+                    const saved = await dailyMealsService.save({
+                        menu_plan_id: currentMenuPlan.menu_plan_id,
+                        recipe_id: aiDish.recipe_id,
+                        meal_type: MEAL_ENUM[type] || type.toLowerCase(),
+                        day_of_week: DAY_ENUM[dayIndex],
+                    });
+                    setPlannerData(prev => ({
+                        ...prev,
+                        [slot]: { ...prev[slot], daily_meal_id: saved.daily_meal_id },
+                    }));
+                } catch (saveErr) {
+                    console.error('Error guardando meal en BD:', saveErr);
+                }
+            }
+        }
+
+        // Descontar inventario escalado por número de personas
+        const familyId = currentFamily?.family_id || currentFamily?.id;
+        if (aiDish.recipe_id && familyId) {
+            try {
+                await inventoryService.deduct(aiDish.recipe_id, familyId, aiPlanServings);
+            } catch (deductErr) {
+                console.error('Error al descontar inventario:', deductErr);
+            }
+        }
+
+        // Cerrar modal y resetear todo
+        setShowModal(false);
+        setAiStep('config');
+        setSuggestions([]);
+        setAiDish(null);
+        setAiPlanServings(1);
+    };
+
     // Resetear al cerrar modal
     const handleCloseModal = () => {
         setShowModal(false);
         setAiStep('config');
         setSuggestions([]);
         setAiError(null);
+        setAiDish(null);
+        setAiPlanServings(1);
     };
 
     return (
@@ -404,11 +466,17 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                     <p>Hola, <strong>{userProfile.name}</strong> 👋 Organiza tu semana.</p>
                 </div>
                 <div className="header-actions">
-                    {userRole !== 'ayudante' && weekOffset === 0 && (
-                        <button className="btn-primary" onClick={() => setShowModal(true)} disabled={isGenerating}>
-                            {isGenerating ? <CircleNotch size={20} className="ph-spin" /> : <Sparkle size={20} weight="fill" />}
-                            {isGenerating ? "Cocinando..." : "Asistente IA"}
-                        </button>
+                    {weekOffset === 0 && (
+                        <div className="btn-locked-wrapper" data-tooltip={userRole === 'ayudante' ? '🔒 Sin permiso' : undefined}>
+                            <button
+                                className={`btn-primary${userRole === 'ayudante' ? ' btn-locked' : ''}`}
+                                onClick={userRole !== 'ayudante' ? () => setShowModal(true) : undefined}
+                                disabled={isGenerating}
+                            >
+                                {isGenerating ? <CircleNotch size={20} className="ph-spin" /> : <Sparkle size={20} weight="fill" />}
+                                {isGenerating ? "Cocinando..." : "Asistente IA"}
+                            </button>
+                        </div>
                     )}
                 </div>
             </header>
@@ -465,10 +533,10 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                         <div className="modal-header-modern">
                             <div>
                                 <h2 style={{ margin: 0, fontSize: '1.5rem', color: '#111827', fontWeight: '800' }}>
-                                    {aiStep === 'config' ? 'Chef Inteligente' : aiStep === 'suggestions' ? '🍽️ Elige una Receta' : '🍳 Generando...'}
+                                    {aiStep === 'config' ? '🍳 Chef Inteligente' : aiStep === 'suggestions' ? '🍽️ Elige una Receta' : aiStep === 'servings' ? '👥 ¿Para cuántas personas?' : '🍳 Generando...'}
                                 </h2>
                                 <p style={{ margin: '4px 0 0', color: '#6B7280', fontSize: '0.95rem' }}>
-                                    {aiStep === 'config' ? 'Personaliza tu menú con IA' : aiStep === 'suggestions' ? 'La IA sugiere estos platos para ti' : 'Creando tu receta completa...'}
+                                    {aiStep === 'config' ? 'Personaliza tu menú con IA' : aiStep === 'suggestions' ? 'La IA sugiere estos platos para ti' : aiStep === 'servings' ? 'Los ingredientes se escalarán automáticamente' : 'Creando tu receta completa...'}
                                 </p>
                             </div>
                             <button onClick={handleCloseModal} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 5 }}>
@@ -514,7 +582,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                         </div>
                                     )}
 
-                                    {/* 3. Cuadrícula de Planificación */}
+                                    {/* 2. Cuadrícula de Planificación */}
                                     <div className="section-title" style={{ marginTop: '20px' }}><CalendarBlank weight="fill" color="#FF9F43" /> ¿Dónde quieres agregar la receta?</div>
                                     <p style={{ fontSize: '0.85rem', color: '#888', marginBottom: '15px' }}>Toca los cuadros para elegir los días y comidas.</p>
                                     
@@ -607,6 +675,42 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                     <p style={{ color: '#6B7280', fontSize: '0.9rem' }}>Gemini está generando ingredientes, pasos y calorías</p>
                                 </div>
                             )}
+
+                            {/* ── PASO 4: ¿CUÁNTAS PERSONAS? ── */}
+                            {aiStep === 'servings' && aiDish && (
+                                <div style={{ textAlign: 'center', padding: '10px 0 20px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, margin: '24px 0 16px' }}>
+                                        <button
+                                            onClick={() => setAiPlanServings(p => Math.max(1, p - 1))}
+                                            style={{ width: 44, height: 44, borderRadius: '50%', border: '2px solid #E5E7EB', background: 'white', cursor: 'pointer', fontSize: '1.5rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
+                                            onMouseEnter={e => { e.currentTarget.style.background = '#FFF7ED'; e.currentTarget.style.borderColor = '#FF9F43'; }}
+                                            onMouseLeave={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#E5E7EB'; }}
+                                        >&minus;</button>
+                                        <div>
+                                            <span style={{ display: 'block', fontSize: '2.8rem', fontWeight: 900, color: '#1F2937', lineHeight: 1 }}>{aiPlanServings}</span>
+                                            <span style={{ fontSize: '0.85rem', color: '#9CA3AF' }}>{aiPlanServings === 1 ? 'persona' : 'personas'}</span>
+                                        </div>
+                                        <button
+                                            onClick={() => setAiPlanServings(p => Math.min(20, p + 1))}
+                                            style={{ width: 44, height: 44, borderRadius: '50%', border: '2px solid #E5E7EB', background: 'white', cursor: 'pointer', fontSize: '1.5rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
+                                            onMouseEnter={e => { e.currentTarget.style.background = '#FFF7ED'; e.currentTarget.style.borderColor = '#FF9F43'; }}
+                                            onMouseLeave={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#E5E7EB'; }}
+                                        >+</button>
+                                    </div>
+
+                                    {/* Preview escalado */}
+                                    {aiDish.ingredients && aiDish.ingredients.length > 0 && (
+                                        <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 12, padding: '12px 16px', textAlign: 'left', maxHeight: 160, overflowY: 'auto', marginTop: 12 }}>
+                                            <p style={{ margin: '0 0 8px', fontSize: '0.78rem', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Ingredientes para {aiPlanServings} {aiPlanServings === 1 ? 'persona' : 'personas'}</p>
+                                            {scaleAIDish(aiDish, aiPlanServings).map((ing, i) => (
+                                                <div key={i} style={{ fontSize: '0.88rem', color: '#374151', padding: '3px 0', borderBottom: i < aiDish.ingredients.length - 1 ? '1px dashed #E5E7EB' : 'none' }}>
+                                                    🥄 {ing}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         {/* Footer */}
@@ -614,10 +718,18 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                             {aiStep === 'suggestions' && !isGenerating && (
                                 <button className="btn-cancel" onClick={() => { setAiStep('config'); setSuggestions([]); }}>← Volver</button>
                             )}
+                            {aiStep === 'servings' && (
+                                <button className="btn-cancel" onClick={() => { setAiStep('suggestions'); setAiDish(null); }}>← Volver</button>
+                            )}
                             <button className="btn-cancel" onClick={handleCloseModal}>Cancelar</button>
                             {aiStep === 'config' && (
                                 <button className="btn-generate" onClick={handleAISuggest} disabled={isGenerating || selectedIngredients.length === 0}>
                                     {isGenerating ? <><CircleNotch size={18} className="ph-spin" /> Pensando...</> : <>Generar Menú <Sparkle weight="fill" /></>}
+                                </button>
+                            )}
+                            {aiStep === 'servings' && (
+                                <button className="btn-generate" onClick={handleConfirmAIServings}>
+                                    Agregar al planner <Check weight="bold" />
                                 </button>
                             )}
                         </div>
@@ -740,7 +852,17 @@ function App() {
     });
 
     const [userFamilies, setUserFamilies] = useState([]);
-    const [userRole, setUserRole] = useState('ayudante');
+    // Inicializar el rol desde la familia guardada en localStorage para que sea correcto desde el inicio
+    const [userRole, setUserRole] = useState(() => {
+        try {
+            const saved = localStorage.getItem('neverita_family');
+            if (saved) {
+                const fam = JSON.parse(saved);
+                return fam.role || 'ayudante';
+            }
+        } catch { /* ignore */ }
+        return 'ayudante';
+    });
 
     // Fetch families for the authenticated user
     useEffect(() => {
@@ -756,10 +878,21 @@ function App() {
                 }));
                 setUserFamilies(mappedFamilies);
 
-                // Si hay una familia activa, actualizar el rol
-                if (currentFamily) {
-                    const match = mappedFamilies.find(f => f.family_id === (currentFamily.family_id || currentFamily.id));
-                    if (match) setUserRole(match.role);
+                // Leer la familia activa desde localStorage para garantizar que el role esté sincronizado
+                // aunque currentFamily aún no esté en el closure
+                const savedFamilyStr = localStorage.getItem('neverita_family');
+                const activeFamilyId = savedFamilyStr
+                    ? JSON.parse(savedFamilyStr)?.family_id ?? JSON.parse(savedFamilyStr)?.id
+                    : null;
+
+                if (activeFamilyId) {
+                    const match = mappedFamilies.find(f => f.family_id === activeFamilyId || f.id === activeFamilyId);
+                    if (match) {
+                        setUserRole(match.role);
+                        // Actualizar también el objeto guardado en localStorage para que tenga el role correcto
+                        const savedFam = JSON.parse(savedFamilyStr);
+                        localStorage.setItem('neverita_family', JSON.stringify({ ...savedFam, role: match.role }));
+                    }
                 }
             } catch (error) {
                 console.error("Error al cargar familias:", error);
@@ -813,6 +946,7 @@ function App() {
             setUserFamilies(prev => [...prev, fam]);
             setCurrentFamily(fam);
             setUserRole('creador');
+            localStorage.setItem('neverita_family', JSON.stringify(fam));
         } catch (error) {
             console.error("Error al crear familia:", error);
             alert("Ocurrió un error al crear la familia en el servidor.");
@@ -947,8 +1081,9 @@ function App() {
         if (!currentMenuPlan) return;
 
         // Calcular la fecha exacta en la que se planifica
-        const scheduledDate = new Date(currentMenuPlan.start_date);
-        scheduledDate.setHours(12, 0, 0, 0); // Mitad del día para evitar problemas de zona horaria
+        // Usar T12:00:00 asegura que la fecha caiga en el mismo día localmente, evitando que
+        // la conversión UTC la corra un día hacia atrás.
+        const scheduledDate = new Date(`${currentMenuPlan.start_date}T12:00:00`);
         scheduledDate.setDate(scheduledDate.getDate() + dayIndex);
 
         try {
@@ -992,7 +1127,7 @@ function App() {
     };
 
     if (!isAuthenticated) return <Auth onLogin={handleLogin} />;
-    if (!currentFamily) return <FamilySelect families={userFamilies} onSelectFamily={(fam) => { setCurrentFamily(fam); localStorage.setItem('neverita_family', JSON.stringify(fam)); }} onCreateFamily={handleCreateFamily} onJoinByCode={handleJoinByCode} />;
+    if (!currentFamily) return <FamilySelect families={userFamilies} onSelectFamily={(fam) => { setCurrentFamily(fam); setUserRole(fam.role || 'ayudante'); localStorage.setItem('neverita_family', JSON.stringify(fam)); }} onCreateFamily={handleCreateFamily} onJoinByCode={handleJoinByCode} />;
 
     return (
         <HashRouter>

@@ -115,7 +115,8 @@ router.post('/validate-expiration', async (req, res, next) => {
     );
 
     // 3. Validar caducidad
-    const scheduledDateObj = new Date(scheduled_date);
+    // Usamos T12:00:00 para forzar la lectura correcta y evitar desfases por zona horaria
+    const scheduledDateObj = new Date(`${scheduled_date}T12:00:00`);
     scheduledDateObj.setHours(0, 0, 0, 0);
     const expiredIngredients = [];
 

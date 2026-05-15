@@ -219,15 +219,13 @@ const Inventory = ({ currentFamily, userRole }) => {
                                                 </span>
                                             </td>
                                             <td>
-                                                {userRole !== 'ayudante' && (
-                                                    <button
-                                                        onClick={() => handleDelete(item.inventory_id)}
-                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#FA7070' }}
-                                                        title="Eliminar"
-                                                    >
-                                                        <Trash size={20} />
-                                                    </button>
-                                                )}
+                                                <button
+                                                    onClick={() => handleDelete(item.inventory_id)}
+                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#FA7070' }}
+                                                    title="Eliminar"
+                                                >
+                                                    <Trash size={20} />
+                                                </button>
                                             </td>
                                         </tr>
                                         );
@@ -265,15 +263,13 @@ const Inventory = ({ currentFamily, userRole }) => {
                                                 </span>
                                             )}
                                         </div>
-                                        {userRole !== 'ayudante' && (
-                                            <button
+                                        <button
                                                 className="inv-card-delete"
                                                 onClick={() => handleDelete(item.inventory_id)}
                                                 title="Eliminar"
                                             >
                                                 <Trash size={18} />
                                             </button>
-                                        )}
                                     </div>
                                     );
                                 })

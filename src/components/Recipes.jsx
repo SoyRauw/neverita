@@ -1,9 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import {
     Plus, Fire, Clock, X, MagnifyingGlass,
-    ChefHat, ListNumbers, Check, ArrowRight, Trash
+    ChefHat, ListNumbers, Check, ArrowRight, Trash, LockSimple, UsersThree
 } from '@phosphor-icons/react';
-import { recipesService, familyRecipesService } from '../api';
+import { recipesService, familyRecipesService, inventoryService } from '../api';
+
+// Permisos por rol
+// creador: todo
+// chef: todo menos gestionar miembros
+// ayudante: solo ver + agregar/quitar ingredientes
+const canDo = (role, action) => {
+    if (role === 'creador' || role === 'chef') return true;
+    // ayudante: no puede crear/editar/planificar recetas
+    return false;
+};
 
 // --- COLORES SEGÚN COMIDA ---
 const getMealColor = (type) => {
@@ -16,7 +26,6 @@ const getMealColor = (type) => {
 };
 
 // Mapea una receta del backend al formato del frontend
-// La BD no tiene columna 'category', así que usamos 'Almuerzo' por defecto
 const mapRecipe = (r) => ({
     id: r.recipe_id,
     recipe_id: r.recipe_id,
@@ -28,6 +37,7 @@ const mapRecipe = (r) => ({
     ingredients: Array.isArray(r.ingredients) ? r.ingredients : [],
     steps: r.instructions ? r.instructions.split('\n').filter(Boolean) : [],
     description: r.description || '',
+    servings: r.servings || 2,
 });
 
 const mealTypes = ['Desayuno', 'Almuerzo', 'Cena'];
@@ -47,6 +57,11 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
     const [selectedSlots, setSelectedSlots] = useState([]);
     const [missingIngredients, setMissingIngredients] = useState(null);
     const [isCheckingIngredients, setIsCheckingIngredients] = useState(false);
+    // Paso intermedio: elegir cuántas personas comerán
+    const [showServingsStep, setShowServingsStep] = useState(false);
+    const [pendingRecipe, setPendingRecipe] = useState(null); // receta que espera confirmación
+    const [planServings, setPlanServings] = useState(2);     // personas elegidas
+    const [planBaseServings, setPlanBaseServings] = useState(2); // servings base de la receta
 
     const [newRecipe, setNewRecipe] = useState({
         name: "", cal: "", time: "", category: [],
@@ -182,13 +197,41 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
         );
     };
 
-    const handleConfirmPlan = () => {
+    // Calcula ingredientes escalados al número de personas
+    const getScaledIngredients = (recipe, persons) => {
+        const base = recipe.servings || 2;
+        const factor = persons / base;
+        if (factor === 1 || !recipe.ingredients || recipe.ingredients.length === 0) return recipe.ingredients || [];
+        return recipe.ingredients.map(ing => {
+            // Formato: "Nombre (cantidad unidad)" o solo "Nombre"
+            const match = ing.match(/^(.+?)\s*\(([\d.]+)\s*(.+?)\)$/);
+            if (!match) return ing;
+            const name = match[1].trim();
+            const qty = parseFloat(match[2]);
+            const unit = match[3].trim();
+            const scaled = Math.round(qty * factor * 100) / 100;
+            return `${name} (${scaled} ${unit})`;
+        });
+    };
+
+    const handleConfirmPlan = async () => {
         if (selectedSlots.length === 0) return alert("Selecciona al menos un espacio.");
+        const multiplier = planBaseServings > 0 ? planServings / planBaseServings : 1;
         selectedSlots.forEach(slot => {
             const [dayIndexStr, meal] = slot.split('-');
-            onAddToPlanner(planRecipe, parseInt(dayIndexStr, 10), meal);
+            onAddToPlanner(planRecipe, parseInt(dayIndexStr, 10), meal, multiplier);
         });
+        // Descontar inventario escalado por personas
+        const fid = currentFamily?.family_id || currentFamily?.id;
+        if (planRecipe?.recipe_id && fid && multiplier !== 1) {
+            try {
+                await inventoryService.deduct(planRecipe.recipe_id, fid, multiplier);
+            } catch (err) {
+                console.error('Error al descontar inventario escalado:', err);
+            }
+        }
         setPlanRecipe(null);
+        setShowServingsStep(false);
         setViewRecipe(null);
     };
 
@@ -204,17 +247,28 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
             if (!ingCheck.valid) {
                 setMissingIngredients(ingCheck.missingIngredients);
             } else {
-                setPlanRecipe(recipe);
-                setSelectedSlots([]);
+                // Mostrar el paso intermedio de personas
+                setPendingRecipe(recipe);
+                setPlanServings(recipe.servings || 2);
+                setPlanBaseServings(recipe.servings || 2);
+                setShowServingsStep(true);
             }
         } catch (err) {
             console.error("Error al validar ingredientes:", err);
-            // Si hay error en la validación, le permitimos abrir el planificador de todos modos
-            setPlanRecipe(recipe);
-            setSelectedSlots([]);
+            setPendingRecipe(recipe);
+            setPlanServings(recipe.servings || 2);
+            setPlanBaseServings(recipe.servings || 2);
+            setShowServingsStep(true);
         } finally {
             setIsCheckingIngredients(false);
         }
+    };
+
+    const handleConfirmServings = () => {
+        setPlanRecipe(pendingRecipe);
+        setSelectedSlots([]);
+        setShowServingsStep(false);
+        setPendingRecipe(null);
     };
 
     const filtered = recipes.filter(r => r.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -238,16 +292,16 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                         />
                     </div>
                     <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                        {userRole !== 'ayudante' && (
-                            <>
-                                <button className="btn-secondary" style={{ flex: 1, minWidth: '140px' }} onClick={handleOpenAddExisting}>
-                                    Importar Existente
-                                </button>
-                                <button className="btn-primary" style={{ flex: 1, minWidth: '140px' }} onClick={() => setIsAdding(true)}>
-                                    <Plus size={20} weight="bold" /> Nueva Receta
-                                </button>
-                            </>
-                        )}
+                        <div className="btn-locked-wrapper" data-tooltip={!canDo(userRole) ? '🔒 Sin permiso' : undefined}>
+                            <button className={`btn-secondary${!canDo(userRole) ? ' btn-locked' : ''}`} style={{ flex: 1, minWidth: '140px' }} onClick={canDo(userRole) ? handleOpenAddExisting : undefined}>
+                                Importar Existente
+                            </button>
+                        </div>
+                        <div className="btn-locked-wrapper" data-tooltip={!canDo(userRole) ? '🔒 Sin permiso' : undefined}>
+                            <button className={`btn-primary${!canDo(userRole) ? ' btn-locked' : ''}`} style={{ flex: 1, minWidth: '140px' }} onClick={canDo(userRole) ? () => setIsAdding(true) : undefined}>
+                                <Plus size={20} weight="bold" /> Nueva Receta
+                            </button>
+                        </div>
                     </div>
                 </div>
             </header>
@@ -264,22 +318,22 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                             <div key={recipe.id} className="recipe-card" onClick={() => setViewRecipe(recipe)} style={{ position: 'relative' }}>
                                 <img src={recipe.img} alt={recipe.name} className="recipe-img" />
 
-                                {userRole !== 'ayudante' && (
+                                <div className="btn-locked-wrapper" style={{ position: 'absolute', top: 8, right: 8 }} data-tooltip={!canDo(userRole) ? '🔒 Sin permiso' : undefined}>
                                     <button
-                                        onClick={(e) => handleDelete(recipe.id, e)}
+                                        onClick={canDo(userRole) ? (e) => handleDelete(recipe.id, e) : undefined}
+                                        className={!canDo(userRole) ? 'btn-locked' : ''}
                                         style={{
-                                            position: 'absolute', top: 8, right: 8,
                                             background: 'rgba(255,255,255,0.9)', border: 'none',
                                             borderRadius: '50%', width: 32, height: 32,
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            cursor: 'pointer', color: '#e74c3c',
+                                            cursor: canDo(userRole) ? 'pointer' : 'not-allowed', color: '#e74c3c',
                                             boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
                                         }}
-                                        title="Eliminar receta"
+                                        title={canDo(userRole) ? 'Eliminar receta' : '🔒 Sin permiso'}
                                     >
-                                        <Trash size={16} />
+                                        {canDo(userRole) ? <Trash size={16} /> : <LockSimple size={16} />}
                                     </button>
-                                )}
+                                </div>
 
                                 <div className="recipe-content">
                                     <div className="recipe-badges">
@@ -378,6 +432,57 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                 </div>
             )}
 
+            {/* MINI-MODAL: ¿PARA CUÁNTAS PERSONAS? (paso previo al planificador) */}
+            {showServingsStep && pendingRecipe && (
+                <div className="modal-overlay" style={{ zIndex: 7500 }} onClick={() => { setShowServingsStep(false); setPendingRecipe(null); }}>
+                    <div className="modal-modern" onClick={e => e.stopPropagation()} style={{ maxWidth: 380, textAlign: 'center', padding: '30px 24px' }}>
+                        <div style={{ width: 60, height: 60, background: '#FFF7ED', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 18px' }}>
+                            <UsersThree size={30} weight="fill" color="#FF9F43" />
+                        </div>
+                        <h3 style={{ margin: '0 0 6px', fontSize: '1.3rem', fontWeight: 800, color: '#1F2937' }}>¿Para cuántas personas?</h3>
+                        <p style={{ margin: '0 0 24px', color: '#6B7280', fontSize: '0.9rem' }}>Los ingredientes se escalarán automáticamente.</p>
+
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 20 }}>
+                            <button
+                                onClick={() => setPlanServings(p => Math.max(1, p - 1))}
+                                style={{ width: 40, height: 40, borderRadius: '50%', border: '2px solid #E5E7EB', background: 'white', cursor: 'pointer', fontSize: '1.4rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
+                                onMouseEnter={e => { e.currentTarget.style.background = '#FFF7ED'; e.currentTarget.style.borderColor = '#FF9F43'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#E5E7EB'; }}
+                            >&minus;</button>
+                            <div style={{ textAlign: 'center' }}>
+                                <span style={{ display: 'block', fontSize: '2.2rem', fontWeight: 900, color: '#1F2937', lineHeight: 1 }}>{planServings}</span>
+                                <span style={{ fontSize: '0.8rem', color: '#9CA3AF' }}>{planServings === 1 ? 'persona' : 'personas'}</span>
+                            </div>
+                            <button
+                                onClick={() => setPlanServings(p => Math.min(20, p + 1))}
+                                style={{ width: 40, height: 40, borderRadius: '50%', border: '2px solid #E5E7EB', background: 'white', cursor: 'pointer', fontSize: '1.4rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
+                                onMouseEnter={e => { e.currentTarget.style.background = '#FFF7ED'; e.currentTarget.style.borderColor = '#FF9F43'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#E5E7EB'; }}
+                            >+</button>
+                        </div>
+
+                        {/* Preview de ingredientes escalados */}
+                        {pendingRecipe.ingredients && pendingRecipe.ingredients.length > 0 && (
+                            <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 10, padding: '10px 14px', marginBottom: 20, textAlign: 'left', maxHeight: 130, overflowY: 'auto' }}>
+                                <p style={{ margin: '0 0 6px', fontSize: '0.78rem', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Ingredientes escalados</p>
+                                {getScaledIngredients(pendingRecipe, planServings).map((ing, i) => (
+                                    <div key={i} style={{ fontSize: '0.85rem', color: '#374151', padding: '2px 0', borderBottom: i < pendingRecipe.ingredients.length - 1 ? '1px dashed #E5E7EB' : 'none' }}>
+                                        🥄 {ing}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <div style={{ display: 'flex', gap: 10 }}>
+                            <button className="btn-secondary" style={{ flex: 1 }} onClick={() => { setShowServingsStep(false); setPendingRecipe(null); }}>Cancelar</button>
+                            <button className="btn-primary" style={{ flex: 1 }} onClick={handleConfirmServings}>
+                                Continuar <ArrowRight weight="bold" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* MODAL 3: PLANIFICAR */}
             {planRecipe && (
                 <div className="modal-overlay" style={{ zIndex: 6500 }} onClick={() => setPlanRecipe(null)}>
@@ -388,6 +493,10 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                                 <div>
                                     <h3 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800, color: '#2d3436' }}>Planificar Plato</h3>
                                     <p style={{ margin: 0, color: '#888', fontSize: '0.9rem' }}>Toca donde quieres comer <span style={{ color: '#F7B27B', fontWeight: 600 }}>{planRecipe.name}</span></p>
+                                    <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: '#9CA3AF' }}>
+                                        <UsersThree size={13} weight="fill" style={{ verticalAlign: 'middle', marginRight: 3 }} />
+                                        Para {planServings} {planServings === 1 ? 'persona' : 'personas'}
+                                    </p>
                                 </div>
                             </div>
                             <button onClick={() => setPlanRecipe(null)} className="btn-secondary" style={{ padding: 8, border: 'none', alignSelf: 'flex-start' }}><X size={24} /></button>
@@ -499,6 +608,9 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                                 <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', color: '#555', fontWeight: 700 }}>
                                     <Clock weight="fill" color="#F7B27B" size={22} /> {viewRecipe.time}
                                 </span>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', color: '#555', fontWeight: 700 }}>
+                                    <UsersThree weight="fill" color="#F7B27B" size={22} /> {viewRecipe.servings || 2} personas
+                                </span>
                             </div>
                             {viewRecipe.description && (
                                 <p style={{ color: '#555', marginBottom: 20, fontStyle: 'italic' }}>{viewRecipe.description}</p>
@@ -528,21 +640,25 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                         </div>
                         <div className="modal-footer">
                             <button className="btn-secondary" onClick={() => setViewRecipe(null)}>Cerrar</button>
-                            {userRole !== 'ayudante' && (
-                                <>
-                                    {availableRecipes.some(r => r.id === viewRecipe.id) ? (
-                                        <button className="btn-primary" onClick={() => {
-                                            handleAddExistingRecipe(viewRecipe.id);
-                                            setViewRecipe(null);
-                                        }}>
-                                            Importar Receta <Plus weight="bold" />
-                                        </button>
-                                    ) : (
-                                        <button className="btn-primary" onClick={() => handlePlanClick(viewRecipe)} disabled={isCheckingIngredients}>
-                                            {isCheckingIngredients ? "Revisando despensa..." : "Planificar"} {!isCheckingIngredients && <ArrowRight weight="bold" />}
-                                        </button>
-                                    )}
-                                </>
+                            {availableRecipes.some(r => r.id === viewRecipe.id) ? (
+                                <div className="btn-locked-wrapper" data-tooltip={!canDo(userRole) ? '🔒 Sin permiso' : undefined}>
+                                    <button
+                                        className={`btn-primary${!canDo(userRole) ? ' btn-locked' : ''}`}
+                                        onClick={canDo(userRole) ? () => { handleAddExistingRecipe(viewRecipe.id); setViewRecipe(null); } : undefined}
+                                    >
+                                        Importar Receta <Plus weight="bold" />
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="btn-locked-wrapper" data-tooltip={!canDo(userRole) ? '🔒 Sin permiso' : undefined}>
+                                    <button
+                                        className={`btn-primary${!canDo(userRole) ? ' btn-locked' : ''}`}
+                                        onClick={canDo(userRole) ? () => handlePlanClick(viewRecipe) : undefined}
+                                        disabled={isCheckingIngredients}
+                                    >
+                                        {isCheckingIngredients ? "Revisando despensa..." : "Planificar"} {!isCheckingIngredients && <ArrowRight weight="bold" />}
+                                    </button>
+                                </div>
                             )}
                         </div>
                     </div>
