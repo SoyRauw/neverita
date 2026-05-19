@@ -3,7 +3,7 @@ import {
     Plus, Fire, Clock, X, MagnifyingGlass,
     ChefHat, ListNumbers, Check, ArrowRight, Trash, LockSimple, UsersThree
 } from '@phosphor-icons/react';
-import { recipesService, familyRecipesService, inventoryService } from '../api';
+import { recipesService, familyRecipesService, inventoryService, ingredientsService } from '../api';
 
 // Permisos por rol
 // creador: todo
@@ -62,6 +62,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
     const [pendingRecipe, setPendingRecipe] = useState(null); // receta que espera confirmación
     const [planServings, setPlanServings] = useState(2);     // personas elegidas
     const [planBaseServings, setPlanBaseServings] = useState(2); // servings base de la receta
+    const [myInventory, setMyInventory] = useState([]); // para validar incremento
 
     const [newRecipe, setNewRecipe] = useState({
         name: "", cal: "", time: "", category: [],
@@ -247,6 +248,25 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
             if (!ingCheck.valid) {
                 setMissingIngredients(ingCheck.missingIngredients);
             } else {
+                // Cargar inventario para validar incremento en tiempo real
+                try {
+                    const [inv, allIngs] = await Promise.all([
+                        inventoryService.getAll(),
+                        ingredientsService.getAll()
+                    ]);
+                    const filtered = fid ? inv.filter(i => i.family_id === fid) : inv;
+                    const inventoryItems = filtered.map(item => {
+                        const ing = allIngs.find(i => i.ingredient_id === item.ingredient_id);
+                        return {
+                            id: item.inventory_id,
+                            name: ing ? ing.name : '',
+                            quantity: Number(item.quantity) || 0,
+                            unit: ing ? ing.unit : '',
+                        };
+                    });
+                    setMyInventory(inventoryItems);
+                } catch(err) { console.error('Error cargando inventario local:', err); }
+
                 // Mostrar el paso intermedio de personas
                 setPendingRecipe(recipe);
                 setPlanServings(recipe.servings || 2);
@@ -272,6 +292,24 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
     };
 
     const filtered = recipes.filter(r => r.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    // Determinar si podemos incrementar personas según inventario
+    let canIncrementPlan = planServings < 20;
+    if (canIncrementPlan && pendingRecipe && pendingRecipe.ingredients && myInventory.length > 0) {
+        const base = pendingRecipe.servings || 2;
+        const factor = (planServings + 1) / base;
+        for (const ingStr of pendingRecipe.ingredients) {
+            const match = ingStr.match(/^(.+?)\s*\(([\d.]+)\s*(.+?)\)$/);
+            if (!match) continue;
+            const name = match[1].trim().toLowerCase();
+            const reqQty = parseFloat(match[2]) * factor;
+            const invItem = myInventory.find(i => i.name.toLowerCase() === name);
+            if (invItem && reqQty > invItem.quantity) {
+                canIncrementPlan = false;
+                break;
+            }
+        }
+    }
 
     return (
         <div className="main-content">
@@ -454,10 +492,20 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                                 <span style={{ fontSize: '0.8rem', color: '#9CA3AF' }}>{planServings === 1 ? 'persona' : 'personas'}</span>
                             </div>
                             <button
-                                onClick={() => setPlanServings(p => Math.min(20, p + 1))}
-                                style={{ width: 40, height: 40, borderRadius: '50%', border: '2px solid #E5E7EB', background: 'white', cursor: 'pointer', fontSize: '1.4rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
-                                onMouseEnter={e => { e.currentTarget.style.background = '#FFF7ED'; e.currentTarget.style.borderColor = '#FF9F43'; }}
-                                onMouseLeave={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#E5E7EB'; }}
+                                disabled={!canIncrementPlan}
+                                onClick={() => {
+                                    if (canIncrementPlan) setPlanServings(p => p + 1);
+                                }}
+                                style={{ 
+                                    width: 40, height: 40, borderRadius: '50%', border: '2px solid #E5E7EB', 
+                                    background: 'white', fontSize: '1.4rem', fontWeight: 700, 
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                                    transition: 'all 0.15s',
+                                    cursor: canIncrementPlan ? 'pointer' : 'not-allowed',
+                                    opacity: canIncrementPlan ? 1 : 0.4
+                                }}
+                                onMouseEnter={e => { if (canIncrementPlan) { e.currentTarget.style.background = '#FFF7ED'; e.currentTarget.style.borderColor = '#FF9F43'; } }}
+                                onMouseLeave={e => { if (canIncrementPlan) { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#E5E7EB'; } }}
                             >+</button>
                         </div>
 

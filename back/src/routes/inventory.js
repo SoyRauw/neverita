@@ -27,7 +27,7 @@ router.get('/:id', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { family_id, ingredient_id, quantity, expiration_date } = req.body;
+    const { family_id, ingredient_id, quantity, expiration_date, is_frozen } = req.body;
 
     // Si no se envió fecha de vencimiento, calcularla automáticamente
     let finalExpDate = expiration_date;
@@ -44,23 +44,63 @@ router.post('/', async (req, res, next) => {
       finalExpDate = date.toISOString().split('T')[0]; // formato YYYY-MM-DD
     }
 
+    const frozenVal = is_frozen ? 1 : 0;
+    const frozenAtVal = is_frozen ? new Date() : null;
+
     const [result] = await db.query(
-      'INSERT INTO inventory (family_id, ingredient_id, quantity, expiration_date) VALUES (?, ?, ?, ?)',
-      [family_id, ingredient_id, quantity, finalExpDate]
+      'INSERT INTO inventory (family_id, ingredient_id, quantity, expiration_date, is_frozen, frozen_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [family_id, ingredient_id, quantity, finalExpDate, frozenVal, frozenAtVal]
     );
-    res.status(201).json({ inventory_id: result.insertId, family_id, ingredient_id, quantity, expiration_date: finalExpDate });
+    res.status(201).json({ inventory_id: result.insertId, family_id, ingredient_id, quantity, expiration_date: finalExpDate, is_frozen: !!frozenVal });
   } catch (err) { next(err); }
 });
 
 router.put('/:id', async (req, res, next) => {
   try {
-    const { family_id, ingredient_id, quantity, expiration_date } = req.body;
-    const [result] = await db.query(
-      'UPDATE inventory SET family_id = ?, ingredient_id = ?, quantity = ?, expiration_date = ? WHERE inventory_id = ?',
-      [family_id, ingredient_id, quantity, expiration_date, req.params.id]
-    );
-    if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found' });
-    res.json({ inventory_id: Number(req.params.id), family_id, ingredient_id, quantity, expiration_date });
+    const { family_id, ingredient_id, quantity, expiration_date, is_frozen } = req.body;
+    
+    // Primero obtener el item actual para comparar el estado
+    const [currentRows] = await db.query('SELECT expiration_date, is_frozen, frozen_at FROM inventory WHERE inventory_id = ?', [req.params.id]);
+    if (currentRows.length === 0) return res.status(404).json({ error: 'Not found' });
+    const current = currentRows[0];
+
+    let query = 'UPDATE inventory SET family_id = ?, ingredient_id = ?, quantity = ?';
+    let params = [family_id, ingredient_id, quantity];
+    
+    let finalExpDate = expiration_date; // por defecto usamos el que viene
+
+    if (is_frozen !== undefined) {
+      const isNowFrozen = is_frozen ? 1 : 0;
+      query += ', is_frozen = ?';
+      params.push(isNowFrozen);
+
+      if (isNowFrozen === 1 && current.is_frozen === 0) {
+        // Congelando: guardar la fecha actual
+        query += ', frozen_at = NOW()';
+      } else if (isNowFrozen === 0 && current.is_frozen === 1 && current.frozen_at) {
+        // Descongelando: calcular cuántos días estuvo congelado y sumarlos a la fecha de vencimiento
+        const oldExpDate = new Date(current.expiration_date);
+        const frozenAt = new Date(current.frozen_at);
+        const now = new Date();
+        
+        // Diferencia en días enteros
+        const diffTime = Math.abs(now - frozenAt);
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        
+        // Desplazar la fecha de vencimiento
+        oldExpDate.setDate(oldExpDate.getDate() + diffDays);
+        finalExpDate = oldExpDate.toISOString().split('T')[0];
+        
+        query += ', frozen_at = NULL';
+      }
+    }
+
+    query += ', expiration_date = ? WHERE inventory_id = ?';
+    params.push(finalExpDate, req.params.id);
+
+    await db.query(query, params);
+    
+    res.json({ inventory_id: Number(req.params.id), family_id, ingredient_id, quantity, expiration_date: finalExpDate, is_frozen });
   } catch (err) { next(err); }
 });
 

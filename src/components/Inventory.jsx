@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Trash, PlusCircle, X, Warning, WarningOctagon, CheckCircle } from '@phosphor-icons/react';
-import { inventoryService, ingredientsService } from '../api';
+import { Trash, PlusCircle, X, Warning, WarningOctagon, CheckCircle, Snowflake } from '@phosphor-icons/react';
+import { inventoryService, ingredientsService, aiService } from '../api';
 
 // Devuelve el estado de caducidad de un item
 // 'expired' | 'critical' | 'warning' | 'ok' | 'none'
-const getExpiryStatus = (expiration_date) => {
+const getExpiryStatus = (expiration_date, is_frozen) => {
+    if (is_frozen) return 'frozen';
     if (!expiration_date) return 'none';
     const now = new Date();
     now.setHours(0, 0, 0, 0);
@@ -18,6 +19,7 @@ const getExpiryStatus = (expiration_date) => {
 };
 
 const EXPIRY_STYLES = {
+    frozen:   { bg: '#F0F9FF', color: '#0EA5E9', badgeBg: '#E0F2FE', badgeColor: '#0EA5E9', label: 'Congelado',   icon: <Snowflake size={15} weight="fill" /> },
     expired:  { bg: '#FEF2F2', color: '#DC2626', badgeBg: '#FEE2E2', badgeColor: '#DC2626', label: 'Vencido',      icon: <WarningOctagon size={15} weight="fill" /> },
     critical: { bg: '#FFF7ED', color: '#EA580C', badgeBg: '#FFEDD5', badgeColor: '#EA580C', label: 'Vence hoy',   icon: <Warning size={15} weight="fill" /> },
     warning:  { bg: '#FEFCE8', color: '#CA8A04', badgeBg: '#FEF9C3', badgeColor: '#CA8A04', label: 'Por vencer',  icon: <Warning size={15} weight="fill" /> },
@@ -31,19 +33,37 @@ const Inventory = ({ currentFamily, userRole }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // Estado del modal para agregar
+    // Modal
     const [showModal, setShowModal] = useState(false);
-    const [form, setForm] = useState({
-        ingredient_id: '',
-        quantity: '',
-        unit: 'unidades',
-        expiration_date: '',
-    });
     const [saving, setSaving] = useState(false);
-    const [creatingNew, setCreatingNew] = useState(false);
-    const [newIngredient, setNewIngredient] = useState({ name: '', unit: 'unidad', category: 'otro' });
 
-    const units = ['unidades', 'gr', 'kg', 'ml', 'litros', 'paquetes'];
+    // Autocomplete
+    const [searchText, setSearchText] = useState('');
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [selectedIngredient, setSelectedIngredient] = useState(null);
+
+    // Modo "crear nuevo"
+    const [creatingNew, setCreatingNew] = useState(false);
+    const [newIngredient, setNewIngredient] = useState({ name: '', unit: 'g', category: 'otro', average_expiry_days: 7 });
+    const [aiLoading, setAiLoading] = useState(false); // spinner mientras IA responde
+
+    // Cantidad y fecha
+    const [quantity, setQuantity] = useState('');
+    const [expirationDate, setExpirationDate] = useState('');
+
+    // Sugerencias filtradas del autocomplete
+    const suggestions = searchText.trim().length >= 1
+        ? ingredients.filter(i => i.name.toLowerCase().includes(searchText.toLowerCase())).slice(0, 8)
+        : [];
+
+    // Fecha estimada según average_expiry_days del ingrediente seleccionado
+    const calcEstimatedExpiry = (ing) => {
+        if (!ing || !ing.average_expiry_days) return null;
+        const d = new Date();
+        d.setDate(d.getDate() + ing.average_expiry_days);
+        return d.toISOString().split('T')[0];
+    };
+    const estimatedExpiry = selectedIngredient && !expirationDate ? calcEstimatedExpiry(selectedIngredient) : null;
 
     // ---------- Cargar inventario + ingredientes ----------
     useEffect(() => {
@@ -56,13 +76,9 @@ const Inventory = ({ currentFamily, userRole }) => {
                     ingredientsService.getAll(),
                 ]);
                 setIngredients(ing);
-
-                // Filtrar por familia si currentFamily está disponible
                 const filtered = currentFamily
                     ? inv.filter(i => i.family_id === currentFamily.family_id || i.family_id === currentFamily.id)
                     : inv;
-
-                // Enriquecer con el nombre del ingrediente
                 const enriched = filtered.map(item => {
                     const ingredient = ing.find(i => i.ingredient_id === item.ingredient_id);
                     return {
@@ -71,7 +87,6 @@ const Inventory = ({ currentFamily, userRole }) => {
                         unit: ingredient ? ingredient.unit : '',
                     };
                 });
-
                 setItems(enriched);
             } catch (err) {
                 setError('No se pudo cargar el inventario. ¿Está el backend corriendo?');
@@ -82,6 +97,37 @@ const Inventory = ({ currentFamily, userRole }) => {
         };
         load();
     }, [currentFamily]);
+
+    // Debounce: llamar a la IA 700ms después de que el usuario deja de escribir el nombre
+    useEffect(() => {
+        const name = newIngredient.name.trim();
+        if (!creatingNew || name.length < 3) return;
+        setAiLoading(true);
+        const timer = setTimeout(async () => {
+            try {
+                const info = await aiService.ingredientInfo(name);
+                setNewIngredient(prev => ({
+                    ...prev,
+                    unit: info.unit || prev.unit,
+                    category: info.category || prev.category,
+                    average_expiry_days: info.average_expiry_days || prev.average_expiry_days,
+                }));
+            } catch (e) { /* silencioso */ }
+            finally { setAiLoading(false); }
+        }, 700);
+        return () => clearTimeout(timer);
+    }, [newIngredient.name, creatingNew]);
+
+    const resetModal = () => {
+        setSearchText('');
+        setSelectedIngredient(null);
+        setCreatingNew(false);
+        setNewIngredient({ name: '', unit: 'g', category: 'otro', average_expiry_days: 7 });
+        setAiLoading(false);
+        setQuantity('');
+        setExpirationDate('');
+        setShowSuggestions(false);
+    };
 
     // ---------- Eliminar ítem ----------
     const handleDelete = async (inventoryId) => {
@@ -94,57 +140,75 @@ const Inventory = ({ currentFamily, userRole }) => {
         }
     };
 
-    // ---------- Agregar ítem ----------
-    const handleAdd = async () => {
-        if (!form.ingredient_id || !form.quantity) {
-            alert('Selecciona un ingrediente e indica la cantidad.');
-            return;
-        }
-        setSaving(true);
-        try {
-            const payload = {
-                family_id: currentFamily?.family_id || currentFamily?.id || null,
-                ingredient_id: Number(form.ingredient_id),
-                quantity: Number(form.quantity),
-                expiration_date: form.expiration_date || null,
-            };
-            const created = await inventoryService.create(payload);
-            const ingredient = ingredients.find(i => i.ingredient_id === created.ingredient_id);
-            setItems(prev => [...prev, {
-                ...created,
-                name: ingredient ? ingredient.name : `Ingrediente #${created.ingredient_id}`,
-                unit: ingredient ? ingredient.unit : '',
-            }]);
-            setShowModal(false);
-            setForm({ ingredient_id: '', quantity: '', unit: 'unidades', expiration_date: '' });
-        } catch (err) {
-            alert('Error al agregar el producto.');
-            console.error(err);
-        } finally {
-            setSaving(false);
-        }
+    // ---------- Seleccionar sugerencia ----------
+    const handleSelectSuggestion = (ing) => {
+        setSelectedIngredient(ing);
+        setSearchText(ing.name);
+        setShowSuggestions(false);
+        setCreatingNew(false);
     };
 
     // ---------- Crear ingrediente nuevo ----------
     const handleCreateIngredient = async () => {
-        if (!newIngredient.name.trim()) {
-            alert('Escribe el nombre del ingrediente.');
-            return;
-        }
+        if (!newIngredient.name.trim()) { alert('Escribe el nombre del ingrediente.'); return; }
         try {
             const created = await ingredientsService.create({
                 name: newIngredient.name.trim(),
                 unit: newIngredient.unit,
                 category: newIngredient.category,
+                average_expiry_days: newIngredient.average_expiry_days,
             });
-            // Agregar a la lista local y seleccionarlo
-            setIngredients(prev => [...prev, created]);
-            setForm(prev => ({ ...prev, ingredient_id: String(created.ingredient_id) }));
+            if (created.already_existed) {
+                alert(`"${created.name}" ya existe. Lo hemos seleccionado automáticamente.`);
+            } else {
+                setIngredients(prev => [...prev, created]);
+            }
+            setSelectedIngredient(created);
+            setSearchText(created.name);
             setCreatingNew(false);
-            setNewIngredient({ name: '', unit: 'unidad', category: 'otro' });
+            setNewIngredient({ name: '', unit: 'g', category: 'otro' });
         } catch (err) {
             alert('Error al crear el ingrediente.');
             console.error(err);
+        }
+    };
+
+    // ---------- Congelar / Descongelar ----------
+    const handleToggleFrozen = async (item) => {
+        try {
+            const newValue = item.is_frozen ? 0 : 1;
+            const updatedItem = await inventoryService.update(item.inventory_id, {
+                ...item,
+                is_frozen: newValue
+            });
+            setItems(prev => prev.map(i => i.inventory_id === item.inventory_id ? { ...i, is_frozen: newValue, expiration_date: updatedItem.expiration_date } : i));
+        } catch (err) {
+            alert('Error al actualizar el estado de congelación.');
+            console.error(err);
+        }
+    };
+
+    // ---------- Agregar al inventario ----------
+    const handleAdd = async () => {
+        if (!selectedIngredient) { alert('Selecciona o crea un ingrediente primero.'); return; }
+        if (!quantity || Number(quantity) <= 0) { alert('Indica una cantidad válida.'); return; }
+        setSaving(true);
+        try {
+            const payload = {
+                family_id: currentFamily?.family_id || currentFamily?.id || null,
+                ingredient_id: selectedIngredient.ingredient_id,
+                quantity: Number(quantity),
+                expiration_date: expirationDate || null,
+            };
+            const created = await inventoryService.create(payload);
+            setItems(prev => [...prev, { ...created, name: selectedIngredient.name, unit: selectedIngredient.unit }]);
+            setShowModal(false);
+            resetModal();
+        } catch (err) {
+            alert('Error al agregar el producto.');
+            console.error(err);
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -158,7 +222,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                         {currentFamily && <span style={{ color: '#FF9F43', fontWeight: 600 }}> — {currentFamily.name}</span>}
                     </p>
                 </div>
-                <button className="btn-primary" onClick={() => setShowModal(true)}>
+                <button className="btn-primary" onClick={() => { resetModal(); setShowModal(true); }}>
                     <PlusCircle size={20} weight="bold" /> Agregar Producto
                 </button>
             </header>
@@ -188,7 +252,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                                     </tr>
                                 ) : (
                                     items.map((item) => {
-                                        const status = getExpiryStatus(item.expiration_date);
+                                        const status = getExpiryStatus(item.expiration_date, item.is_frozen);
                                         const style = EXPIRY_STYLES[status];
                                         return (
                                         <tr key={item.inventory_id} style={{ borderBottom: '1px solid #eee', background: style.bg, transition: 'background 0.3s' }}>
@@ -212,13 +276,22 @@ const Inventory = ({ currentFamily, userRole }) => {
                                                     borderRadius: '8px',
                                                     fontSize: '0.9rem',
                                                     fontWeight: status !== 'ok' && status !== 'none' ? 700 : 400,
+                                                    textDecoration: status === 'frozen' ? 'line-through' : 'none',
+                                                    opacity: status === 'frozen' ? 0.6 : 1
                                                 }}>
                                                     {item.expiration_date
                                                         ? new Date(item.expiration_date).toLocaleDateString()
                                                         : '—'}
                                                 </span>
                                             </td>
-                                            <td>
+                                            <td style={{ display: 'flex', gap: 10 }}>
+                                                <button
+                                                    onClick={() => handleToggleFrozen(item)}
+                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: item.is_frozen ? '#0EA5E9' : '#9CA3AF' }}
+                                                    title={item.is_frozen ? "Descongelar" : "Congelar"}
+                                                >
+                                                    <Snowflake size={20} weight={item.is_frozen ? "fill" : "regular"} />
+                                                </button>
                                                 <button
                                                     onClick={() => handleDelete(item.inventory_id)}
                                                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#FA7070' }}
@@ -242,11 +315,11 @@ const Inventory = ({ currentFamily, userRole }) => {
                                 </p>
                             ) : (
                                 items.map((item) => {
-                                    const status = getExpiryStatus(item.expiration_date);
+                                    const status = getExpiryStatus(item.expiration_date, item.is_frozen);
                                     const style = EXPIRY_STYLES[status];
                                     return (
                                     <div key={item.inventory_id} className="inv-card" style={{ background: style.bg, borderLeft: status !== 'ok' && status !== 'none' ? `3px solid ${style.color}` : undefined }}>
-                                        <div className="inv-card-icon">{status === 'expired' ? '🗑️' : status === 'critical' ? '⚠️' : status === 'warning' ? '⏳' : '📦'}</div>
+                                        <div className="inv-card-icon">{status === 'frozen' ? <Snowflake size={24} weight="fill" color="#0EA5E9" /> : status === 'expired' ? '🗑️' : status === 'critical' ? '⚠️' : status === 'warning' ? '⏳' : '📦'}</div>
                                         <div className="inv-card-info">
                                             <h4 style={{ color: status === 'expired' ? '#DC2626' : 'inherit', textDecoration: status === 'expired' ? 'line-through' : 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
                                                 {item.name}
@@ -258,18 +331,34 @@ const Inventory = ({ currentFamily, userRole }) => {
                                             </h4>
                                             <p style={{ color: status === 'expired' ? '#9CA3AF' : 'inherit' }}>{item.quantity} {item.unit}</p>
                                             {item.expiration_date && (
-                                                <span className="inv-card-expiry" style={{ color: style.badgeColor, fontWeight: status !== 'ok' && status !== 'none' ? 700 : 400 }}>
+                                                <span className="inv-card-expiry" style={{ 
+                                                    color: style.badgeColor, 
+                                                    fontWeight: status !== 'ok' && status !== 'none' ? 700 : 400,
+                                                    textDecoration: status === 'frozen' ? 'line-through' : 'none',
+                                                    opacity: status === 'frozen' ? 0.6 : 1
+                                                }}>
                                                     {status === 'expired' ? 'Venció: ' : 'Vence: '}{new Date(item.expiration_date).toLocaleDateString()}
                                                 </span>
                                             )}
                                         </div>
-                                        <button
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                            <button
+                                                className="inv-card-delete"
+                                                onClick={() => handleToggleFrozen(item)}
+                                                title={item.is_frozen ? "Descongelar" : "Congelar"}
+                                                style={{ color: item.is_frozen ? '#0EA5E9' : '#9CA3AF' }}
+                                            >
+                                                <Snowflake size={18} weight={item.is_frozen ? "fill" : "regular"} />
+                                            </button>
+                                            <button
                                                 className="inv-card-delete"
                                                 onClick={() => handleDelete(item.inventory_id)}
                                                 title="Eliminar"
+                                                style={{ color: '#FA7070' }}
                                             >
                                                 <Trash size={18} />
                                             </button>
+                                        </div>
                                     </div>
                                     );
                                 })
@@ -281,62 +370,112 @@ const Inventory = ({ currentFamily, userRole }) => {
 
             {/* -------- MODAL AGREGAR -------- */}
             {showModal && (
-                <div className="modal-overlay" onClick={() => setShowModal(false)}>
+                <div className="modal-overlay" onClick={() => { setShowModal(false); resetModal(); }}>
                     <div className="modal-modern" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
                         <div style={{ padding: '24px 24px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <h3 style={{ margin: 0, fontWeight: 800 }}>Agregar Producto</h3>
-                            <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                            <button onClick={() => { setShowModal(false); resetModal(); }} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
                                 <X size={22} color="#9CA3AF" />
                             </button>
                         </div>
 
                         <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+                            {/* ---- BUSCADOR AUTOCOMPLETE ---- */}
                             <div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                                    <label style={{ fontWeight: 600, fontSize: '0.9rem', color: '#555' }}>
-                                        Ingrediente
-                                    </label>
+                                    <label style={{ fontWeight: 600, fontSize: '0.9rem', color: '#555' }}>Ingrediente</label>
                                     <button
-                                        onClick={() => setCreatingNew(!creatingNew)}
-                                        style={{
-                                            background: creatingNew ? '#FEF2F2' : '#FFF7ED',
-                                            color: creatingNew ? '#DC2626' : '#FF9F43',
-                                            border: 'none', borderRadius: 8,
-                                            padding: '4px 12px', fontSize: '0.8rem',
-                                            fontWeight: 700, cursor: 'pointer'
-                                        }}
+                                        onClick={() => { setCreatingNew(!creatingNew); setSelectedIngredient(null); setSearchText(''); }}
+                                        style={{ background: creatingNew ? '#FEF2F2' : '#FFF7ED', color: creatingNew ? '#DC2626' : '#FF9F43', border: 'none', borderRadius: 8, padding: '4px 12px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}
                                     >
                                         {creatingNew ? '✕ Cancelar' : '+ Nuevo Producto'}
                                     </button>
                                 </div>
 
-                                {creatingNew ? (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, background: '#FFFBF5', border: '2px dashed #FFD9A0', borderRadius: 12, padding: 14 }}>
+                                {!creatingNew && (
+                                    <div style={{ position: 'relative' }}>
                                         <input
                                             type="text"
-                                            placeholder="Nombre del ingrediente (Ej: Harina Pan)"
-                                            value={newIngredient.name}
-                                            onChange={e => setNewIngredient({ ...newIngredient, name: e.target.value })}
-                                            style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '2px solid #E5E7EB', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }}
+                                            placeholder="Busca un ingrediente... (ej: Arroz)"
+                                            value={searchText}
+                                            onChange={e => { setSearchText(e.target.value); setSelectedIngredient(null); setShowSuggestions(true); }}
+                                            onFocus={() => setShowSuggestions(true)}
+                                            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                                            style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: selectedIngredient ? '2px solid #22C55E' : '2px solid #E5E7EB', fontSize: '1rem', outline: 'none', boxSizing: 'border-box', background: selectedIngredient ? '#F0FFF4' : 'white' }}
                                         />
+                                        {selectedIngredient && (
+                                            <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#22C55E', fontWeight: 700 }}>
+                                                ✓ {selectedIngredient.unit}
+                                            </span>
+                                        )}
+
+                                        {/* Lista de sugerencias */}
+                                        {showSuggestions && suggestions.length > 0 && (
+                                            <div style={{ position: 'absolute', top: '110%', left: 0, right: 0, zIndex: 999, background: 'white', border: '2px solid #E5E7EB', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', maxHeight: 220, overflowY: 'auto' }}>
+                                                {suggestions.map(ing => (
+                                                    <div
+                                                        key={ing.ingredient_id}
+                                                        onMouseDown={() => handleSelectSuggestion(ing)}
+                                                        style={{ padding: '10px 14px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #F3F4F6', fontSize: '0.95rem' }}
+                                                        onMouseEnter={e => e.currentTarget.style.background = '#FFF7ED'}
+                                                        onMouseLeave={e => e.currentTarget.style.background = 'white'}
+                                                    >
+                                                        <span style={{ fontWeight: 600 }}>{ing.name}</span>
+                                                        <span style={{ fontSize: '0.78rem', color: '#9CA3AF', background: '#F3F4F6', padding: '2px 8px', borderRadius: 20 }}>{ing.unit}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {/* Sin resultados: sugerir crear */}
+                                        {showSuggestions && searchText.trim().length >= 1 && suggestions.length === 0 && (
+                                            <div style={{ position: 'absolute', top: '110%', left: 0, right: 0, zIndex: 999, background: 'white', border: '2px dashed #FFD9A0', borderRadius: 12, padding: '12px 14px', fontSize: '0.9rem', color: '#92400E' }}>
+                                                No encontrado.{' '}
+                                                <button onMouseDown={() => { setCreatingNew(true); setNewIngredient(p => ({ ...p, name: searchText })); setShowSuggestions(false); }} style={{ background: 'none', border: 'none', color: '#FF9F43', fontWeight: 700, cursor: 'pointer' }}>
+                                                    ¿Crear "{searchText}"?
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* ---- FORMULARIO CREAR NUEVO ---- */}
+                                {creatingNew && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, background: '#FFFBF5', border: '2px dashed #FFD9A0', borderRadius: 12, padding: 14 }}>
+                                        <div style={{ position: 'relative' }}>
+                                            <input
+                                                type="text"
+                                                placeholder="Nombre del ingrediente (Ej: Harina Pan)"
+                                                value={newIngredient.name}
+                                                onChange={e => setNewIngredient({ ...newIngredient, name: e.target.value })}
+                                                style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '2px solid #E5E7EB', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }}
+                                            />
+                                            {aiLoading && (
+                                                <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: '0.75rem', color: '#FF9F43', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                    ✨ IA...
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* Sugerencia de la IA */}
+                                        {!aiLoading && newIngredient.average_expiry_days > 0 && newIngredient.name.trim().length >= 3 && (
+                                            <div style={{ background: '#F0FFF4', border: '1px solid #BBF7D0', borderRadius: 8, padding: '6px 12px', fontSize: '0.8rem', color: '#166534', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <CheckCircle size={14} weight="fill" color="#22C55E" />
+                                                IA sugiere: <strong>{newIngredient.unit}</strong> · <strong>{newIngredient.category}</strong> · dura <strong>{newIngredient.average_expiry_days} días</strong>
+                                            </div>
+                                        )}
+
                                         <div style={{ display: 'flex', gap: 8 }}>
-                                            <select
-                                                value={newIngredient.unit}
-                                                onChange={e => setNewIngredient({ ...newIngredient, unit: e.target.value })}
-                                                style={{ flex: 1, padding: '8px 10px', borderRadius: 10, border: '2px solid #E5E7EB', fontSize: '0.9rem' }}
-                                            >
-                                                <option value="unidad">Unidad</option>
+                                            <select value={newIngredient.unit} onChange={e => setNewIngredient({ ...newIngredient, unit: e.target.value })} style={{ flex: 1, padding: '8px 10px', borderRadius: 10, border: '2px solid #E5E7EB', fontSize: '0.9rem' }}>
                                                 <option value="g">Gramos (g)</option>
                                                 <option value="kg">Kilogramos (kg)</option>
                                                 <option value="ml">Mililitros (ml)</option>
                                                 <option value="l">Litros (l)</option>
                                                 <option value="cup">Taza</option>
+                                                <option value="unidad">Unidad</option>
                                             </select>
-                                            <select
-                                                value={newIngredient.category}
-                                                onChange={e => setNewIngredient({ ...newIngredient, category: e.target.value })}
-                                                style={{ flex: 1, padding: '8px 10px', borderRadius: 10, border: '2px solid #E5E7EB', fontSize: '0.9rem' }}
-                                            >
+                                            <select value={newIngredient.category} onChange={e => setNewIngredient({ ...newIngredient, category: e.target.value })} style={{ flex: 1, padding: '8px 10px', borderRadius: 10, border: '2px solid #E5E7EB', fontSize: '0.9rem' }}>
                                                 <option value="vegetal">Vegetal</option>
                                                 <option value="fruta">Fruta</option>
                                                 <option value="proteína">Proteína</option>
@@ -348,76 +487,57 @@ const Inventory = ({ currentFamily, userRole }) => {
                                                 <option value="otro">Otro</option>
                                             </select>
                                         </div>
-                                        <button
-                                            onClick={handleCreateIngredient}
-                                            style={{
-                                                background: '#FF9F43', color: 'white', border: 'none',
-                                                borderRadius: 10, padding: '8px 16px', fontWeight: 700,
-                                                cursor: 'pointer', fontSize: '0.9rem'
-                                            }}
-                                        >
-                                            Crear y seleccionar
+                                        <button onClick={handleCreateIngredient} disabled={aiLoading} style={{ background: aiLoading ? '#E5E7EB' : '#FF9F43', color: aiLoading ? '#9CA3AF' : 'white', border: 'none', borderRadius: 10, padding: '8px 16px', fontWeight: 700, cursor: aiLoading ? 'not-allowed' : 'pointer', fontSize: '0.9rem' }}>
+                                            {aiLoading ? '✨ Consultando IA...' : 'Crear y seleccionar'}
                                         </button>
                                     </div>
-                                ) : (
-                                    <select
-                                        value={form.ingredient_id}
-                                        onChange={e => setForm({ ...form, ingredient_id: e.target.value })}
-                                        style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: '2px solid #E5E7EB', fontSize: '1rem', outline: 'none' }}
-                                    >
-                                        <option value="">— Selecciona un ingrediente —</option>
-                                        {ingredients.map(ing => (
-                                            <option key={ing.ingredient_id} value={ing.ingredient_id}>
-                                                {ing.name}
-                                            </option>
-                                        ))}
-                                    </select>
                                 )}
+
                             </div>
 
-                            <div style={{ display: 'flex', gap: 10 }}>
+                            {/* ---- CANTIDAD ---- */}
+                            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
                                 <div style={{ flex: 2 }}>
-                                    <label style={{ fontWeight: 600, fontSize: '0.9rem', color: '#555', display: 'block', marginBottom: 6 }}>
-                                        Cantidad
-                                    </label>
+                                    <label style={{ fontWeight: 600, fontSize: '0.9rem', color: '#555', display: 'block', marginBottom: 6 }}>Cantidad</label>
                                     <input
-                                        type="number"
-                                        min="0"
-                                        step="any"
-                                        value={form.quantity}
-                                        onChange={e => setForm({ ...form, quantity: e.target.value })}
-                                        placeholder="Ej: 2"
+                                        type="number" min="0" step="any"
+                                        value={quantity}
+                                        onChange={e => setQuantity(e.target.value)}
+                                        placeholder="Ej: 500"
                                         style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: '2px solid #E5E7EB', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }}
                                     />
                                 </div>
-                                <div style={{ flex: 2 }}>
-                                    <label style={{ fontWeight: 600, fontSize: '0.9rem', color: '#555', display: 'block', marginBottom: 6 }}>
-                                        Unidad
-                                    </label>
-                                    <div style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: '2px solid #E5E7EB', fontSize: '1rem', background: '#F3F4F6', color: '#6B7280' }}>
-                                        {form.ingredient_id
-                                            ? (ingredients.find(i => i.ingredient_id === Number(form.ingredient_id))?.unit || '—')
-                                            : '—'}
+                                <div style={{ flex: 1 }}>
+                                    <label style={{ fontWeight: 600, fontSize: '0.9rem', color: '#555', display: 'block', marginBottom: 6 }}>Unidad</label>
+                                    <div style={{ padding: '10px 14px', borderRadius: 12, border: '2px solid #E5E7EB', fontSize: '1rem', background: '#F3F4F6', color: '#6B7280', textAlign: 'center' }}>
+                                        {selectedIngredient ? selectedIngredient.unit : '—'}
                                     </div>
                                 </div>
                             </div>
 
+                            {/* ---- FECHA VENCIMIENTO ---- */}
                             <div>
                                 <label style={{ fontWeight: 600, fontSize: '0.9rem', color: '#555', display: 'block', marginBottom: 6 }}>
-                                    Fecha de vencimiento (opcional)
+                                    Fecha de vencimiento <span style={{ fontWeight: 400, color: '#9CA3AF' }}>(opcional)</span>
                                 </label>
                                 <input
                                     type="date"
-                                    value={form.expiration_date}
-                                    onChange={e => setForm({ ...form, expiration_date: e.target.value })}
+                                    value={expirationDate}
+                                    onChange={e => setExpirationDate(e.target.value)}
                                     style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: '2px solid #E5E7EB', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }}
                                 />
+                                {estimatedExpiry && (
+                                    <p style={{ margin: '6px 0 0', fontSize: '0.8rem', color: '#6B7280', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <CheckCircle size={14} color="#22C55E" weight="fill" />
+                                        Se usará fecha estimada: <strong style={{ marginLeft: 3 }}>{new Date(estimatedExpiry + 'T12:00:00').toLocaleDateString()}</strong>&nbsp;({selectedIngredient.average_expiry_days} días)
+                                    </p>
+                                )}
                             </div>
                         </div>
 
                         <div style={{ padding: '16px 24px 24px', display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-                            <button className="btn-secondary" onClick={() => setShowModal(false)}>Cancelar</button>
-                            <button className="btn-primary" onClick={handleAdd} disabled={saving}>
+                            <button className="btn-secondary" onClick={() => { setShowModal(false); resetModal(); }}>Cancelar</button>
+                            <button className="btn-primary" onClick={handleAdd} disabled={saving || !selectedIngredient}>
                                 {saving ? 'Guardando...' : 'Agregar'}
                             </button>
                         </div>
@@ -429,3 +549,4 @@ const Inventory = ({ currentFamily, userRole }) => {
 };
 
 export default Inventory;
+

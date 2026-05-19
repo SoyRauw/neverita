@@ -21,11 +21,26 @@ router.get('/:id', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const { name, category, unit, image_url, average_expiry_days } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'El nombre es obligatorio.' });
+
+    // Buscar duplicado insensible a mayúsculas y tildes
+    const [existing] = await db.query(
+      'SELECT * FROM ingredients WHERE LOWER(name) = LOWER(?) LIMIT 1',
+      [name.trim()]
+    );
+    if (existing.length > 0) {
+      // Retornar el existente con flag para que el frontend lo sepa
+      return res.status(200).json({ ...existing[0], already_existed: true });
+    }
+
+    // Capitalizar primer letra
+    const formattedName = name.trim().charAt(0).toUpperCase() + name.trim().slice(1).toLowerCase();
+
     const [result] = await db.query(
       'INSERT INTO ingredients (name, category, unit, image_url, average_expiry_days) VALUES (?, ?, ?, ?, ?)',
-      [name, category || 'otro', unit || 'unidad', image_url || null, average_expiry_days || 7]
+      [formattedName, category || 'otro', unit || 'unidad', image_url || null, average_expiry_days || 7]
     );
-    res.status(201).json({ ingredient_id: result.insertId, name, category: category || 'otro', unit: unit || 'unidad', image_url, average_expiry_days: average_expiry_days || 7 });
+    res.status(201).json({ ingredient_id: result.insertId, name: formattedName, category: category || 'otro', unit: unit || 'unidad', image_url, average_expiry_days: average_expiry_days || 7, already_existed: false });
   } catch (err) { next(err); }
 });
 

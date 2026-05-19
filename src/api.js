@@ -160,6 +160,10 @@ export const inventoryService = {
         method: 'POST',
         body: JSON.stringify(data),
     }),
+    update: (id, data) => fetchAPI(`/inventory/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+    }),
     delete: (id) => fetchAPI(`/inventory/${id}`, { method: 'DELETE' }),
     /** Descontar ingredientes del inventario al planificar una receta */
     deduct: (recipeId, familyId, multiplier) => fetchAPI('/inventory/deduct', {
@@ -224,6 +228,11 @@ export const aiService = {
             family_id: familyId,
             servings,
         }),
+    }),
+    /** Obtiene categoría, unidad y días de duración estimados para un ingrediente */
+    ingredientInfo: (name) => fetchAPI('/ai/ingredient-info', {
+        method: 'POST',
+        body: JSON.stringify({ name }),
     }),
 };
 

@@ -27,11 +27,13 @@ router.post('/suggest', async (req, res) => {
         const systemPrompt = `
             Eres un Chef experto en "Cocina de Aprovechamiento".
             Tienes EXCLUSIVAMENTE estos ingredientes en la nevera: ${ingredients.join(', ')}.
-            (Asume que también tienes básicos: sal, aceite, agua, pimienta).
+            (El único básico que siempre está disponible es agua para cocción. Nada más.)
 
             TU MISIÓN:
             Sugiere 3 nombres de recetas que se puedan cocinar PRINCIPALMENTE con esos ingredientes.
             NO sugieras platos que requieran ingredientes principales que no están en la lista.
+            NUNCA asumas que el usuario tiene sal, aceite, especias, condimentos u otros ingredientes
+            que no estén explícitamente en la lista anterior.
             
             Responde SOLO JSON:
             { "suggestions": [{ "title": "Nombre del Plato", "description": "Descripción corta de 10 palabras" }, ...] }
@@ -52,6 +54,54 @@ router.post('/suggest', async (req, res) => {
         res.status(500).json({ error: "Error al sugerir recetas" });
     }
 });
+
+// ==========================================
+// PASO 0.5: INFO DEL INGREDIENTE (días duración, categoría, unidad)
+// ==========================================
+router.post('/ingredient-info', async (req, res) => {
+    try {
+        const { name } = req.body;
+        if (!name || !name.trim()) return res.status(400).json({ error: 'Falta el nombre del ingrediente.' });
+
+        const apiKey = process.env.GEMINI_API_KEY || "AIzaSyAU4T5KvvhpHNwmkrfWCK3pVTU2lxgfUAY";
+
+        const prompt = `
+            Eres un experto en conservación de alimentos.
+            Para el ingrediente "${name.trim()}", responde SOLO con este JSON (sin markdown, sin explicaciones):
+            {
+                "average_expiry_days": <número entero de días que dura típicamente en la nevera o despensa>,
+                "category": "<una de: vegetal, fruta, proteína, lácteo, grano, condimento, grasa, bebida, otro>",
+                "unit": "<una de: g, kg, ml, l, cup, cucharada grande, cucharada pequeña, unidad>"
+            }
+            Ejemplos: pollo=4, arroz=365, leche=7, mantequilla=30, sal=730, zanahoria=21, huevo=21.
+        `;
+
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({
+            model: "gemini-3.1-flash-lite",
+            generationConfig: { responseMimeType: "application/json" }
+        });
+
+        const result = await model.generateContent(prompt);
+        const data = JSON.parse(result.response.text());
+
+        // Validar y sanear
+        const validCategories = ['vegetal', 'fruta', 'proteína', 'lácteo', 'grano', 'condimento', 'grasa', 'bebida', 'otro'];
+        const validUnits = ['g', 'kg', 'ml', 'l', 'cup', 'cucharada grande', 'cucharada pequeña', 'unidad'];
+
+        res.json({
+            average_expiry_days: Math.max(1, Math.round(Number(data.average_expiry_days) || 7)),
+            category: validCategories.includes(data.category) ? data.category : 'otro',
+            unit: validUnits.includes(data.unit) ? data.unit : 'unidad',
+        });
+
+    } catch (error) {
+        console.error('❌ Error en ingredient-info:', error);
+        // Fallback silencioso para no bloquear al usuario
+        res.json({ average_expiry_days: 7, category: 'otro', unit: 'unidad' });
+    }
+});
+
 
 // ==========================================
 // PASO 2: COCINAR / GENERAR (La Receta)
@@ -126,11 +176,15 @@ router.post('/generate', async (req, res) => {
             El campo "servings" del JSON DEBE ser 1.
             =============================================================
 
-            REGLA #2 — INVENTARIO DISPONIBLE Y CANTIDADES A USAR:
+            REGLA #2 — USA SOLO LO QUE ESTÁ EN EL INVENTARIO:
             El usuario tiene estos ingredientes (las cantidades totales en su nevera están entre paréntesis):
             [ ${available_ingredients.join(', ')} ]
-            También tiene básicos: sal, aceite, agua, especias.
-            ⚠️ MUY IMPORTANTE: NO USES TODA LA CANTIDAD QUE TIENE EL USUARIO.
+            ⚠️ CRÍTICO: NO puedes usar NINGÚN ingrediente que no esté en esa lista.
+            NO asumas que el usuario tiene sal, aceite, especias, condimentos, pimienta ni ningún otro
+            ingrediente que no aparezca EXPLÍCITAMENTE arriba.
+            La ÚNICA excepción es el agua (para cocción), que siempre está disponible.
+            Solo usa lo que está en la lista. Si un ingrediente no está, no lo uses.
+            Además, NO USES TODA LA CANTIDAD QUE TIENE EL USUARIO.
             Ese es su INVENTARIO TOTAL. Tú solo debes tomar la porción necesaria para 1 SOLA PERSONA,
             siguiendo los límites de la REGLA #1.
             NUNCA pidas más cantidad de la que el usuario tiene disponible.

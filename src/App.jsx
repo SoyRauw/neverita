@@ -456,6 +456,22 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         setAiPlanServings(1);
     };
 
+    // Determinar si podemos incrementar personas según inventario para IA
+    let canIncrementAI = aiPlanServings < 20;
+    if (canIncrementAI && aiDish && aiDish.ingredients && myInventory.length > 0) {
+        for (const ingStr of aiDish.ingredients) {
+            const match = ingStr.match(/^(.+?)\s*\(([\d.]+)\s*(.+?)\)$/);
+            if (!match) continue;
+            const name = match[1].trim().toLowerCase();
+            const reqQty = parseFloat(match[2]) * (aiPlanServings + 1);
+            const invItem = myInventory.find(i => i.name.toLowerCase() === name);
+            if (invItem && reqQty > invItem.quantity) {
+                canIncrementAI = false;
+                break;
+            }
+        }
+    }
+
     return (
         <div className="main-content">
             <style>{modalStyles}</style>
@@ -691,10 +707,20 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                             <span style={{ fontSize: '0.85rem', color: '#9CA3AF' }}>{aiPlanServings === 1 ? 'persona' : 'personas'}</span>
                                         </div>
                                         <button
-                                            onClick={() => setAiPlanServings(p => Math.min(20, p + 1))}
-                                            style={{ width: 44, height: 44, borderRadius: '50%', border: '2px solid #E5E7EB', background: 'white', cursor: 'pointer', fontSize: '1.5rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
-                                            onMouseEnter={e => { e.currentTarget.style.background = '#FFF7ED'; e.currentTarget.style.borderColor = '#FF9F43'; }}
-                                            onMouseLeave={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#E5E7EB'; }}
+                                            disabled={!canIncrementAI}
+                                            onClick={() => {
+                                                if (canIncrementAI) setAiPlanServings(p => p + 1);
+                                            }}
+                                            style={{ 
+                                                width: 44, height: 44, borderRadius: '50%', border: '2px solid #E5E7EB', 
+                                                background: 'white', fontSize: '1.5rem', fontWeight: 700, 
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                                                transition: 'all 0.15s',
+                                                cursor: canIncrementAI ? 'pointer' : 'not-allowed',
+                                                opacity: canIncrementAI ? 1 : 0.4
+                                            }}
+                                            onMouseEnter={e => { if (canIncrementAI) { e.currentTarget.style.background = '#FFF7ED'; e.currentTarget.style.borderColor = '#FF9F43'; } }}
+                                            onMouseLeave={e => { if (canIncrementAI) { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#E5E7EB'; } }}
                                         >+</button>
                                     </div>
 
