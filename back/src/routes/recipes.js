@@ -115,9 +115,6 @@ router.post('/validate-expiration', async (req, res, next) => {
     );
 
     // 3. Validar caducidad
-    // Usamos T12:00:00 para forzar la lectura correcta y evitar desfases por zona horaria
-    const scheduledDateObj = new Date(`${scheduled_date}T12:00:00`);
-    scheduledDateObj.setHours(0, 0, 0, 0);
     const expiredIngredients = [];
 
     for (const reqIng of recipeIngs) {
@@ -129,9 +126,9 @@ router.post('/validate-expiration', async (req, res, next) => {
       // Buscar si hay AL MENOS UN ítem que NO esté vencido para la fecha
       const hasValidItem = invItems.some(item => {
         if (!item.expiration_date) return true; // No tiene fecha de caducidad = no se vence
-        const expDate = new Date(item.expiration_date);
-        expDate.setHours(0, 0, 0, 0);
-        return expDate.getTime() >= scheduledDateObj.getTime();
+        const expStr = item.expiration_date.split('T')[0];
+        const scheduledStr = scheduled_date.split('T')[0];
+        return expStr >= scheduledStr;
       });
 
       // Si TODOS los ítems de este ingrediente están vencidos para esa fecha, es un error

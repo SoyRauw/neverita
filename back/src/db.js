@@ -29,7 +29,8 @@ const pool = mysql.createPool({
   ssl: {
     minVersion: 'TLSv1.2',
     rejectUnauthorized: false
-  }
+  },
+  dateStrings: true // Prevent timezone shifting on DATE columns
 });
 
 export const db = pool;
