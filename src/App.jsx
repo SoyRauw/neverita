@@ -1051,8 +1051,7 @@ function App() {
                 
                 // 2. Buscar un plan que sea de ESA semana
                 let plan = plans.find(p => {
-                    const pDate = new Date(p.start_date);
-                    const pMonday = getMonday(pDate);
+                    const pMonday = getMonday(p.start_date);
                     const pMondayStr = pMonday.toLocaleDateString('en-CA');
                     return pMondayStr === targetMondayStr;
                 });
