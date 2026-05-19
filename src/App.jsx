@@ -206,9 +206,11 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         const selectedItems = myInventory.filter(i => selectedIngredients.includes(i.id) && i.expiration_date);
         if (selectedItems.length === 0) return blocked;
 
+        // Limpiar el start_date de cualquier sufijo T...
+        const startDateStr = currentMenuPlan.start_date.split('T')[0];
+
         for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
-            const scheduledDate = new Date(currentMenuPlan.start_date);
-            scheduledDate.setHours(12, 0, 0, 0);
+            const scheduledDate = new Date(`${startDateStr}T12:00:00`);
             scheduledDate.setDate(scheduledDate.getDate() + dayIndex);
             const scheduledStr = scheduledDate.toISOString().split('T')[0];
 
@@ -382,7 +384,8 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
             for (const slot of selectedSlots) {
                 const [dayIndexStr] = slot.split('-');
                 const dayIndex = parseInt(dayIndexStr, 10);
-                const scheduledDate = new Date(`${currentMenuPlan.start_date}T12:00:00`);
+                const startDateStr = currentMenuPlan.start_date.split('T')[0];
+                const scheduledDate = new Date(`${startDateStr}T12:00:00`);
                 scheduledDate.setDate(scheduledDate.getDate() + dayIndex);
 
                 try {
@@ -1001,10 +1004,20 @@ function App() {
 
     // Obtener el lunes de la semana actual
     const getMonday = (d) => {
-        const date = new Date(d);
+        let date;
+        if (typeof d === 'string') {
+            const dateStr = d.includes('T') ? d.split('T')[0] : d;
+            date = new Date(`${dateStr}T12:00:00`);
+        } else {
+            // Forzar fecha a mediodía para evitar cambios de día por la zona horaria
+            date = new Date(d);
+            date.setHours(12, 0, 0, 0);
+        }
         const day = date.getDay();
         const diff = date.getDate() - day + (day === 0 ? -6 : 1);
-        return new Date(date.setDate(diff));
+        const monday = new Date(date.setDate(diff));
+        monday.setHours(0, 0, 0, 0);
+        return monday;
     };
 
     const formatWeekLabel = (monday) => {
@@ -1107,9 +1120,8 @@ function App() {
         if (!currentMenuPlan) return;
 
         // Calcular la fecha exacta en la que se planifica
-        // Usar T12:00:00 asegura que la fecha caiga en el mismo día localmente, evitando que
-        // la conversión UTC la corra un día hacia atrás.
-        const scheduledDate = new Date(`${currentMenuPlan.start_date}T12:00:00`);
+        const startDateStr = currentMenuPlan.start_date.split('T')[0];
+        const scheduledDate = new Date(`${startDateStr}T12:00:00`);
         scheduledDate.setDate(scheduledDate.getDate() + dayIndex);
 
         try {
