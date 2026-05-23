@@ -234,6 +234,11 @@ export const aiService = {
         method: 'POST',
         body: JSON.stringify({ name }),
     }),
+    /** Genera una lista de compras inteligente */
+    generateShoppingList: (payload) => fetchAPI('/ai/shopping-list', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    }),
 };
 
 export const dailyMealsService = {
@@ -248,3 +253,20 @@ export const dailyMealsService = {
     delete: (dailyMealId) => fetchAPI(`/daily-meals/${dailyMealId}`, { method: 'DELETE' }),
 };
 
+export const shoppingListService = {
+    getByFamily: (familyId) => fetchAPI(`/shopping-list?family_id=${familyId}`),
+    create: (data) => fetchAPI('/shopping-list', {
+        method: 'POST',
+        body: JSON.stringify(data),
+    }),
+    update: (id, data) => fetchAPI(`/shopping-list/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+    }),
+    delete: (id) => fetchAPI(`/shopping-list/${id}`, {
+        method: 'DELETE',
+    }),
+    clearChecked: (familyId) => fetchAPI(`/shopping-list/clear/${familyId}`, {
+        method: 'DELETE',
+    }),
+};

@@ -124,11 +124,19 @@ router.post('/validate-expiration', async (req, res, next) => {
       if (invItems.length === 0) continue;
 
       // Buscar si hay AL MENOS UN ítem que NO esté vencido para la fecha
+      // Normalizar a string YYYY-MM-DD (mysql2 puede devolver Date o string según config)
+      const toDateStr = (val) => {
+        if (!val) return null;
+        if (typeof val === 'string') return val.split('T')[0];
+        if (val instanceof Date) return val.toISOString().split('T')[0];
+        return String(val).split('T')[0];
+      };
       const hasValidItem = invItems.some(item => {
         if (!item.expiration_date) return true; // No tiene fecha de caducidad = no se vence
-        const expStr = item.expiration_date.split('T')[0];
+        const expStr = toDateStr(item.expiration_date);
         const scheduledStr = scheduled_date.split('T')[0];
-        return expStr >= scheduledStr;
+        // El ítem es válido si vence el mismo día o después (scheduledStr <= expStr)
+        return scheduledStr <= expStr;
       });
 
       // Si TODOS los ítems de este ingrediente están vencidos para esa fecha, es un error

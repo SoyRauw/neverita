@@ -8,9 +8,10 @@ const getExpiryStatus = (expiration_date, is_frozen) => {
     if (is_frozen) return 'frozen';
     if (!expiration_date) return 'none';
     const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    const exp = new Date(expiration_date);
-    exp.setHours(0, 0, 0, 0);
+    now.setHours(12, 0, 0, 0); // Comparar con mediodía
+    const dateStr = expiration_date.includes('T') ? expiration_date.split('T')[0] : expiration_date;
+    const exp = new Date(dateStr + 'T12:00:00');
+    exp.setHours(12, 0, 0, 0);
     const diffDays = Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
     if (diffDays < 0)  return 'expired';   // Ya vencido
     if (diffDays === 0) return 'critical';  // Vence HOY
@@ -280,7 +281,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                                                     opacity: status === 'frozen' ? 0.6 : 1
                                                 }}>
                                                     {item.expiration_date
-                                                        ? new Date(item.expiration_date).toLocaleDateString()
+                                                        ? new Date((item.expiration_date.includes('T') ? item.expiration_date.split('T')[0] : item.expiration_date) + 'T12:00:00').toLocaleDateString()
                                                         : '—'}
                                                 </span>
                                             </td>
@@ -337,7 +338,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                                                     textDecoration: status === 'frozen' ? 'line-through' : 'none',
                                                     opacity: status === 'frozen' ? 0.6 : 1
                                                 }}>
-                                                    {status === 'expired' ? 'Venció: ' : 'Vence: '}{new Date(item.expiration_date).toLocaleDateString()}
+                                                    {status === 'expired' ? 'Venció: ' : 'Vence: '}{new Date((item.expiration_date.includes('T') ? item.expiration_date.split('T')[0] : item.expiration_date) + 'T12:00:00').toLocaleDateString()}
                                                 </span>
                                             )}
                                         </div>

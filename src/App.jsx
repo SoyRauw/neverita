@@ -206,6 +206,15 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         const selectedItems = myInventory.filter(i => selectedIngredients.includes(i.id) && i.expiration_date);
         if (selectedItems.length === 0) return blocked;
 
+        // Normaliza la fecha de vencimiento a string 'YYYY-MM-DD',
+        // independientemente de si llega como string o como objeto Date de mysql2.
+        const toDateStr = (val) => {
+            if (!val) return null;
+            if (typeof val === 'string') return val.split('T')[0];
+            if (val instanceof Date) return val.toISOString().split('T')[0];
+            return String(val).split('T')[0];
+        };
+
         // Limpiar el start_date de cualquier sufijo T...
         const startDateStr = currentMenuPlan.start_date.split('T')[0];
 
@@ -218,12 +227,13 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
             const byName = {};
             for (const item of selectedItems) {
                 if (!byName[item.name]) byName[item.name] = [];
-                byName[item.name].push(item.expiration_date);
+                byName[item.name].push(toDateStr(item.expiration_date));
             }
 
-            // Si para algún ingrediente, TODOS sus lotes vencen antes de ese día → bloquear
+            // Un ingrediente bloquea el día si TODOS sus lotes vencen ANTES de ese día.
+            // Vence el mismo día que se planifica → aún válido (scheduledStr > expStr lo bloquea correctamente).
             const hasBlocker = Object.values(byName).some(dates =>
-                dates.every(d => d.split('T')[0] < scheduledStr)
+                dates.every(expStr => expStr !== null && scheduledStr > expStr)
             );
 
             if (hasBlocker) blocked.add(dayIndex);
@@ -585,13 +595,14 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                     ) : (
                                         <div className="chips-container">
                                             {myInventory.map(item => {
-                                                const isExpiring = item.expiration_date && (new Date(item.expiration_date).getTime() - new Date().setHours(0,0,0,0)) / (1000 * 60 * 60 * 24) <= 3;
+                                                const dateStr = item.expiration_date.includes('T') ? item.expiration_date.split('T')[0] : item.expiration_date;
+                                                const isExpiring = item.expiration_date && (new Date(dateStr + 'T12:00:00').getTime() - new Date().setHours(12,0,0,0)) / (1000 * 60 * 60 * 24) <= 3;
                                                 return (
                                                 <div
                                                     key={item.id}
                                                     className={`chip-modern ${selectedIngredients.includes(item.id) ? 'active' : ''}`}
                                                     onClick={() => toggleSelection(item.id, selectedIngredients, setSelectedIngredients)}
-                                                    title={item.expiration_date ? `Vence: ${new Date(item.expiration_date).toLocaleDateString()}` : 'Sin fecha de vencimiento'}
+                                                    title={item.expiration_date ? `Vence: ${new Date(dateStr + 'T12:00:00').toLocaleDateString()}` : 'Sin fecha de vencimiento'}
                                                 >
                                                     {isExpiring && <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444', marginRight: 6, display: 'inline-block' }} title="Por vencer"></div>}
                                                     {item.name} <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>({item.quantity} {item.unit})</span>
@@ -1068,6 +1079,16 @@ function App() {
                 }
 
                 // Si es semana pasada y no hay plan, no hay nada que mostrar
+                // Normalizar start_date a string YYYY-MM-DD para evitar problemas
+                // con mysql2 que puede devolver un objeto Date en lugar de string.
+                if (plan && plan.start_date) {
+                    const sd = plan.start_date;
+                    if (sd instanceof Date) {
+                        plan = { ...plan, start_date: sd.toISOString().split('T')[0] };
+                    } else if (typeof sd === 'string' && sd.includes('T')) {
+                        plan = { ...plan, start_date: sd.split('T')[0] };
+                    }
+                }
                 setCurrentMenuPlan(plan || null);
 
                 if (!plan) {
@@ -1196,7 +1217,7 @@ function App() {
                     <Route path="/" element={<PlannerPage userProfile={userProfile} plannerData={plannerData} setPlannerData={setPlannerData} currentMenuPlan={currentMenuPlan} currentFamily={currentFamily} weekLabel={weekLabel} userRole={userRole} weekOffset={weekOffset} onNavigateWeek={handleNavigateWeek} />} />
                     <Route path="/recipes" element={<Recipes onAddToPlanner={handleAddToPlanner} currentFamily={currentFamily} userProfile={userProfile} userRole={userRole} />} />
                     <Route path="/inventory" element={<Inventory currentFamily={currentFamily} userRole={userRole} />} />
-                    <Route path="/shopping-list" element={<ShoppingList />} />
+                    <Route path="/shopping-list" element={<ShoppingList currentFamily={currentFamily} />} />
                 </Routes>
             </div>
         </HashRouter>

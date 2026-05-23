@@ -3,6 +3,14 @@ import { db } from '../db.js';
 
 export const router = express.Router();
 
+// Helper: normaliza columnas DATE que mysql2 puede devolver como objetos Date
+const normalizeItem = (item) => {
+  const i = { ...item };
+  if (i.expiration_date instanceof Date) i.expiration_date = i.expiration_date.toISOString().split('T')[0];
+  if (i.frozen_at instanceof Date) i.frozen_at = i.frozen_at.toISOString();
+  return i;
+};
+
 router.get('/', async (req, res, next) => {
   try {
     const { family_id } = req.query;
@@ -13,7 +21,7 @@ router.get('/', async (req, res, next) => {
       params.push(family_id);
     }
     const [rows] = await db.query(query, params);
-    res.json(rows);
+    res.json(rows.map(normalizeItem));
   } catch (err) { next(err); }
 });
 

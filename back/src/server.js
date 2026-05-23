@@ -15,6 +15,7 @@ import { router as familyRecipesRouter } from './routes/family_recipes.js';
 import { errorHandler } from './utils/errorHandler.js';
 import { router as aiRecipesRouter } from './routes/ai_recipes.js';
 import { router as passwordResetRouter } from './routes/password_reset.js';
+import { router as shoppingListRouter } from './routes/shopping_list.js';
 
 dotenv.config();
 
@@ -58,6 +59,7 @@ app.use('/family_recipes', familyRecipesRouter); // alias with underscore
 app.use('/families', familiesRouter);
 app.use('/ai', aiRecipesRouter);
 app.use('/password-reset', passwordResetRouter);
+app.use('/shopping-list', shoppingListRouter);
 
 app.use(errorHandler);
 

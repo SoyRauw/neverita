@@ -376,3 +376,62 @@ router.post('/generate', async (req, res) => {
         if (connection) connection.release();
     }
 });
+
+// ==========================================
+// PASO 3: LISTA DE COMPRAS INTELIGENTE
+// ==========================================
+router.post('/shopping-list', async (req, res) => {
+    try {
+        const { family_id, member_count, current_inventory = [], weekly_plan_ingredients = [] } = req.body;
+        if (!family_id) return res.status(400).json({ error: "Falta family_id" });
+
+        const apiKey = process.env.GEMINI_API_KEY || "AIzaSyAU4T5KvvhpHNwmkrfWCK3pVTU2lxgfUAY";
+        console.log("🛒 Generando lista de compras inteligente para familia", family_id);
+
+        const systemPrompt = `
+            Eres un asistente de compras inteligente enfocado en economía familiar y anti-desperdicio.
+            Tu misión es generar una lista de compras estructurada para una familia de ${member_count || 1} personas.
+
+            TOMA EN CUENTA LO SIGUIENTE:
+            1. INVENTARIO ACTUAL (evita sugerir lo que ya tienen con buen stock, PERO sugiere reponer lo que está por vencer o vencido):
+            ${current_inventory.length > 0 ? JSON.stringify(current_inventory) : "Inventario vacío."}
+
+            2. INGREDIENTES REQUERIDOS PARA EL MENÚ DE LA SEMANA (agrega los que falten o que no alcancen según el inventario):
+            ${weekly_plan_ingredients.length > 0 ? JSON.stringify(weekly_plan_ingredients) : "No hay plan semanal activo."}
+
+            3. CESTA BÁSICA RECOMENDADA (evalúa si faltan básicos esenciales como arroz, harina, huevos, carnes según el tamaño de la familia).
+            Para ${member_count || 1} personas, las cantidades típicas semanales rondan:
+            - Harina (Pan/trigo): ~${(member_count || 1)} kg
+            - Arroz/Pasta: ~${(member_count || 1) * 0.5} kg
+            - Huevos: ~${(member_count || 1) * 0.5} cartones
+            - Carnes/Pollo: ~${(member_count || 1) * 1.5} kg
+            
+            No dupliques ítems (combina las cantidades si se requiere para el menú y la cesta básica).
+            No sugieras cantidades excesivas.
+            
+            Responde SOLO JSON con este formato exacto:
+            {
+                "items": [
+                    { "name": "Nombre del producto (ej: Harina Pan)", "quantity": 2, "unit": "kg", "reason": "Faltante cesta básica" },
+                    { "name": "Pollo entero", "quantity": 1.5, "unit": "kg", "reason": "Requerido para receta: Pollo al horno" },
+                    { "name": "Leche", "quantity": 2, "unit": "l", "reason": "Reponer (vence pronto)" }
+                ]
+            }
+            Unidades válidas: "g", "kg", "ml", "l", "cup", "cucharada grande", "cucharada pequeña", "unidad", "paquete", "cartón".
+        `;
+
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({
+            model: "gemini-3.1-flash-lite",
+            generationConfig: { responseMimeType: "application/json" }
+        });
+
+        const result = await model.generateContent(systemPrompt);
+        const data = JSON.parse(result.response.text());
+        res.json(data);
+
+    } catch (error) {
+        console.error('❌ Error generando lista de compras:', error);
+        res.status(500).json({ error: "Error generando la lista inteligente." });
+    }
+});

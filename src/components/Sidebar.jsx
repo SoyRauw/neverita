@@ -20,8 +20,9 @@ const Sidebar = ({ activeFamily, onOpenManager, onLogout }) => {
 
         filtered.forEach(item => {
           if (item.expiration_date) {
-            const expDate = new Date(item.expiration_date);
-            const diffTime = expDate.getTime() - now.getTime();
+            const dateStr = item.expiration_date.includes('T') ? item.expiration_date.split('T')[0] : item.expiration_date;
+            const expDate = new Date(dateStr + 'T12:00:00');
+            const diffTime = expDate.getTime() - new Date().setHours(12, 0, 0, 0);
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             
             if (diffDays <= 3) {

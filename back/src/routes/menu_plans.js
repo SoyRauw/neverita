@@ -3,6 +3,14 @@ import { db } from '../db.js';
 
 export const router = express.Router();
 
+// Helper: normaliza columnas DATE que mysql2 puede devolver como objetos Date
+const normalizePlan = (plan) => {
+  const p = { ...plan };
+  if (p.start_date instanceof Date) p.start_date = p.start_date.toISOString().split('T')[0];
+  if (p.created_at instanceof Date) p.created_at = p.created_at.toISOString();
+  return p;
+};
+
 // GET /menu-plans?family_id=X — filtrar por familia
 // GET /menu-plans?created_by=X — filtrar por usuario
 router.get('/', async (req, res, next) => {
@@ -19,7 +27,7 @@ router.get('/', async (req, res, next) => {
     }
     query += ' ORDER BY created_at DESC';
     const [rows] = await db.query(query, params);
-    res.json(rows);
+    res.json(rows.map(normalizePlan));
   } catch (err) { next(err); }
 });
 
@@ -27,7 +35,7 @@ router.get('/:id', async (req, res, next) => {
   try {
     const [rows] = await db.query('SELECT * FROM menu_plans WHERE menu_plan_id = ?', [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
-    res.json(rows[0]);
+    res.json(normalizePlan(rows[0]));
   } catch (err) { next(err); }
 });
 
