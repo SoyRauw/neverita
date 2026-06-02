@@ -189,11 +189,15 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
 
     const toggleSlot = (dayIndex, meal) => {
         const slotKey = `${dayIndex}-${meal}`;
-        // No permitir selección en días con ingredientes vencidos
+        // Si ya está seleccionado, permitir deseleccionarlo sin importar si está bloqueado
+        if (selectedSlots.includes(slotKey)) {
+            setSelectedSlots(prev => prev.filter(k => k !== slotKey));
+            return;
+        }
+        // No permitir selección nueva en días con ingredientes vencidos
         if (expiredDayIndexes.has(dayIndex)) return;
-        setSelectedSlots(prev =>
-            prev.includes(slotKey) ? prev.filter(k => k !== slotKey) : [...prev, slotKey]
-        );
+        
+        setSelectedSlots(prev => [...prev, slotKey]);
     };
 
     // Calcula qué días de la semana tienen al menos un ingrediente seleccionado vencido.
@@ -345,7 +349,11 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                 time: recipe.preparation_time ? `${recipe.preparation_time} min` : 'N/A',
                 img: recipe.image_url || 'https://images.unsplash.com/photo-1546554137-f86b9593a222?w=400',
                 // Ingredientes como strings para escalar en frontend
-                ingredients: ingList.map(i => `${i.name} (${i.quantity} ${i.unit})`),
+                ingredients: ingList.map(i => {
+                    const measurePart = i.measure_qty && i.measure_unit ? `${i.measure_qty} ${i.measure_unit} de ` : '';
+                    const qtyPart = i.quantity ? `(${i.quantity} ${i.unit})` : `(${i.unit})`;
+                    return `${measurePart}${i.name} ${qtyPart}`;
+                }),
                 steps: recipe.instructions ? recipe.instructions.split('\n').filter(Boolean) : [],
                 description: recipe.description || '',
                 recipe_id: recipe.recipe_id,
@@ -364,16 +372,26 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         }
     };
 
-    // Escalar ingredientes de una receta IA (formato "Nombre (qty unit)")
+    // Escalar ingredientes de una receta IA (formato "1 cucharada de Nombre (qty unit)" o "Nombre (qty unit)")
     const scaleAIDish = (dish, persons) => {
         if (persons === 1 || !dish.ingredients || dish.ingredients.length === 0) return dish.ingredients;
         return dish.ingredients.map(ing => {
-            const match = ing.match(/^(.+?)\s*\(([\d.]+)\s*(.+?)\)$/);
+            const match = ing.match(/^(?:([\d.]+)\s+(.+?)\s+de\s+)?(.+?)\s*\(([\d.]+)\s*(.+?)\)$/);
             if (!match) return ing;
-            const name = match[1].trim();
-            const qty = parseFloat(match[2]);
-            const unit = match[3].trim();
-            return `${name} (${Math.round(qty * persons * 100) / 100} ${unit})`;
+            
+            const mQty = match[1] ? parseFloat(match[1]) : null;
+            const mUnit = match[2] || '';
+            const name = match[3].trim();
+            const bQty = parseFloat(match[4]);
+            const bUnit = match[5].trim();
+            
+            const scaledBQty = Math.round(bQty * persons * 100) / 100;
+            if (mQty) {
+                const scaledMQty = Math.round(mQty * persons * 100) / 100;
+                return `${scaledMQty} ${mUnit} de ${name} (${scaledBQty} ${bUnit})`;
+            } else {
+                return `${name} (${scaledBQty} ${bUnit})`;
+            }
         });
     };
 
@@ -457,6 +475,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         setSuggestions([]);
         setAiDish(null);
         setAiPlanServings(1);
+        setSelectedSlots([]);
     };
 
     // Resetear al cerrar modal
@@ -467,16 +486,17 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         setAiError(null);
         setAiDish(null);
         setAiPlanServings(1);
+        setSelectedSlots([]);
     };
 
     // Determinar si podemos incrementar personas según inventario para IA
     let canIncrementAI = aiPlanServings < 20;
     if (canIncrementAI && aiDish && aiDish.ingredients && myInventory.length > 0) {
         for (const ingStr of aiDish.ingredients) {
-            const match = ingStr.match(/^(.+?)\s*\(([\d.]+)\s*(.+?)\)$/);
+            const match = ingStr.match(/^(?:([\d.]+)\s+(.+?)\s+de\s+)?(.+?)\s*\(([\d.]+)\s*(.+?)\)$/);
             if (!match) continue;
-            const name = match[1].trim().toLowerCase();
-            const reqQty = parseFloat(match[2]) * (aiPlanServings + 1);
+            const name = match[3].trim().toLowerCase();
+            const reqQty = parseFloat(match[4]) * (aiPlanServings + 1);
             const invItem = myInventory.find(i => i.name.toLowerCase() === name);
             if (invItem && reqQty > invItem.quantity) {
                 canIncrementAI = false;
@@ -623,7 +643,21 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                         </div>
                                     )}
 
-                                    <div className="plan-mini-grid" style={{ display: 'grid', gridTemplateColumns: '70px repeat(7, 1fr)', gap: 8, overflowX: 'auto', paddingBottom: '10px' }}>
+                                    {(() => {
+                                        const now = new Date();
+                                        const currentDayIndex = now.getDay() === 0 ? 6 : now.getDay() - 1;
+                                        const currentHour = now.getHours();
+                                        const isSlotDisabled = (dayIndex, meal) => {
+                                            if (dayIndex < currentDayIndex) return true;
+                                            if (dayIndex === currentDayIndex) {
+                                                if (meal === 'Desayuno' && currentHour >= 11) return true;
+                                                if (meal === 'Almuerzo' && currentHour >= 17) return true;
+                                                if (meal === 'Cena' && currentHour >= 22) return true;
+                                            }
+                                            return false;
+                                        };
+                                        return (
+                                            <div className="plan-mini-grid" style={{ display: 'grid', gridTemplateColumns: '70px repeat(7, 1fr)', gap: 8, overflowX: 'auto', paddingBottom: '10px' }}>
                                         <div></div>
                                         {weekDays.map((d, dayIndex) => {
                                             const isBlocked = expiredDayIndexes.has(dayIndex);
@@ -641,18 +675,21 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                                 {weekDays.map((_, dayIndex) => {
                                                     const slotKey = `${dayIndex}-${meal}`;
                                                     const isSelected = selectedSlots.includes(slotKey);
-                                                    const isBlocked = expiredDayIndexes.has(dayIndex);
+                                                    const isExpiredBlocked = expiredDayIndexes.has(dayIndex);
+                                                    const isTimeDisabled = isSlotDisabled(dayIndex, meal);
+                                                    const isBlocked = isExpiredBlocked || isTimeDisabled;
+                                                    
                                                     return (
-                                                        <div key={slotKey} onClick={() => toggleSlot(dayIndex, meal)} style={{
+                                                        <div key={slotKey} onClick={() => { if (!isBlocked) toggleSlot(dayIndex, meal); }} style={{
                                                             aspectRatio: '1', borderRadius: '8px',
-                                                            border: isBlocked ? '2px solid #FECACA' : isSelected ? '2px solid #FF9F43' : '2px dashed #e2e8f0',
-                                                            background: isBlocked ? '#FEF2F2' : isSelected ? '#fffaf0' : 'transparent',
+                                                            border: isExpiredBlocked ? '2px solid #FECACA' : (isTimeDisabled ? '2px solid #e2e8f0' : (isSelected ? '2px solid #FF9F43' : '2px dashed #e2e8f0')),
+                                                            background: isExpiredBlocked ? '#FEF2F2' : (isTimeDisabled ? '#f1f5f9' : (isSelected ? '#fffaf0' : 'transparent')),
                                                             cursor: isBlocked ? 'not-allowed' : 'pointer',
                                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                             transition: 'all 0.2s', minWidth: '40px',
                                                             opacity: isBlocked ? 0.6 : 1,
-                                                        }} title={isBlocked ? 'Ingrediente vencido este día' : ''}>
-                                                            {isBlocked && <span style={{ fontSize: '0.8rem' }}>✕</span>}
+                                                        }} title={isExpiredBlocked ? 'Ingrediente vencido este día' : (isTimeDisabled ? 'Horario pasado' : '')}>
+                                                            {isBlocked && <span style={{ fontSize: '0.8rem', color: isExpiredBlocked ? '#DC2626' : '#cbd5e1' }}>{isExpiredBlocked ? '🚫' : '✕'}</span>}
                                                             {!isBlocked && isSelected && <Check size={18} weight="bold" color="#FF9F43" />}
                                                         </div>
                                                     );
@@ -660,6 +697,8 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                             </React.Fragment>
                                         ))}
                                     </div>
+                                    );
+                                    })()}
                                 </>
                             )}
 

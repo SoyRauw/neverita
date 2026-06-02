@@ -34,6 +34,7 @@ router.post('/suggest', async (req, res) => {
             NO sugieras platos que requieran ingredientes principales que no están en la lista.
             NUNCA asumas que el usuario tiene sal, aceite, especias, condimentos u otros ingredientes
             que no estén explícitamente en la lista anterior.
+            SIN EMBARGO, si el usuario SÍ tiene condimentos, sal o especias en su lista, asegúrate de tomarlos en cuenta para sugerir recetas bien sazonadas.
             
             Responde SOLO JSON:
             { "suggestions": [{ "title": "Nombre del Plato", "description": "Descripción corta de 10 palabras" }, ...] }
@@ -160,12 +161,12 @@ router.post('/generate', async (req, res) => {
             La receta es para UNA sola persona. Estos son los límites máximos
             que NO PUEDES superar bajo ninguna circunstancia:
 
-              • Carnes (pollo, cerdo, res, pescado): MÁXIMO 200 g
+              • Carnes (pollo, cerdo, res, pescado): MÁXIMO 200 g o 1 unidad
               • Arroz, pasta, cereales (crudos): MÁXIMO 80 g
               • Legumbres crudas (caraotas, lentejas, arvejas): MÁXIMO 80 g
               • Huevos: MÁXIMO 2 unidades
-              • Papa, yuca u otros alméidos: MÁXIMO 150 g
-              • Verduras / vegetales: MÁXIMO 150 g
+              • Papa, yuca u otros almidones: MÁXIMO 150 g o 1-2 unidades
+              • Verduras / vegetales: MÁXIMO 150 g o 1-2 unidades
               • Aceite, mantequilla, grasa: MÁXIMO 1 cucharada grande
               • Leche o líquidos de cocina: MÁXIMO 200 ml
               • Sal, pimienta, especias: MÁXIMO 1 cucharada pequeña
@@ -176,14 +177,21 @@ router.post('/generate', async (req, res) => {
             El campo "servings" del JSON DEBE ser 1.
             =============================================================
 
-            REGLA #2 — USA SOLO LO QUE ESTÁ EN EL INVENTARIO:
-            El usuario tiene estos ingredientes (las cantidades totales en su nevera están entre paréntesis):
+            REGLA #2 — USA SOLO LO QUE ESTÁ EN EL INVENTARIO Y MANTÉN LA UNIDAD:
+            El usuario tiene estos ingredientes (las cantidades totales en su nevera y su UNIDAD DE MEDIDA están entre paréntesis):
             [ ${available_ingredients.join(', ')} ]
             ⚠️ CRÍTICO: NO puedes usar NINGÚN ingrediente que no esté en esa lista.
             NO asumas que el usuario tiene sal, aceite, especias, condimentos, pimienta ni ningún otro
             ingrediente que no aparezca EXPLÍCITAMENTE arriba.
             La ÚNICA excepción es el agua (para cocción), que siempre está disponible.
             Solo usa lo que está en la lista. Si un ingrediente no está, no lo uses.
+            
+            ⚠️ IMPORTANTE PARA EL SABOR: Si el usuario TIENE sal, aceite, especias o condimentos en su lista de inventario, ASEGÚRATE de incluirlos en la receta para darle buen sabor. ¡No hagas recetas desabridas si el usuario tiene con qué sazonar!
+
+            ⚠️ CRÍTICO SOBRE UNIDADES DE MEDIDA:
+            DEBES mantener EXACTAMENTE la misma unidad de medida que se indica entre paréntesis para cada ingrediente en el inventario.
+            Si el inventario dice "Papa (10 unidad)", tu receta DEBE devolver "unidad" como unidad para la Papa y una cantidad coherente (ej: 1 o 2). NUNCA uses "g" si el inventario dice "unidad", ni viceversa. Las cantidades deben reflejar la unidad elegida.
+            
             Además, NO USES TODA LA CANTIDAD QUE TIENE EL USUARIO.
             Ese es su INVENTARIO TOTAL. Tú solo debes tomar la porción necesaria para 1 SOLA PERSONA,
             siguiendo los límites de la REGLA #1.
@@ -197,9 +205,9 @@ router.post('/generate', async (req, res) => {
             =============================================================
 
             *** EJEMPLO DE CÓMO HACERLO BIEN ***
-            Si el inventario dice: "Arroz (2000 g), Chuleta de cerdo (1000 g), Huevo (12 unidad)"
-            MAL (cantidades muy altas): Arroz (400 g), Chuleta (600 g), Huevo (4 unidad)
-            BIEN (cantidades para 1 persona): Arroz (80 g), Chuleta (150 g), Huevo (1 unidad)
+            Si el inventario dice: "Arroz (2000 g), Chuleta de cerdo (1000 g), Huevo (12 unidad), Papa (5 unidad)"
+            MAL (cantidades muy altas o cambiando la unidad a gramos cuando el usuario tiene unidades): Arroz (400 g), Chuleta (600 g), Huevo (4 unidad), Papa (300 g)
+            BIEN (cantidades para 1 persona, y respetando las unidades exactas): Arroz (80 g), Chuleta (150 g), Huevo (1 unidad), Papa (1 unidad)
             =============================================================
 
             Responde SOLO JSON:
@@ -213,13 +221,31 @@ router.post('/generate', async (req, res) => {
                     "servings": 1, 
                     "calories_per_serving": 400 
                 },
-                "ingredients": [{ "name": "...", "quantity": 1, "unit": "g", "category": "vegetal", "average_expiry_days": 7 }]
+                "ingredients": [
+                    { 
+                        "name": "Azúcar", 
+                        "quantity": 15, 
+                        "unit": "g", 
+                        "category": "condimento", 
+                        "average_expiry_days": 730,
+                        "measure_qty": 1,
+                        "measure_unit": "cucharada grande"
+                    }
+                ]
             }
             IMPORTANTE: "difficulty" único en: "easy", "regular", "hard".
-            IMPORTANTE: "unit" único en: "g", "kg", "ml", "l", "cup", "cucharada grande", "cucharada pequeña", "unidad".
+            IMPORTANTE: "unit" único en: "g", "kg", "ml", "l", "unidad".
             IMPORTANTE: "category" único en: "vegetal", "fruta", "proteína", "lácteo", "grano", "condimento", "grasa", "bebida", "otro".
             IMPORTANTE: "average_expiry_days" entero positivo (pollo=5, arroz=365, leche=7, sal=730).
+            IMPORTANTE SOBRE UNIDADES CULINARIAS (measure_qty y measure_unit): 
+            El usuario quiere que a la hora de cocinar se le indique la cantidad en medidas prácticas (cucharadas, tazas, pizca, etc.), pero que el descuento del inventario sea en gramos/ml.
+            Si el ingrediente se mide mejor en cucharadas o tazas al cocinar (ej. sal, aceite, azúcar, arroz), incluye "measure_qty" (número) y "measure_unit" (texto como "cucharada pequeña", "taza", "pizca").
+            La cantidad (quantity) y unidad (unit) principal DEBEN seguir siendo la base en "g", "ml" o "unidad" según el inventario.
+            Ejemplo para sal: quantity: 10, unit: "g", measure_qty: 1, measure_unit: "cucharada pequeña".
+            Si no aplica medida culinaria (ej. "1 unidad de Pollo"), omite measure_qty y measure_unit o déjalos nulos.
+            
             IMPORTANTE: En "instructions", usa saltos de línea (\\n\\n) para separar los pasos visualmente. No escribas todo en un solo bloque de texto.
+            IMPORTANTE SOBRE LAS INSTRUCCIONES: Los pasos de la receta (instructions) NO DEBEN incluir cantidades exactas (no digas "Corta 150g de papa" ni "Bate 2 huevos"). En su lugar, nombra los ingredientes de forma genérica (ej: "Corta la papa", "Bate los huevos"). Esto es VITAL porque las recetas son escalables y el texto con cantidades fijas confundirá al usuario cuando cocine para más personas.
         `;
 
         const genAI = new GoogleGenerativeAI(apiKey);
@@ -232,15 +258,12 @@ router.post('/generate', async (req, res) => {
         const aiData = JSON.parse(result.response.text());
 
         // --- NORMALIZAR UNIDADES (seguridad extra) ---
-        const validUnits = ['g', 'kg', 'ml', 'l', 'cup', 'cucharada grande', 'cucharada pequeña', 'unidad'];
+        const validUnits = ['g', 'kg', 'ml', 'l', 'unidad'];
         const unitMap = {
             'gramos': 'g', 'gramo': 'g', 'gr': 'g',
             'kilogramos': 'kg', 'kilogramo': 'kg', 'kilo': 'kg', 'kilos': 'kg',
             'mililitros': 'ml', 'mililitro': 'ml',
             'litros': 'l', 'litro': 'l',
-            'taza': 'cup', 'tazas': 'cup', 'cups': 'cup',
-            'cucharadas': 'cucharada grande', 'cucharada': 'cucharada grande', 'cda': 'cucharada grande', 'tbsp': 'cucharada grande',
-            'cucharadita': 'cucharada pequeña', 'cucharaditas': 'cucharada pequeña', 'cdta': 'cucharada pequeña', 'tsp': 'cucharada pequeña',
             'unidades': 'unidad', 'u': 'unidad', 'pieza': 'unidad', 'piezas': 'unidad', 'ud': 'unidad',
         };
         // --- NORMALIZAR CATEGORÍAS (seguridad extra) ---
@@ -353,8 +376,8 @@ router.post('/generate', async (req, res) => {
 
                 // Relacionar receta con ingrediente
                 await connection.query(
-                    'INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity) VALUES (?, ?, ?)',
-                    [recipeId, ingId, ing.quantity]
+                    'INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity, measure_qty, measure_unit) VALUES (?, ?, ?, ?, ?)',
+                    [recipeId, ingId, ing.quantity, ing.measure_qty || null, ing.measure_unit || null]
                 );
             }
         }
@@ -390,34 +413,62 @@ router.post('/shopping-list', async (req, res) => {
 
         const systemPrompt = `
             Eres un asistente de compras inteligente enfocado en economía familiar y anti-desperdicio.
-            Tu misión es generar una lista de compras estructurada para una familia de ${member_count || 1} personas.
+            Tu misión es generar una lista de compras COMPLETA y DETALLADA para una familia de ${member_count || 1} personas para la semana.
 
-            TOMA EN CUENTA LO SIGUIENTE:
-            1. INVENTARIO ACTUAL (evita sugerir lo que ya tienen con buen stock, PERO sugiere reponer lo que está por vencer o vencido):
-            ${current_inventory.length > 0 ? JSON.stringify(current_inventory) : "Inventario vacío."}
+            ════════════════════════════════════════════════
+            REGLA #1 — SIEMPRE USA NOMBRES ESPECÍFICOS DE PRODUCTO:
+            ❌ PROHIBIDO escribir nombres vagos como:
+               "Productos básicos", "Verduras variadas", "Condimentos", "Especias", "Perecederos", "Lácteos varios", "Proteínas", "Otros básicos"
+            ✅ OBLIGATORIO escribir el nombre real y concreto del producto:
+               "Tomate", "Cebolla", "Ajo", "Sal", "Aceite de girasol", "Orégano", "Pimienta negra", "Azúcar", "Leche entera", "Queso blanco", etc.
+            Cada ítem DEBE ser un producto individual y reconocible que puedas encontrar en el supermercado.
+            ════════════════════════════════════════════════
 
-            2. INGREDIENTES REQUERIDOS PARA EL MENÚ DE LA SEMANA (agrega los que falten o que no alcancen según el inventario):
-            ${weekly_plan_ingredients.length > 0 ? JSON.stringify(weekly_plan_ingredients) : "No hay plan semanal activo."}
+            REGLA #2 — INVENTARIO ACTUAL (no repitas lo que ya tienen con buen stock):
+            ${current_inventory.length > 0 ? JSON.stringify(current_inventory) : "Inventario vacío — recomienda todos los básicos necesarios."}
 
-            3. CESTA BÁSICA RECOMENDADA (evalúa si faltan básicos esenciales como arroz, harina, huevos, carnes según el tamaño de la familia).
-            Para ${member_count || 1} personas, las cantidades típicas semanales rondan:
-            - Harina (Pan/trigo): ~${(member_count || 1)} kg
-            - Arroz/Pasta: ~${(member_count || 1) * 0.5} kg
-            - Huevos: ~${(member_count || 1) * 0.5} cartones
-            - Carnes/Pollo: ~${(member_count || 1) * 1.5} kg
-            
-            No dupliques ítems (combina las cantidades si se requiere para el menú y la cesta básica).
-            No sugieras cantidades excesivas.
-            
-            Responde SOLO JSON con este formato exacto:
+            REGLA #3 — INGREDIENTES DEL MENÚ SEMANAL (incluye los que falten o que no alcancen):
+            ${weekly_plan_ingredients.length > 0 ? JSON.stringify(weekly_plan_ingredients) : "Sin plan semanal — recomienda una despensa completa para la semana."}
+
+            REGLA #4 — CESTA BÁSICA COMPLETA:
+            Verifica si faltan estos productos esenciales (uno por uno, con nombre exacto) y agrégalos si no están en el inventario:
+            GRANOS/ALMIDONES: Arroz blanco, Pasta (espagueti o macarrón), Harina de trigo, Harina Pan (si aplica), Avena
+            PROTEÍNAS: Pollo (pechuga o entero), Carne molida de res, Atún en lata, Huevos, Caraotas negras o rojas, Lentejas
+            LÁCTEOS: Leche entera, Queso blanco, Mantequilla, Yogur natural
+            VERDURAS: Tomate, Cebolla, Ajo, Zanahoria, Papa, Pimentón verde, Apio España, Celery, Cilantro
+            FRUTAS: Plátano, Naranja, Limón
+            ACEITES Y GRASAS: Aceite vegetal o de girasol
+            CONDIMENTOS Y ESPECIAS (cada uno por separado): Sal, Azúcar, Pimienta negra, Orégano, Comino, Salsa de tomate, Mayonesa, Mostaza
+            PANADERÍA: Pan de molde o pan blanco
+            LIMPIEZA/HOGAR (si se necesita): Jabón de platos, Papel higiénico, Desengrasante
+
+            Para ${member_count || 1} personas, cantidades semanales aproximadas:
+            - Arroz blanco: ${(member_count || 1) * 0.5} kg
+            - Harina (trigo o Pan): ${(member_count || 1)} kg
+            - Huevos: ${Math.ceil((member_count || 1) * 0.5) * 12} unidad
+            - Pollo: ${(member_count || 1) * 1.5} kg
+            - Leche: ${(member_count || 1)} l
+
+            REGLA #5 — SIN DUPLICADOS:
+            No repitas productos. Si un ítem es necesario tanto para el menú como para la cesta básica, combina las cantidades en un solo ítem.
+
+            REGLA #6 — CONVERSIÓN A UNIDADES ESTÁNDAR:
+            PROHIBIDO usar unidades como "cartón", "paquete", "docena", "bolsa" o "lata". DEBES convertir todo a unidades de medida estándar.
+            Por ejemplo, si necesitas "Huevos":
+            - 1 cartón completo (cubeta) = 30 unidad
+            - Medio cartón = 15 unidad
+            - 1 docena = 12 unidad
+            - Media docena = 6 unidad
+
+            Responde SOLO con JSON válido, sin texto adicional, con este formato exacto:
             {
                 "items": [
-                    { "name": "Nombre del producto (ej: Harina Pan)", "quantity": 2, "unit": "kg", "reason": "Faltante cesta básica" },
-                    { "name": "Pollo entero", "quantity": 1.5, "unit": "kg", "reason": "Requerido para receta: Pollo al horno" },
-                    { "name": "Leche", "quantity": 2, "unit": "l", "reason": "Reponer (vence pronto)" }
+                    { "name": "Tomate", "quantity": 1, "unit": "kg", "reason": "Verdura básica semanal" },
+                    { "name": "Pollo pechuga", "quantity": 1.5, "unit": "kg", "reason": "Requerido para receta: Pollo guisado" },
+                    { "name": "Huevos", "quantity": 30, "unit": "unidad", "reason": "Básico semanal" }
                 ]
             }
-            Unidades válidas: "g", "kg", "ml", "l", "cup", "cucharada grande", "cucharada pequeña", "unidad", "paquete", "cartón".
+            Unidades válidas ESTRICTAS (solo usa una de estas): "g", "kg", "ml", "l", "cup", "cucharada grande", "cucharada pequeña", "unidad".
         `;
 
         const genAI = new GoogleGenerativeAI(apiKey);

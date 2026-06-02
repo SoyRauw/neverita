@@ -204,14 +204,23 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
         const factor = persons / base;
         if (factor === 1 || !recipe.ingredients || recipe.ingredients.length === 0) return recipe.ingredients || [];
         return recipe.ingredients.map(ing => {
-            // Formato: "Nombre (cantidad unidad)" o solo "Nombre"
-            const match = ing.match(/^(.+?)\s*\(([\d.]+)\s*(.+?)\)$/);
+            // Formato: "1 cucharada de Nombre (cantidad unidad)" o "Nombre (cantidad unidad)" o solo "Nombre"
+            const match = ing.match(/^(?:([\d.]+)\s+(.+?)\s+de\s+)?(.+?)\s*\(([\d.]+)\s*(.+?)\)$/);
             if (!match) return ing;
-            const name = match[1].trim();
-            const qty = parseFloat(match[2]);
-            const unit = match[3].trim();
-            const scaled = Math.round(qty * factor * 100) / 100;
-            return `${name} (${scaled} ${unit})`;
+            
+            const mQty = match[1] ? parseFloat(match[1]) : null;
+            const mUnit = match[2] || '';
+            const name = match[3].trim();
+            const bQty = parseFloat(match[4]);
+            const bUnit = match[5].trim();
+            
+            const scaledBQty = Math.round(bQty * factor * 100) / 100;
+            if (mQty) {
+                const scaledMQty = Math.round(mQty * factor * 100) / 100;
+                return `${scaledMQty} ${mUnit} de ${name} (${scaledBQty} ${bUnit})`;
+            } else {
+                return `${name} (${scaledBQty} ${bUnit})`;
+            }
         });
     };
 
@@ -299,10 +308,10 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
         const base = pendingRecipe.servings || 2;
         const factor = (planServings + 1) / base;
         for (const ingStr of pendingRecipe.ingredients) {
-            const match = ingStr.match(/^(.+?)\s*\(([\d.]+)\s*(.+?)\)$/);
+            const match = ingStr.match(/^(?:([\d.]+)\s+(.+?)\s+de\s+)?(.+?)\s*\(([\d.]+)\s*(.+?)\)$/);
             if (!match) continue;
-            const name = match[1].trim().toLowerCase();
-            const reqQty = parseFloat(match[2]) * factor;
+            const name = match[3].trim().toLowerCase();
+            const reqQty = parseFloat(match[4]) * factor;
             const invItem = myInventory.find(i => i.name.toLowerCase() === name);
             if (invItem && reqQty > invItem.quantity) {
                 canIncrementPlan = false;
@@ -310,6 +319,21 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
             }
         }
     }
+
+    // Helper para bloquear días pasados
+    const now = new Date();
+    const currentDayIndex = now.getDay() === 0 ? 6 : now.getDay() - 1;
+    const currentHour = now.getHours();
+    
+    const isSlotDisabled = (dayIndex, meal) => {
+        if (dayIndex < currentDayIndex) return true;
+        if (dayIndex === currentDayIndex) {
+            if (meal === 'Desayuno' && currentHour >= 11) return true;
+            if (meal === 'Almuerzo' && currentHour >= 17) return true;
+            if (meal === 'Cena' && currentHour >= 22) return true;
+        }
+        return false;
+    };
 
     return (
         <div className="main-content">
@@ -565,15 +589,17 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                                         {weekDays.map((_, dayIndex) => {
                                             const slotKey = `${dayIndex}-${meal}`;
                                             const isSelected = selectedSlots.includes(slotKey);
+                                            const disabled = isSlotDisabled(dayIndex, meal);
                                             return (
-                                                <div key={slotKey} onClick={() => toggleSlot(dayIndex, meal)} style={{
+                                                <div key={slotKey} onClick={() => { if (!disabled) toggleSlot(dayIndex, meal); }} style={{
                                                     aspectRatio: '1', borderRadius: '8px',
-                                                    border: isSelected ? '2px solid #F7B27B' : '2px dashed #cbd5e1',
-                                                    backgroundColor: isSelected ? '#fffaf5' : '#f8fafc',
-                                                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                    transition: 'all 0.15s ease', transform: isSelected ? 'scale(0.95)' : 'scale(1)'
+                                                    border: isSelected ? '2px solid #F7B27B' : (disabled ? '2px solid #e2e8f0' : '2px dashed #cbd5e1'),
+                                                    backgroundColor: disabled ? '#f1f5f9' : (isSelected ? '#fffaf5' : '#f8fafc'),
+                                                    cursor: disabled ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    transition: 'all 0.15s ease', transform: isSelected ? 'scale(0.95)' : 'scale(1)',
+                                                    opacity: disabled ? 0.6 : 1
                                                 }}>
-                                                    {isSelected ? <Check weight="bold" color="#F7B27B" size={20} /> : <Plus weight="bold" color="#cbd5e1" size={16} />}
+                                                    {isSelected ? <Check weight="bold" color="#F7B27B" size={20} /> : (disabled ? <X weight="bold" color="#cbd5e1" size={16} /> : <Plus weight="bold" color="#cbd5e1" size={16} />)}
                                                 </div>
                                             );
                                         })}

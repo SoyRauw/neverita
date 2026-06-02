@@ -14,7 +14,7 @@ router.get('/', async (req, res, next) => {
     // 2. Traer todos los ingredientes de esas recetas en una sola query JOIN
     const recipeIds = recipes.map(r => r.recipe_id);
     const [ingredientRows] = await db.query(
-      `SELECT ri.recipe_id, i.name, ri.quantity, i.unit
+      `SELECT ri.recipe_id, i.name, ri.quantity, i.unit, ri.measure_qty, ri.measure_unit
        FROM recipe_ingredients ri
        JOIN ingredients i ON ri.ingredient_id = i.ingredient_id
        WHERE ri.recipe_id IN (?)`,
@@ -28,7 +28,8 @@ router.get('/', async (req, res, next) => {
         ingredientsByRecipe[row.recipe_id] = [];
       }
       const qty = row.quantity ? `${row.quantity} ${row.unit || ''}`.trim() : row.unit || '';
-      ingredientsByRecipe[row.recipe_id].push(qty ? `${row.name} (${qty})` : row.name);
+      const measurePart = row.measure_qty && row.measure_unit ? `${row.measure_qty} ${row.measure_unit} de ` : '';
+      ingredientsByRecipe[row.recipe_id].push(qty ? `${measurePart}${row.name} (${qty})` : `${measurePart}${row.name}`);
     }
 
     // 4. Combinar recetas con sus ingredientes
@@ -50,7 +51,7 @@ router.get('/:id', async (req, res, next) => {
     const recipe = rows[0];
 
     const [ingredientRows] = await db.query(
-      `SELECT i.name, ri.quantity, i.unit
+      `SELECT i.name, ri.quantity, i.unit, ri.measure_qty, ri.measure_unit
        FROM recipe_ingredients ri
        JOIN ingredients i ON ri.ingredient_id = i.ingredient_id
        WHERE ri.recipe_id = ?`,
@@ -59,7 +60,8 @@ router.get('/:id', async (req, res, next) => {
 
     recipe.ingredients = ingredientRows.map(row => {
       const qty = row.quantity ? `${row.quantity} ${row.unit || ''}`.trim() : row.unit || '';
-      return qty ? `${row.name} (${qty})` : row.name;
+      const measurePart = row.measure_qty && row.measure_unit ? `${row.measure_qty} ${row.measure_unit} de ` : '';
+      return qty ? `${measurePart}${row.name} (${qty})` : `${measurePart}${row.name}`;
     });
 
     res.json(recipe);
