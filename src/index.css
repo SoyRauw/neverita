@@ -599,6 +599,67 @@ header {
     color: #333;
 }
 
+/* === BOTÓN DE LECTURA POR VOZ (TTS) === */
+.btn-speech {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 16px;
+    border-radius: 50px;
+    border: 1.5px solid #ccc;
+    background: white;
+    color: #555;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+.btn-speech:hover {
+    border-color: #F7B27B;
+    color: #e67e22;
+    background: #FFF7ED;
+    transform: translateY(-1px);
+}
+
+/* Estado: leyendo → naranja con animación de pulso */
+.btn-speech.speaking {
+    background: linear-gradient(135deg, #FF9F43, #e67e22);
+    border-color: transparent;
+    color: white;
+    box-shadow: 0 4px 14px rgba(247, 178, 123, 0.5);
+    animation: speechPulse 1.6s ease-in-out infinite;
+}
+
+.btn-speech.speaking:hover {
+    animation: none;
+    transform: translateY(-1px);
+    background: linear-gradient(135deg, #e67e22, #d35400);
+    box-shadow: 0 6px 20px rgba(247, 178, 123, 0.7);
+    color: white;
+}
+
+/* Estado: pausado → azul calmado */
+.btn-speech.paused {
+    background: #EFF6FF;
+    border-color: #93C5FD;
+    color: #2563EB;
+}
+
+.btn-speech.paused:hover {
+    background: #DBEAFE;
+    border-color: #3B82F6;
+    color: #1D4ED8;
+    transform: translateY(-1px);
+}
+
+@keyframes speechPulse {
+    0%   { box-shadow: 0 0 0 0 rgba(247, 178, 123, 0.6); }
+    50%  { box-shadow: 0 0 0 8px rgba(247, 178, 123, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(247, 178, 123, 0); }
+}
+
 /* Inputs */
 .form-input,
 .form-textarea {

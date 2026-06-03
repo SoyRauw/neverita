@@ -36,8 +36,14 @@ router.post('/suggest', async (req, res) => {
             que no estén explícitamente en la lista anterior.
             SIN EMBARGO, si el usuario SÍ tiene condimentos, sal o especias en su lista, asegúrate de tomarlos en cuenta para sugerir recetas bien sazonadas.
             
-            Responde SOLO JSON:
+            VÁLVULA DE ESCAPE Y CANTIDADES INSUFICIENTES (EDGE CASE):
+            1. Observa atentamente las cantidades numéricas entre paréntesis de cada ingrediente. Si el usuario tiene cantidades absurdamente pequeñas (ej: "Harina de trigo (1 g)", "Caraotas (2 g)"), NO las consideres viables para cocinar.
+            2. Si los ingredientes con cantidades viables son insuficientes o incompatibles para formar al menos un plato real y comestible, devuelve un JSON con un mensaje de error pidiendo que agreguen más elementos.
+            
+            Responde SOLO JSON. Si hay recetas válidas, usa este formato:
             { "suggestions": [{ "title": "Nombre del Plato", "description": "Descripción corta de 10 palabras" }, ...] }
+            Si faltan ingredientes, usa este formato EXACTO:
+            { "error": "Faltan ingredientes básicos. Por favor, agrega más elementos a tu inventario para poder cocinar un plato real." }
         `;
 
         const genAI = new GoogleGenerativeAI(apiKey);
@@ -72,8 +78,9 @@ router.post('/ingredient-info', async (req, res) => {
             {
                 "average_expiry_days": <número entero de días que dura típicamente en la nevera o despensa>,
                 "category": "<una de: vegetal, fruta, proteína, lácteo, grano, condimento, grasa, bebida, otro>",
-                "unit": "<una de: g, kg, ml, l, cup, cucharada grande, cucharada pequeña, unidad>"
+                "unit": "<una de: g, ml, cup, cucharada grande, cucharada pequeña, unidad>"
             }
+            IMPORTANTE: Nunca uses "kg" ni "l", usa siempre su equivalente en "g" o "ml".
             Ejemplos: pollo=4, arroz=365, leche=7, mantequilla=30, sal=730, zanahoria=21, huevo=21.
         `;
 
@@ -88,7 +95,7 @@ router.post('/ingredient-info', async (req, res) => {
 
         // Validar y sanear
         const validCategories = ['vegetal', 'fruta', 'proteína', 'lácteo', 'grano', 'condimento', 'grasa', 'bebida', 'otro'];
-        const validUnits = ['g', 'kg', 'ml', 'l', 'cup', 'cucharada grande', 'cucharada pequeña', 'unidad'];
+        const validUnits = ['g', 'ml', 'cup', 'cucharada grande', 'cucharada pequeña', 'unidad'];
 
         res.json({
             average_expiry_days: Math.max(1, Math.round(Number(data.average_expiry_days) || 7)),
@@ -188,14 +195,15 @@ router.post('/generate', async (req, res) => {
             
             ⚠️ IMPORTANTE PARA EL SABOR: Si el usuario TIENE sal, aceite, especias o condimentos en su lista de inventario, ASEGÚRATE de incluirlos en la receta para darle buen sabor. ¡No hagas recetas desabridas si el usuario tiene con qué sazonar!
 
-            ⚠️ CRÍTICO SOBRE UNIDADES DE MEDIDA:
-            DEBES mantener EXACTAMENTE la misma unidad de medida que se indica entre paréntesis para cada ingrediente en el inventario.
-            Si el inventario dice "Papa (10 unidad)", tu receta DEBE devolver "unidad" como unidad para la Papa y una cantidad coherente (ej: 1 o 2). NUNCA uses "g" si el inventario dice "unidad", ni viceversa. Las cantidades deben reflejar la unidad elegida.
+            ⚠️ CRÍTICO SOBRE UNIDADES DE MEDIDA Y CANTIDADES MÁXIMAS DISPONIBLES:
+            DEBES mantener EXACTAMENTE la misma unidad de medida que se indica entre paréntesis para cada ingrediente.
+            NUNCA EXCEDAS LA CANTIDAD DISPONIBLE. La cantidad en tu receta DEBE SER MENOR O IGUAL a la cantidad entre paréntesis.
+            Si el inventario dice "Harina de trigo (1 g)", NO PUEDES usar 80 g. Tu máximo absoluto es 1 g. Si 1 g no sirve para la receta, usa un sustituto o improvisa, pero NUNCA inventes que el usuario tiene más de lo que indica su inventario.
+            NUNCA uses "g" si el inventario dice "unidad", ni viceversa. Las cantidades deben reflejar la unidad elegida.
             
-            Además, NO USES TODA LA CANTIDAD QUE TIENE EL USUARIO.
+            Además, si el usuario tiene mucha cantidad (ej. 2000 g), NO USES TODA LA CANTIDAD.
             Ese es su INVENTARIO TOTAL. Tú solo debes tomar la porción necesaria para 1 SOLA PERSONA,
-            siguiendo los límites de la REGLA #1.
-            NUNCA pidas más cantidad de la que el usuario tiene disponible.
+            siguiendo los límites de la REGLA #1, y asegurando SIEMPRE que la cantidad a usar <= cantidad en inventario.
             =============================================================
 
             REGLA #3 — IMPROVISA:
@@ -440,35 +448,35 @@ router.post('/shopping-list', async (req, res) => {
             ACEITES Y GRASAS: Aceite vegetal o de girasol
             CONDIMENTOS Y ESPECIAS (cada uno por separado): Sal, Azúcar, Pimienta negra, Orégano, Comino, Salsa de tomate, Mayonesa, Mostaza
             PANADERÍA: Pan de molde o pan blanco
-            LIMPIEZA/HOGAR (si se necesita): Jabón de platos, Papel higiénico, Desengrasante
 
             Para ${member_count || 1} personas, cantidades semanales aproximadas:
-            - Arroz blanco: ${(member_count || 1) * 0.5} kg
-            - Harina (trigo o Pan): ${(member_count || 1)} kg
+            - Arroz blanco: ${(member_count || 1) * 500} g
+            - Harina (trigo o Pan): ${(member_count || 1) * 1000} g
             - Huevos: ${Math.ceil((member_count || 1) * 0.5) * 12} unidad
-            - Pollo: ${(member_count || 1) * 1.5} kg
-            - Leche: ${(member_count || 1)} l
+            - Pollo: ${(member_count || 1) * 1500} g
+            - Leche: ${(member_count || 1) * 1000} ml
 
             REGLA #5 — SIN DUPLICADOS:
             No repitas productos. Si un ítem es necesario tanto para el menú como para la cesta básica, combina las cantidades en un solo ítem.
 
-            REGLA #6 — CONVERSIÓN A UNIDADES ESTÁNDAR:
-            PROHIBIDO usar unidades como "cartón", "paquete", "docena", "bolsa" o "lata". DEBES convertir todo a unidades de medida estándar.
-            Por ejemplo, si necesitas "Huevos":
-            - 1 cartón completo (cubeta) = 30 unidad
-            - Medio cartón = 15 unidad
-            - 1 docena = 12 unidad
-            - Media docena = 6 unidad
+            REGLA #6 — CONVERSIÓN A UNIDADES ESTÁNDAR (SÓLO GRAMOS Y MILILITROS):
+            PROHIBIDO usar unidades como "kg", "l", "cartón", "paquete", "docena", "bolsa" o "lata". 
+            DEBES convertir TODO a "g" para peso, "ml" para líquidos y "unidad" para piezas.
+            Por ejemplo:
+            - Medio kilo de arroz = 500 g (NUNCA 0.5 kg)
+            - Un kilo de pollo = 1000 g
+            - 1 litro de leche = 1000 ml (NUNCA 1 l)
+            - 1 cartón completo de huevos = 30 unidad
 
             Responde SOLO con JSON válido, sin texto adicional, con este formato exacto:
             {
                 "items": [
-                    { "name": "Tomate", "quantity": 1, "unit": "kg", "reason": "Verdura básica semanal" },
-                    { "name": "Pollo pechuga", "quantity": 1.5, "unit": "kg", "reason": "Requerido para receta: Pollo guisado" },
+                    { "name": "Tomate", "quantity": 1000, "unit": "g", "reason": "Verdura básica semanal" },
+                    { "name": "Pollo pechuga", "quantity": 1500, "unit": "g", "reason": "Requerido para receta: Pollo guisado" },
                     { "name": "Huevos", "quantity": 30, "unit": "unidad", "reason": "Básico semanal" }
                 ]
             }
-            Unidades válidas ESTRICTAS (solo usa una de estas): "g", "kg", "ml", "l", "cup", "cucharada grande", "cucharada pequeña", "unidad".
+            Unidades válidas ESTRICTAS (solo usa una de estas): "g", "ml", "cup", "cucharada grande", "cucharada pequeña", "unidad".
         `;
 
         const genAI = new GoogleGenerativeAI(apiKey);

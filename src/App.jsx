@@ -170,6 +170,83 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
     const [selectedMealDetails, setSelectedMealDetails] = useState(null);
     const [slideDir, setSlideDir] = useState(''); // '' | 'left' | 'right'
 
+    // --- TTS (Texto a Voz) ---
+    const [speechState, setSpeechState] = useState('idle'); // idle, speaking, paused
+    const utteranceRef = React.useRef(null);
+
+    const stopSpeech = React.useCallback(() => {
+        window.speechSynthesis.cancel();
+        setSpeechState('idle');
+    }, []);
+
+    const startSpeech = React.useCallback((recipe) => {
+        stopSpeech();
+        if (!recipe) return;
+
+        let textToRead = `Receta: ${recipe.name}. `;
+        if (recipe.ingredients && recipe.ingredients.length > 0) {
+            textToRead += `Ingredientes: ${recipe.ingredients.join(', ')}. `;
+        }
+        if (recipe.steps && recipe.steps.length > 0) {
+            textToRead += `Pasos a seguir: ${recipe.steps.map(s => s.replace(/^\\d+[\\.\\-]?\\s*/, '')).join('. ')}.`;
+        }
+
+        const utterance = new SpeechSynthesisUtterance(textToRead);
+        utterance.pitch = 1.05;  // ligeramente más agudo = menos robótico
+
+        // Seleccionar la mejor voz disponible en español
+        const pickBestVoice = () => {
+            const voices = window.speechSynthesis.getVoices();
+            const esVoices = voices.filter(v =>
+                v.lang.startsWith('es') || v.lang.startsWith('ES')
+            );
+
+            // Prioridad: Google (Chrome) > Microsoft Online Natural (Edge) > cualquier español
+            const preferred = [
+                esVoices.find(v => /Google.*español|Google.*Spanish/i.test(v.name)),
+                esVoices.find(v => /Microsoft.*Natural/i.test(v.name)),
+                esVoices.find(v => /Microsoft/i.test(v.name)),
+                esVoices.find(v => v.lang === 'es-ES'),
+                esVoices.find(v => v.lang.startsWith('es')),
+                esVoices[0],
+            ].find(Boolean);
+
+            if (preferred) utterance.voice = preferred;
+        };
+
+        const voices = window.speechSynthesis.getVoices();
+        if (voices.length > 0) {
+            pickBestVoice();
+        } else {
+            window.speechSynthesis.onvoiceschanged = () => {
+                pickBestVoice();
+                window.speechSynthesis.onvoiceschanged = null;
+            };
+        }
+
+        utterance.onend = () => setSpeechState('idle');
+        utterance.onerror = () => setSpeechState('idle');
+
+        utteranceRef.current = utterance;
+        window.speechSynthesis.speak(utterance);
+        setSpeechState('speaking');
+    }, [stopSpeech]);
+
+    const togglePause = React.useCallback(() => {
+        if (speechState === 'speaking') {
+            window.speechSynthesis.pause();
+            setSpeechState('paused');
+        } else if (speechState === 'paused') {
+            window.speechSynthesis.resume();
+            setSpeechState('speaking');
+        }
+    }, [speechState]);
+
+    const handleCloseMealDetails = () => {
+        stopSpeech();
+        setSelectedMealDetails(null);
+    };
+
     const handleNavigate = (dir) => {
         setSlideDir(dir > 0 ? 'right' : 'left');
         onNavigateWeek(dir);
@@ -319,10 +396,17 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                 .filter(i => selectedIngredients.includes(i.id))
                 .map(i => `${i.name} (${i.quantity} ${i.unit})`);
             const data = await aiService.suggest(ingredientsWithQty);
-            setSuggestions(data.suggestions || []);
+            
+            if (data.error) {
+                setAiError(data.error);
+                setAiStep('config'); // Volver a la pantalla de selección para que añadan más
+            } else {
+                setSuggestions(data.suggestions || []);
+            }
         } catch (err) {
             console.error('Error en sugerencias IA:', err);
             setAiError('No se pudo conectar con la IA. Intenta de nuevo.');
+            setAiStep('config');
         } finally {
             setIsGenerating(false);
         }
@@ -596,10 +680,38 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                         {/* Contenido con Scroll */}
                         <div className="modal-scroll-content">
 
-                            {/* Error */}
+                            {/* Error / Válvula de Escape */}
                             {aiError && (
-                                <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, padding: '12px 16px', marginTop: 16, color: '#DC2626', fontSize: '0.9rem' }}>
-                                    ⚠️ {aiError}
+                                <div style={{ 
+                                    background: '#FFFBEB', 
+                                    border: '1px solid #FCD34D', 
+                                    borderLeft: '4px solid #F59E0B',
+                                    borderRadius: 12, 
+                                    padding: '16px 20px', 
+                                    marginTop: 16, 
+                                    marginBottom: 16,
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: 12,
+                                    boxShadow: '0 4px 6px -1px rgba(245, 158, 11, 0.1), 0 2px 4px -1px rgba(245, 158, 11, 0.06)'
+                                }}>
+                                    <div style={{ 
+                                        background: '#FEF3C7', 
+                                        borderRadius: '50%', 
+                                        padding: 8, 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        justifyContent: 'center',
+                                        flexShrink: 0
+                                    }}>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="#D97706" viewBox="0 0 256 256"><path d="M236.8,188.09L149.35,36.22a24.76,24.76,0,0,0-42.7,0L19.2,188.09a23.51,23.51,0,0,0,0,23.72A24.35,24.35,0,0,0,40.55,224h174.9a24.35,24.35,0,0,0,21.35-12.19A23.51,23.51,0,0,0,236.8,188.09ZM223.2,196.1a8.32,8.32,0,0,1-7.75,4.23H40.55a8.32,8.32,0,0,1-7.75-4.23,7.51,7.51,0,0,1,0-7.86l87.45-151.87a8.75,8.75,0,0,1,15.5,0l87.45,151.87A7.51,7.51,0,0,1,223.2,196.1ZM128,136a8,8,0,0,1-8-8V96a8,8,0,0,1,16,0v32A8,8,0,0,1,128,136Zm0,48a12,12,0,1,1,12-12A12,12,0,0,1,128,184Z"></path></svg>
+                                    </div>
+                                    <div>
+                                        <h4 style={{ margin: '0 0 4px', color: '#92400E', fontSize: '1.05rem', fontWeight: 800 }}>Atención</h4>
+                                        <p style={{ margin: 0, color: '#B45309', fontSize: '0.95rem', lineHeight: 1.4 }}>
+                                            {aiError}
+                                        </p>
+                                    </div>
                                 </div>
                             )}
 
@@ -818,7 +930,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
 
             {/* --- MODAL DETALLE DEL PLATO (SOLO LECTURA) --- */}
             {selectedMealDetails && (
-                <div className="modal-overlay" onClick={() => setSelectedMealDetails(null)}>
+                <div className="modal-overlay" onClick={handleCloseMealDetails}>
                     <div className="modal-modern" onClick={e => e.stopPropagation()} style={{ padding: 0, maxWidth: '650px' }}>
 
                         {/* Cabecera con Imagen */}
@@ -826,8 +938,35 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                             <img src={selectedMealDetails.img} alt={selectedMealDetails.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
 
                             {/* Botón Cerrar Flotante */}
-                            <button onClick={() => setSelectedMealDetails(null)} style={{ position: 'absolute', top: '15px', right: '15px', background: 'white', border: 'none', borderRadius: '50%', width: '36px', height: '36px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+                            <button onClick={handleCloseMealDetails} style={{ position: 'absolute', top: '15px', right: '15px', background: 'white', border: 'none', borderRadius: '50%', width: '36px', height: '36px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
                                 <X size={20} weight="bold" color="#4B5563" />
+                            </button>
+
+                            {/* Botón Flotante Leer Receta */}
+                            <button
+                                className={`btn-speech ${speechState !== 'idle' ? 'active' : ''}`}
+                                onClick={() => {
+                                    if (speechState === 'idle') {
+                                        startSpeech(selectedMealDetails);
+                                    } else {
+                                        togglePause();
+                                    }
+                                }}
+                                style={{
+                                    position: 'absolute', top: '15px', right: '60px',
+                                    background: speechState === 'idle' ? 'rgba(255, 255, 255, 0.9)' : '#FF9F43',
+                                    color: speechState === 'idle' ? '#FF9F43' : 'white',
+                                    border: 'none', borderRadius: '50px',
+                                    padding: '8px 16px', cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', gap: '8px',
+                                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                                    fontWeight: 'bold', fontSize: '0.9rem',
+                                    transition: 'all 0.3s ease'
+                                }}
+                            >
+                                {speechState === 'idle' && <>🔊 Leer Receta</>}
+                                {speechState === 'speaking' && <>⏸️ Pausar</>}
+                                {speechState === 'paused' && <>▶️ Reanudar</>}
                             </button>
 
                             {/* Píldora de Kcal y Tiempo */}
@@ -877,7 +1016,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
 
                         {/* Footer Solo de Cierre */}
                         <div className="modal-footer-modern" style={{ justifyContent: 'center', padding: '20px', background: '#F9FAFB' }}>
-                            <button className="btn-cancel" onClick={() => setSelectedMealDetails(null)} style={{ width: '100%', maxWidth: '250px', background: 'white', border: '2px solid #E5E7EB' }}>
+                            <button className="btn-cancel" onClick={handleCloseMealDetails} style={{ width: '100%', maxWidth: '250px', background: 'white', border: '2px solid #E5E7EB' }}>
                                 Cerrar
                             </button>
                         </div>

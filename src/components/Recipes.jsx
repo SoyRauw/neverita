@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     Plus, Fire, Clock, X, MagnifyingGlass,
-    ChefHat, ListNumbers, Check, ArrowRight, Trash, LockSimple, UsersThree
+    ChefHat, ListNumbers, Check, ArrowRight, Trash, LockSimple, UsersThree,
+    SpeakerHigh, Pause, Play
 } from '@phosphor-icons/react';
 import { recipesService, familyRecipesService, inventoryService, ingredientsService } from '../api';
 
@@ -48,6 +49,90 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [searchTerm, setSearchTerm] = useState("");
+
+    // --- TTS (Text-to-Speech) ---
+    const [speechState, setSpeechState] = useState('idle'); // 'idle' | 'speaking' | 'paused'
+    const utteranceRef = useRef(null);
+
+    const stopSpeech = useCallback(() => {
+        window.speechSynthesis.cancel();
+        utteranceRef.current = null;
+        setSpeechState('idle');
+    }, []);
+
+    const startSpeech = useCallback((recipe) => {
+        stopSpeech();
+
+        // Texto natural con pausas (comas extra entre secciones)
+        const ingList = recipe.ingredients && recipe.ingredients.length > 0
+            ? recipe.ingredients.join(', ')
+            : 'Sin ingredientes registrados';
+
+        const stepsList = recipe.steps && recipe.steps.length > 0
+            ? recipe.steps.map((s, i) => `Paso ${i + 1}: ${s.replace(/^\d+[.\-]?\s*/, '')}`).join('. ')
+            : 'Sin pasos registrados';
+
+        const fullText = `Receta: ${recipe.name}. Los ingredientes son: ${ingList}. Ahora, las instrucciones. ${stepsList}.`;
+
+        const utterance = new SpeechSynthesisUtterance(fullText);
+        utterance.lang = 'es-ES';
+        utterance.rate = 0.88;   // un poco más lento = más natural
+        utterance.pitch = 1.05;  // ligeramente más agudo = menos robótico
+
+        // Seleccionar la mejor voz disponible en español
+        const pickBestVoice = () => {
+            const voices = window.speechSynthesis.getVoices();
+            const esVoices = voices.filter(v =>
+                v.lang.startsWith('es') || v.lang.startsWith('ES')
+            );
+
+            // Prioridad: Google (Chrome) > Microsoft Online Natural (Edge) > cualquier español
+            const preferred = [
+                esVoices.find(v => /Google.*español|Google.*Spanish/i.test(v.name)),
+                esVoices.find(v => /Microsoft.*Natural/i.test(v.name)),
+                esVoices.find(v => /Microsoft/i.test(v.name)),
+                esVoices.find(v => v.lang === 'es-ES'),
+                esVoices.find(v => v.lang.startsWith('es')),
+                esVoices[0],
+            ].find(Boolean);
+
+            if (preferred) utterance.voice = preferred;
+        };
+
+        const voices = window.speechSynthesis.getVoices();
+        if (voices.length > 0) {
+            pickBestVoice();
+        } else {
+            // Las voces pueden cargarse de forma asíncrona en algunos navegadores
+            window.speechSynthesis.onvoiceschanged = () => {
+                pickBestVoice();
+                window.speechSynthesis.onvoiceschanged = null;
+            };
+        }
+
+        utterance.onend = () => setSpeechState('idle');
+        utterance.onerror = () => setSpeechState('idle');
+
+        utteranceRef.current = utterance;
+        window.speechSynthesis.speak(utterance);
+        setSpeechState('speaking');
+    }, [stopSpeech]);
+
+    const togglePause = useCallback(() => {
+        if (speechState === 'speaking') {
+            window.speechSynthesis.pause();
+            setSpeechState('paused');
+        } else if (speechState === 'paused') {
+            window.speechSynthesis.resume();
+            setSpeechState('speaking');
+        }
+    }, [speechState]);
+
+    // Detener síntesis al cerrar el modal
+    const handleCloseViewRecipe = useCallback(() => {
+        stopSpeech();
+        setViewRecipe(null);
+    }, [stopSpeech]);
 
     const [viewRecipe, setViewRecipe] = useState(null);
     const [isAdding, setIsAdding] = useState(false);
@@ -660,11 +745,29 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
 
             {/* MODAL 1: DETALLE (MOVIDO AL FINAL PARA QUE APAREZCA POR ENCIMA CUANDO ESTÁ IMPORTANDO) */}
             {viewRecipe && (
-                <div className="modal-overlay" style={{ zIndex: 6000 }} onClick={() => setViewRecipe(null)}>
+                <div className="modal-overlay" style={{ zIndex: 6000 }} onClick={handleCloseViewRecipe}>
                     <div className="modal-modern" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h3 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 800, color: '#2d3436' }}>{viewRecipe.name}</h3>
-                            <button onClick={() => setViewRecipe(null)} className="btn-secondary" style={{ padding: 8, border: 'none' }}><X size={24} /></button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                {/* Botón TTS */}
+                                <button
+                                    id="btn-recipe-tts"
+                                    onClick={() => speechState === 'idle' ? startSpeech(viewRecipe) : togglePause()}
+                                    title={speechState === 'idle' ? 'Leer receta en voz alta' : speechState === 'speaking' ? 'Pausar lectura' : 'Reanudar lectura'}
+                                    className={`btn-speech${speechState === 'speaking' ? ' speaking' : speechState === 'paused' ? ' paused' : ''}`}
+                                >
+                                    {speechState === 'idle' && <SpeakerHigh size={20} weight="fill" />}
+                                    {speechState === 'speaking' && <Pause size={20} weight="fill" />}
+                                    {speechState === 'paused' && <Play size={20} weight="fill" />}
+                                    <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>
+                                        {speechState === 'idle' && 'Leer'}
+                                        {speechState === 'speaking' && 'Pausar'}
+                                        {speechState === 'paused' && 'Reanudar'}
+                                    </span>
+                                </button>
+                                <button onClick={handleCloseViewRecipe} className="btn-secondary" style={{ padding: 8, border: 'none' }}><X size={24} /></button>
+                            </div>
                         </div>
                         <div className="modal-body">
                             <div className="recipe-hero-wrapper">
@@ -713,12 +816,12 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                             </div>
                         </div>
                         <div className="modal-footer">
-                            <button className="btn-secondary" onClick={() => setViewRecipe(null)}>Cerrar</button>
+                            <button className="btn-secondary" onClick={handleCloseViewRecipe}>Cerrar</button>
                             {availableRecipes.some(r => r.id === viewRecipe.id) ? (
                                 <div className="btn-locked-wrapper" data-tooltip={!canDo(userRole) ? '🔒 Sin permiso' : undefined}>
                                     <button
                                         className={`btn-primary${!canDo(userRole) ? ' btn-locked' : ''}`}
-                                        onClick={canDo(userRole) ? () => { handleAddExistingRecipe(viewRecipe.id); setViewRecipe(null); } : undefined}
+                                        onClick={canDo(userRole) ? () => { handleAddExistingRecipe(viewRecipe.id); handleCloseViewRecipe(); } : undefined}
                                     >
                                         Importar Receta <Plus weight="bold" />
                                     </button>
