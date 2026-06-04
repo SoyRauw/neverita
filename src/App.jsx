@@ -9,6 +9,7 @@ import CalendarGrid from './components/CalendarGrid';
 import Inventory from './components/Inventory';
 import Recipes from './components/Recipes';
 import Auth from './components/Auth';
+import LandingPage from './components/LandingPage';
 import FamilySelect from './components/FamilySelect';
 import FamilyManager from './components/FamilyManager';
 import ShoppingList from './components/ShoppingList';
@@ -1050,6 +1051,9 @@ function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(() => {
         return localStorage.getItem('neverita_auth') === 'true';
     });
+    // --- Landing / Home informativa (visible sin estar logueado) ---
+    const [showLanding, setShowLanding] = useState(false);
+    const [authForceRegister, setAuthForceRegister] = useState(false);
     const [currentFamily, setCurrentFamily] = useState(() => {
         try {
             const saved = localStorage.getItem('neverita_family');
@@ -1362,7 +1366,21 @@ function App() {
         }
     };
 
-    if (!isAuthenticated) return <Auth onLogin={handleLogin} />;
+    if (!isAuthenticated) return (
+        <>
+            <Auth
+                onLogin={handleLogin}
+                onShowLanding={() => setShowLanding(true)}
+                forceRegister={authForceRegister}
+            />
+            {showLanding && (
+                <LandingPage
+                    onClose={() => setShowLanding(false)}
+                    onRegister={() => { setAuthForceRegister(true); setShowLanding(false); }}
+                />
+            )}
+        </>
+    );
     if (!currentFamily) return <FamilySelect families={userFamilies} onSelectFamily={(fam) => { setCurrentFamily(fam); setUserRole(fam.role || 'ayudante'); localStorage.setItem('neverita_family', JSON.stringify(fam)); }} onCreateFamily={handleCreateFamily} onJoinByCode={handleJoinByCode} />;
 
     return (

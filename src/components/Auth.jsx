@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { User, Lock, EnvelopeSimple, ForkKnife, CircleNotch, Eye, EyeSlash, CheckCircle, XCircle, ArrowLeft, PaperPlaneTilt, ShieldCheck } from '@phosphor-icons/react';
+import React, { useState, useEffect } from 'react';
+import { User, Lock, EnvelopeSimple, ForkKnife, CircleNotch, Eye, EyeSlash, CheckCircle, XCircle, ArrowLeft, PaperPlaneTilt, ShieldCheck, Sparkle, PlayCircle, Snowflake, CalendarBlank, ShoppingCart, Check } from '@phosphor-icons/react';
 import { authService } from '../api';
 
 // --- Validaciones de contraseña ---
@@ -41,8 +41,14 @@ const PasswordField = ({ name, placeholder, value, onChange, showPw, onToggleSho
     </div>
 );
 
-const Auth = ({ onLogin }) => {
+const Auth = ({ onLogin, onShowLanding, forceRegister }) => {
     const [isRegistering, setIsRegistering] = useState(false);
+
+    // Si se vuelve de la landing pulsando "Crear cuenta", abrimos el modo registro.
+    useEffect(() => {
+        if (forceRegister) setIsRegistering(true);
+    }, [forceRegister]);
+
     const [formData, setFormData] = useState({ username: '', password: '', confirmPassword: '', name: '', email: '' });
     const [errorMsg, setErrorMsg] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -279,6 +285,12 @@ const Auth = ({ onLogin }) => {
         <div className="login-split-screen">
             {/* --- LADO IZQUIERDO: BANNER --- */}
             <div className="login-banner">
+                <div className="login-glyphs" aria-hidden="true">
+                    <Snowflake size={64} weight="fill" />
+                    <ForkKnife size={52} weight="fill" />
+                    <CalendarBlank size={58} weight="fill" />
+                    <ShoppingCart size={48} weight="fill" />
+                </div>
                 <div className="banner-content">
                     <div className="logo-display">
                         <div className="logo-icon-bg">
@@ -289,18 +301,41 @@ const Auth = ({ onLogin }) => {
                     <p className="banner-text">
                         Tu cocina inteligente: planifica, ahorra y disfruta cocinando.
                     </p>
+                    {onShowLanding && (
+                        <button type="button" className="banner-discover-btn" onClick={onShowLanding}>
+                            <PlayCircle size={22} weight="fill" />
+                            Descubre cómo funciona
+                        </button>
+                    )}
+                    <ul className="banner-feats">
+                        <li><Snowflake size={16} weight="fill" /> Inventario</li>
+                        <li><Sparkle size={16} weight="fill" /> Recetas IA</li>
+                        <li><CalendarBlank size={16} weight="fill" /> Planificador</li>
+                        <li><ShoppingCart size={16} weight="fill" /> Lista de compras</li>
+                    </ul>
                 </div>
                 <div className="banner-footer">© 2026 Neverita App</div>
             </div>
 
             {/* --- LADO DERECHO: FORMULARIO --- */}
             <div className="login-form-container">
+                <div className="auth-mobile-brand" aria-hidden="true">
+                    <div className="amb-badge"><ForkKnife size={26} color="white" weight="fill" /></div>
+                    <span className="amb-text">Neve<b>rita.</b></span>
+                </div>
                 {forgotMode ? renderForgotPassword() : (
                     <div className="auth-card-glass">
                         <div className="form-header">
                             <h2>{isRegistering ? 'Crear Cuenta' : 'Bienvenido'}</h2>
                             <p>{isRegistering ? 'Empieza tu viaje culinario' : 'Ingresa tus credenciales'}</p>
                         </div>
+
+                        {onShowLanding && (
+                            <button type="button" className="form-discover-pill" onClick={onShowLanding}>
+                                <Sparkle size={16} weight="fill" />
+                                ¿Primera vez? Mira todo lo que puedes hacer
+                            </button>
+                        )}
 
                         <form onSubmit={handleAuthSubmit}>
                             {errorMsg && (
