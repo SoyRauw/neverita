@@ -2282,8 +2282,12 @@ header {
 
     .login-form-container {
         width: 100% !important;
+        flex: 1 0 auto !important;
+        overflow: visible !important;
         padding: 28px 18px !important;
+        flex-direction: column !important;
         justify-content: center !important;
+        align-items: center !important;
         background:
             radial-gradient(60% 30% at 50% 0%, rgba(255, 159, 67, .14), transparent 60%),
             linear-gradient(180deg, #FFF7EF 0%, #FFEFDF 100%) !important;
