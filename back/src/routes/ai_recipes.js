@@ -25,26 +25,38 @@ router.post('/suggest', async (req, res) => {
         console.log('🔍 Buscando ideas con:', ingredients);
 
         const systemPrompt = `
-            Eres un Chef experto en "Cocina de Aprovechamiento".
+            Eres un Chef experto en "Cocina de Aprovechamiento" y también eres un crítico honesto.
             Tienes EXCLUSIVAMENTE estos ingredientes en la nevera: ${ingredients.join(', ')}.
             (El único básico que siempre está disponible es agua para cocción. Nada más.)
 
-            TU MISIÓN:
-            Sugiere 3 nombres de recetas que se puedan cocinar PRINCIPALMENTE con esos ingredientes.
-            NO sugieras platos que requieran ingredientes principales que no están en la lista.
-            NUNCA asumas que el usuario tiene sal, aceite, especias, condimentos u otros ingredientes
-            que no estén explícitamente en la lista anterior.
-            SIN EMBARGO, si el usuario SÍ tiene condimentos, sal o especias en su lista, asegúrate de tomarlos en cuenta para sugerir recetas bien sazonadas.
-            
-            VÁLVULA DE ESCAPE Y CANTIDADES INSUFICIENTES (EDGE CASE):
-            1. Observa atentamente las cantidades numéricas entre paréntesis de cada ingrediente. Si el usuario tiene cantidades absurdamente pequeñas (ej: "Harina de trigo (1 g)", "Caraotas (2 g)"), NO las consideres viables para cocinar.
-            2. Si los ingredientes con cantidades viables son insuficientes o incompatibles para formar al menos un plato real y comestible, devuelve un JSON con un mensaje de error pidiendo que agreguen más elementos.
-            
-            Responde SOLO JSON. Si hay recetas válidas, usa este formato:
+            ANTES DE SUGERIR CUALQUIER RECETA, evalúa si los ingredientes forman una comida real:
+
+            ✅ INGREDIENTES SUSTANCIALES (al menos uno es necesario para que la receta tenga sentido):
+            - Proteínas: pollo, carne, pescado, huevos, atún, jamón, queso, tofu, caraotas, lentejas, etc.
+            - Vegetales/frutas: papa, zanahoria, tomate, cebolla, ajo, lechuga, plátano, etc.
+            - Lácteos: leche, yogur, crema, etc.
+            - Carbohidratos con sustancia: arroz, pasta, pan, arepas, yuca, plátano, etc.
+
+            ❌ SOLO condimentos NO son suficientes:
+            - sal, pimienta, mostaza, mayonesa, aceite, vinagre, azúcar, salsa de tomate solos o combinados
+            - Un ingrediente sustancial + solo condimentos = receta sin sentido (arroz con mostaza NO ES UNA RECETA REAL)
+
+            REGLA DE ORO: Para que una receta sea válida necesita AL MENOS:
+            - Un ingrediente sustancial de proteína, vegetal, lácteo O un carbohidrato combinado con otro ingrediente sustancial (no solo condimentos)
+            - Si el único ingrediente "de comida" es un carbohidrato (arroz, pasta) y el resto son SOLO condimentos → RECHAZA
+
+            Ejemplos VÁLIDOS: arroz + pollo ✅, pan + jamón ✅, huevos solos ✅, pasta + atún ✅, arroz + caraotas ✅
+            Ejemplos INVÁLIDOS: arroz + mostaza ❌, pasta + aceite + sal ❌, arroz + mayonesa ❌
+
+            Si los ingredientes son insuficientes o formarían una receta sin sentido, devuelve:
+            { "error": "Los ingredientes disponibles no son suficientes para preparar una comida real. Agrega una proteína, vegetal u otro ingrediente sustancial." }
+
+            Si SÍ son válidos, sugiere exactamente 3 recetas usando SOLO esos ingredientes:
             { "suggestions": [{ "title": "Nombre del Plato", "description": "Descripción corta de 10 palabras" }, ...] }
-            Si faltan ingredientes, usa este formato EXACTO:
-            { "error": "Faltan ingredientes básicos. Por favor, agrega más elementos a tu inventario para poder cocinar un plato real." }
+
+            Responde SOLO JSON, sin markdown ni explicaciones.
         `;
+
 
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({
@@ -206,10 +218,24 @@ router.post('/generate', async (req, res) => {
             siguiendo los límites de la REGLA #1, y asegurando SIEMPRE que la cantidad a usar <= cantidad en inventario.
             =============================================================
 
-            REGLA #3 — IMPROVISA:
-            Si el título requiere algo que no está en el inventario,
-            usa un sustituto disponible o ajusta la técnica.
-            Mantén el título.
+            REGLA #3 — NO IMPROVISES, RECHAZA SI NO DA:
+            Si los ingredientes disponibles NO son suficientes para hacer una receta que tenga sentido
+            (por ejemplo: solo hay condimentos, o solo hay un ingrediente que no forma una comida completa),
+            NO INVENTES sustitutos ni hagas una receta absurda.
+            En ese caso, responde con este JSON especial:
+            {
+              "rejected": true,
+              "reason": "Explica brevemente por qué no se puede hacer la receta (en español, max 1 oración)",
+              "missing": ["ingrediente faltante 1", "ingrediente faltante 2"]
+            }
+            Ejemplos de cuando RECHAZAR:
+            - Solo hay arroz y condimentos (falta una proteína o vegetal principal)
+            - Solo hay un ingrediente que no es comida (ej: sal sola)
+            - Los ingredientes no tienen ninguna lógica culinaria juntos
+            Ejemplos de cuando ACEPTAR (aunque sea simple):
+            - Pan + jamón = sándwich válido
+            - Huevos solos = huevos fritos/revueltos válido
+            - Arroz + pollo = arroz con pollo válido
             =============================================================
 
             *** EJEMPLO DE CÓMO HACERLO BIEN ***
@@ -264,6 +290,17 @@ router.post('/generate', async (req, res) => {
 
         const result = await model.generateContent(systemPrompt);
         const aiData = JSON.parse(result.response.text());
+
+        // --- VERIFICAR SI LA IA RECHAZÓ LA RECETA ---
+        if (aiData.rejected) {
+            connection.release();
+            console.log('🚫 IA rechazó la receta:', aiData.reason);
+            return res.status(422).json({
+                error: aiData.reason || 'No hay ingredientes suficientes para hacer esta receta.',
+                missing: aiData.missing || [],
+                rejected: true
+            });
+        }
 
         // --- NORMALIZAR UNIDADES (seguridad extra) ---
         const validUnits = ['g', 'kg', 'ml', 'l', 'unidad'];
@@ -413,7 +450,7 @@ router.post('/generate', async (req, res) => {
 // ==========================================
 router.post('/shopping-list', async (req, res) => {
     try {
-        const { family_id, member_count, current_inventory = [], weekly_plan_ingredients = [] } = req.body;
+        const { family_id, member_count, current_inventory = [], weekly_plan_ingredients = [], current_shopping_list = [] } = req.body;
         if (!family_id) return res.status(400).json({ error: "Falta family_id" });
 
         const apiKey = process.env.GEMINI_API_KEY || "AIzaSyAU4T5KvvhpHNwmkrfWCK3pVTU2lxgfUAY";
@@ -424,16 +461,19 @@ router.post('/shopping-list', async (req, res) => {
             Tu misión es generar una lista de compras COMPLETA y DETALLADA para una familia de ${member_count || 1} personas para la semana.
 
             ════════════════════════════════════════════════
-            REGLA #1 — SIEMPRE USA NOMBRES ESPECÍFICOS DE PRODUCTO:
+            REGLA #1 — SIEMPRE USA NOMBRES ESPECÍFICOS DE PRODUCTO Y SOLO ALIMENTOS:
             ❌ PROHIBIDO escribir nombres vagos como:
-               "Productos básicos", "Verduras variadas", "Condimentos", "Especias", "Perecederos", "Lácteos varios", "Proteínas", "Otros básicos"
-            ✅ OBLIGATORIO escribir el nombre real y concreto del producto:
-               "Tomate", "Cebolla", "Ajo", "Sal", "Aceite de girasol", "Orégano", "Pimienta negra", "Azúcar", "Leche entera", "Queso blanco", etc.
-            Cada ítem DEBE ser un producto individual y reconocible que puedas encontrar en el supermercado.
+               "Productos básicos", "Verduras variadas", "Condimentos"
+            ❌ PROHIBIDO sugerir productos que NO sean comida:
+               Nada de jabón, detergente, papel higiénico, pasta dental, productos de limpieza o higiene personal. ESTA APP ES SOLO DE COMIDA.
+            ✅ OBLIGATORIO escribir el nombre real y concreto del alimento:
+               "Tomate", "Cebolla", "Pollo", "Aceite de girasol", "Leche entera", etc.
+            Cada ítem DEBE ser un alimento individual y reconocible.
             ════════════════════════════════════════════════
 
-            REGLA #2 — INVENTARIO ACTUAL (no repitas lo que ya tienen con buen stock):
+            REGLA #2 — INVENTARIO ACTUAL (verifica las cantidades):
             ${current_inventory.length > 0 ? JSON.stringify(current_inventory) : "Inventario vacío — recomienda todos los básicos necesarios."}
+            IMPORTANTE: Evalúa si la cantidad que ya tienen es suficiente para ${member_count || 1} personas por 7 días. Si tienen suficiente, NO LO AGREGUES. Si tienen poco, agrega solo la diferencia necesaria.
 
             REGLA #3 — INGREDIENTES DEL MENÚ SEMANAL (incluye los que falten o que no alcancen):
             ${weekly_plan_ingredients.length > 0 ? JSON.stringify(weekly_plan_ingredients) : "Sin plan semanal — recomienda una despensa completa para la semana."}
@@ -456,8 +496,12 @@ router.post('/shopping-list', async (req, res) => {
             - Pollo: ${(member_count || 1) * 1500} g
             - Leche: ${(member_count || 1) * 1000} ml
 
-            REGLA #5 — SIN DUPLICADOS:
-            No repitas productos. Si un ítem es necesario tanto para el menú como para la cesta básica, combina las cantidades en un solo ítem.
+            REGLA #5 — SIN DUPLICADOS (REGLA DE ORO):
+            A continuación se muestra lo que el usuario YA TIENE ANOTADO en su lista de compras actual:
+            ${current_shopping_list.length > 0 ? JSON.stringify(current_shopping_list) : "Lista de compras actualmente vacía."}
+            
+            ⚠️ CRÍTICO: NO PUEDES SUGERIR NINGÚN PRODUCTO QUE YA ESTÉ EN ESA LISTA. Si el usuario ya anotó "Pollo", "Huevos" o "Arroz", ignóralos por completo y asume que ya los va a comprar. Tu tarea es encontrar cosas que falten y que AÚN NO estén anotadas.
+            Tampoco repitas productos dentro de tu propia respuesta.
 
             REGLA #6 — CONVERSIÓN A UNIDADES ESTÁNDAR (SÓLO GRAMOS Y MILILITROS):
             PROHIBIDO usar unidades como "kg", "l", "cartón", "paquete", "docena", "bolsa" o "lata". 

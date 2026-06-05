@@ -135,7 +135,7 @@ const ShoppingList = ({ currentFamily }) => {
         try {
             const familyId = currentFamily.family_id || currentFamily.id;
             const [inv, plans] = await Promise.all([
-                inventoryService.getAll(familyId),
+                inventoryService.getByFamily(familyId),
                 menuPlansService.getByFamily(familyId)
             ]);
 
@@ -172,7 +172,8 @@ const ShoppingList = ({ currentFamily }) => {
                 family_id: familyId,
                 member_count: currentFamily.members || 1,
                 current_inventory: inv.map(i => ({ name: i.name, quantity: i.quantity, unit: i.unit, expiration_date: i.expiration_date })),
-                weekly_plan_ingredients: weekly_plan_ingredients.map(i => ({ name: i.name, quantity: i.quantity, unit: i.unit }))
+                weekly_plan_ingredients: weekly_plan_ingredients.map(i => ({ name: i.name, quantity: i.quantity, unit: i.unit })),
+                current_shopping_list: items.map(i => ({ name: i.name, quantity: i.quantity, unit: i.unit }))
             };
 
             const response = await aiService.generateShoppingList(payload);

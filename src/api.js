@@ -26,16 +26,16 @@ async function fetchAPI(endpoint, options = {}) {
     try {
         const response = await fetch(url, config);
         if (!response.ok) {
-            // Intentar extraer el mensaje de error del backend
+            // 422: receta rechazada por la IA (no es un error real, devolvemos el JSON para que el caller lo procese)
+            if (response.status === 422) {
+                return await response.json();
+            }
+            // Otros errores: lanzar excepción
             let errorMessage = `HTTP error! status: ${response.status}`;
             try {
                 const errorData = await response.json();
-                if (errorData.error) {
-                    errorMessage = errorData.error;
-                }
-            } catch (e) {
-                // Ignorar si no se puede parsear a JSON
-            }
+                if (errorData.error) errorMessage = errorData.error;
+            } catch (e) { /* ignorar */ }
             throw new Error(errorMessage);
         }
 
