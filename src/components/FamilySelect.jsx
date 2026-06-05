@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, House, ArrowLeft, Check, Key, SignIn, CircleNotch, CaretDown, CaretUp } from '@phosphor-icons/react';
+import { Plus, House, ArrowLeft, Check, Key, SignIn, CircleNotch, CaretDown, CaretUp, ForkKnife, CookingPot, Carrot } from '@phosphor-icons/react';
 
 const FamilySelect = ({ families, onSelectFamily, onCreateFamily, onJoinByCode }) => {
     const [viewMode, setViewMode] = useState('list'); // 'list', 'create', 'join'
@@ -34,6 +34,19 @@ const FamilySelect = ({ families, onSelectFamily, onCreateFamily, onJoinByCode }
 
     return (
         <div className="family-screen-bg">
+            {/* Fondo animado: blobs a la deriva + glifos flotantes */}
+            <div className="fam-bg-decor" aria-hidden="true">
+                <div className="fam-blob b1"></div>
+                <div className="fam-blob b2"></div>
+                <div className="fam-blob b3"></div>
+            </div>
+            <div className="fam-glyphs" aria-hidden="true">
+                <ForkKnife size={58} weight="fill" />
+                <CookingPot size={64} weight="fill" />
+                <Carrot size={50} weight="fill" />
+                <House size={54} weight="fill" />
+            </div>
+
             <div className="family-content-wrapper">
 
                 {/* LOGO */}
@@ -197,44 +210,53 @@ const FamilySelect = ({ families, onSelectFamily, onCreateFamily, onJoinByCode }
 
                     /* Acordeón */
                     .mobile-accordion-card { 
-                        display: block; background: white; border-radius: 20px; 
-                        box-shadow: 0 8px 25px rgba(0,0,0,0.05); overflow: hidden; margin-bottom: 20px;
+                        display: block; background: rgba(255,255,255,0.78); backdrop-filter: blur(12px);
+                        border: 1px solid rgba(255,159,67,0.18);
+                        border-radius: 22px; 
+                        box-shadow: 0 14px 34px rgba(180,100,30,0.12); overflow: hidden; margin-bottom: 20px;
+                        animation: nv-rise-sm 0.5s var(--ease-out) both;
                     }
                     .accordion-header {
                         width: 100%; padding: 18px; display: flex; justify-content: space-between;
-                        align-items: center; background: white; border: none; outline: none;
+                        align-items: center; background: transparent; border: none; outline: none; cursor: pointer;
                     }
-                    .header-info { display: flex; align-items: center; gap: 10px; font-weight: 700; color: #333; }
-                    .accordion-content { max-height: 0; transition: max-height 0.3s ease; background: #fafafa; overflow: hidden; }
+                    .header-info { display: flex; align-items: center; gap: 10px; font-weight: 800; color: #2A2118; }
+                    .accordion-content { max-height: 0; transition: max-height 0.35s var(--ease-out); background: rgba(255,246,236,0.6); overflow: hidden; }
                     .accordion-content.is-open { max-height: 400px; overflow-y: auto; }
                     .mobile-family-item {
-                        padding: 15px 20px; display: flex; justify-content: space-between;
-                        align-items: center; border-top: 1px solid #eee;
+                        padding: 16px 20px; display: flex; justify-content: space-between;
+                        align-items: center; border-top: 1px solid rgba(255,159,67,0.14);
+                        transition: background 0.2s;
                     }
-                    .item-details strong { display: block; color: #111; font-size: 1rem; }
-                    .item-details span { font-size: 0.8rem; color: #888; }
-                    .item-arrow { color: #FF9F43; font-weight: bold; }
+                    .mobile-family-item:active { background: #FFF1E0; }
+                    .item-details strong { display: block; color: #2A2118; font-size: 1rem; }
+                    .item-details span { font-size: 0.8rem; color: #9b8d7c; }
+                    .item-arrow { color: #FF9F43; font-weight: bold; font-size: 1.2rem; }
 
                     /* Grid de Botones Accionadores estilo PC */
                     .mobile-action-grid {
                         display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;
                     }
                     .mobile-action-card {
-                        background: white; border-radius: 24px; padding: 15px;
+                        background: rgba(255,255,255,0.78); backdrop-filter: blur(12px); border-radius: 24px; padding: 18px 15px;
                         display: flex; flex-direction: column; align-items: center; text-align: center;
-                        box-shadow: 0 10px 25px rgba(0,0,0,0.06);
-                        border: 1px solid rgba(255,255,255,0.8);
-                        cursor: pointer; transition: transform 0.2s;
+                        box-shadow: 0 14px 30px rgba(180,100,30,0.12);
+                        border: 1px solid rgba(255,159,67,0.18);
+                        cursor: pointer; transition: transform 0.2s var(--ease-spring), box-shadow 0.2s;
+                        animation: nv-pop 0.5s var(--ease-spring) both;
                     }
+                    .mobile-action-card:nth-child(2) { animation-delay: 0.1s; }
                     .mobile-action-card:active { transform: scale(0.95); }
                     
                     .mini-icon-box-dashed {
-                        width: 50px; height: 50px; border: 2px dashed #FF9F43;
-                        border-radius: 50%; display: flex; align-items: center; justify-content: center;
-                        color: #FF9F43; margin-bottom: 10px;
+                        width: 54px; height: 54px;
+                        background: linear-gradient(135deg, #FF9F43, #FF7F50);
+                        border-radius: 16px; display: flex; align-items: center; justify-content: center;
+                        color: #fff; margin-bottom: 10px;
+                        box-shadow: 0 8px 18px rgba(255,127,80,0.32);
                     }
-                    .mini-card-info h3 { font-size: 0.95rem; font-weight: 800; color: #333; margin: 0; }
-                    .mini-card-info span { font-size: 0.75rem; color: #888; white-space: nowrap; }
+                    .mini-card-info h3 { font-size: 0.98rem; font-weight: 800; color: #2A2118; margin: 0; }
+                    .mini-card-info span { font-size: 0.75rem; color: #9b8d7c; white-space: nowrap; }
 
                     .error-msg { color: #EF4444; background: #FEF2F2; padding: 12px; border-radius: 12px; font-size: 0.9rem; margin-bottom: 16px; text-align: center; }
                 }

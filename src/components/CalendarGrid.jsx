@@ -31,7 +31,7 @@ const CalendarGrid = ({ data, onMealClick }) => {
                                     {meal ? (
                                         <img src={meal.img} alt={meal.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                     ) : (
-                                        <div className="empty-state"><Plus size={32} color="#e5e7eb" weight="bold" /></div>
+                                        <div className="empty-state"><Plus size={32} color="#F0C28E" weight="bold" /></div>
                                     )}
                                 </div>
                             );
@@ -52,7 +52,7 @@ const CalendarGrid = ({ data, onMealClick }) => {
                                 return (
                                     <div key={mealKey} className="mobile-meal-slot" onClick={() => meal && onMealClick(meal)}>
                                         <div className="mobile-meal-img-container">
-                                            {meal ? <img src={meal.img} alt="" className="filled-img" /> : <Plus size={20} color="#ccc" />}
+                                            {meal ? <img src={meal.img} alt="" className="filled-img" /> : <Plus size={20} color="#F0C28E" />}
                                         </div>
                                         <span className="mobile-meal-label">{type}</span>
                                     </div>

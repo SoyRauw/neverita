@@ -45,30 +45,30 @@ const modalStyles = `
     display: flex; flex-wrap: wrap; gap: 10px;
   }
   .chip-modern {
-    padding: 10px 18px; border-radius: 50px; font-size: 0.95rem; font-weight: 500;
+    padding: 10px 18px; border-radius: 50px; font-size: 0.95rem; font-weight: 700;
     cursor: pointer; transition: all 0.2s ease; 
-    border: 1px solid #E5E7EB; background: #F9FAFB; color: #4B5563;
+    border: 1.5px solid rgba(230,126,34,0.18); background: #FFF9F2; color: #6B5E4F;
     display: flex; align-items: center; gap: 8px; user-select: none;
   }
-  .chip-modern:hover { background: #F3F4F6; border-color: #D1D5DB; }
+  .chip-modern:hover { background: #FFF1E0; border-color: #FF9F43; color: #e67e22; }
   .chip-modern.active {
-    background: #FF9F43; color: white; border-color: #FF9F43;
-    box-shadow: 0 4px 12px rgba(255, 159, 67, 0.35); transform: translateY(-1px);
+    background: linear-gradient(135deg, #FF9F43, #FF7F50); color: white; border-color: transparent;
+    box-shadow: 0 8px 18px rgba(255, 127, 80, 0.35); transform: translateY(-2px);
   }
   .modern-input {
-    width: 100%; padding: 16px; border-radius: 16px; border: 2px solid #E5E7EB;
-    font-size: 1rem; transition: all 0.2s; outline: none; background: #FCFCFC; color: #1F2937;
+    width: 100%; padding: 15px; border-radius: 14px; border: 1.5px solid rgba(230,126,34,0.18);
+    font-size: 1rem; font-weight: 600; transition: all 0.2s; outline: none; background: rgba(255,250,244,0.85); color: #2A2118;
   }
-  .modern-input:focus { border-color: #FF9F43; background: white; box-shadow: 0 0 0 4px rgba(255, 159, 67, 0.1); }
+  .modern-input:focus { border-color: #FF9F43; background: white; box-shadow: 0 0 0 4px rgba(255, 159, 67, 0.14); }
   .modal-footer-modern {
-    padding: 20px 24px; border-top: 1px solid #F3F4F6; background: white;
+    padding: 20px 24px; border-top: 1px solid rgba(255,159,67,0.16); background: #FFFAF4;
     display: flex; gap: 12px; justify-content: flex-end;
   }
   .btn-cancel {
-    padding: 12px 20px; border-radius: 14px; border: none; background: #F3F4F6;
-    color: #4B5563; font-weight: 600; cursor: pointer; transition: 0.2s;
+    padding: 12px 20px; border-radius: 14px; border: 1.5px solid rgba(230,126,34,0.2); background: rgba(255,255,255,0.6);
+    color: #6B5E4F; font-weight: 800; cursor: pointer; transition: 0.2s;
   }
-  .btn-cancel:hover { background: #E5E7EB; color: #1F2937; }
+  .btn-cancel:hover { background: #FFF1E0; color: #e67e22; border-color: #FF9F43; }
   .btn-generate {
     padding: 12px 28px; border-radius: 14px; border: none; background: #FF9F43;
     color: white; font-weight: 600; cursor: pointer; 
@@ -830,11 +830,11 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                                     key={i}
                                                     onClick={() => handlePickSuggestion(sug)}
                                                     style={{
-                                                        background: '#F9FAFB', border: '2px solid #E5E7EB', borderRadius: 16,
+                                                        background: '#FFF9F2', border: '2px solid rgba(230,126,34,0.18)', borderRadius: 16,
                                                         padding: '18px 20px', cursor: 'pointer', transition: 'all 0.2s',
                                                     }}
                                                     onMouseEnter={e => { e.currentTarget.style.borderColor = '#FF9F43'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(255,159,67,0.15)'; }}
-                                                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#E5E7EB'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+                                                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(230,126,34,0.18)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
                                                 >
                                                     <h4 style={{ margin: '0 0 6px', fontSize: '1.1rem', fontWeight: 700, color: '#1F2937' }}>
                                                         {sug.title}
@@ -864,9 +864,9 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, margin: '24px 0 16px' }}>
                                         <button
                                             onClick={() => setAiPlanServings(p => Math.max(1, p - 1))}
-                                            style={{ width: 44, height: 44, borderRadius: '50%', border: '2px solid #E5E7EB', background: 'white', cursor: 'pointer', fontSize: '1.5rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
+                                            style={{ width: 44, height: 44, borderRadius: '50%', border: '2px solid rgba(230,126,34,0.18)', background: 'white', cursor: 'pointer', fontSize: '1.5rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
                                             onMouseEnter={e => { e.currentTarget.style.background = '#FFF7ED'; e.currentTarget.style.borderColor = '#FF9F43'; }}
-                                            onMouseLeave={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#E5E7EB'; }}
+                                            onMouseLeave={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = 'rgba(230,126,34,0.18)'; }}
                                         >&minus;</button>
                                         <div>
                                             <span style={{ display: 'block', fontSize: '2.8rem', fontWeight: 900, color: '#1F2937', lineHeight: 1 }}>{aiPlanServings}</span>
@@ -878,7 +878,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                                 if (canIncrementAI) setAiPlanServings(p => p + 1);
                                             }}
                                             style={{ 
-                                                width: 44, height: 44, borderRadius: '50%', border: '2px solid #E5E7EB', 
+                                                width: 44, height: 44, borderRadius: '50%', border: '2px solid rgba(230,126,34,0.18)', 
                                                 background: 'white', fontSize: '1.5rem', fontWeight: 700, 
                                                 display: 'flex', alignItems: 'center', justifyContent: 'center', 
                                                 transition: 'all 0.15s',
@@ -886,16 +886,16 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                                 opacity: canIncrementAI ? 1 : 0.4
                                             }}
                                             onMouseEnter={e => { if (canIncrementAI) { e.currentTarget.style.background = '#FFF7ED'; e.currentTarget.style.borderColor = '#FF9F43'; } }}
-                                            onMouseLeave={e => { if (canIncrementAI) { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#E5E7EB'; } }}
+                                            onMouseLeave={e => { if (canIncrementAI) { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = 'rgba(230,126,34,0.18)'; } }}
                                         >+</button>
                                     </div>
 
                                     {/* Preview escalado */}
                                     {aiDish.ingredients && aiDish.ingredients.length > 0 && (
-                                        <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 12, padding: '12px 16px', textAlign: 'left', maxHeight: 160, overflowY: 'auto', marginTop: 12 }}>
+                                        <div style={{ background: '#FFF9F2', border: '1px solid rgba(230,126,34,0.18)', borderRadius: 12, padding: '12px 16px', textAlign: 'left', maxHeight: 160, overflowY: 'auto', marginTop: 12 }}>
                                             <p style={{ margin: '0 0 8px', fontSize: '0.78rem', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Ingredientes para {aiPlanServings} {aiPlanServings === 1 ? 'persona' : 'personas'}</p>
                                             {scaleAIDish(aiDish, aiPlanServings).map((ing, i) => (
-                                                <div key={i} style={{ fontSize: '0.88rem', color: '#374151', padding: '3px 0', borderBottom: i < aiDish.ingredients.length - 1 ? '1px dashed #E5E7EB' : 'none' }}>
+                                                <div key={i} style={{ fontSize: '0.88rem', color: '#374151', padding: '3px 0', borderBottom: i < aiDish.ingredients.length - 1 ? '1px dashed rgba(230,126,34,0.2)' : 'none' }}>
                                                     🥄 {ing}
                                                 </div>
                                             ))}
@@ -984,7 +984,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                             <div className="planner-detail-cols" style={{ display: 'flex', gap: '24px', marginTop: '24px', flexWrap: 'wrap' }}>
 
                                 {/* Caja Ingredientes */}
-                                <div style={{ flex: 1, minWidth: '220px', background: '#F9FAFB', padding: '24px', borderRadius: '20px', border: '1px solid #F3F4F6' }}>
+                                <div style={{ flex: 1, minWidth: '220px', background: '#FFF9F2', padding: '24px', borderRadius: '20px', border: '1px solid #F3F4F6' }}>
                                     <h3 style={{ fontSize: '1.15rem', color: '#FF9F43', display: 'flex', alignItems: 'center', gap: '10px', marginTop: 0, marginBottom: '16px' }}>
                                         <ChefHat weight="fill" size={24} /> Ingredientes
                                     </h3>
@@ -997,7 +997,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                 </div>
 
                                 {/* Caja Pasos */}
-                                <div style={{ flex: 1, minWidth: '220px', background: '#F9FAFB', padding: '24px', borderRadius: '20px', border: '1px solid #F3F4F6' }}>
+                                <div style={{ flex: 1, minWidth: '220px', background: '#FFF9F2', padding: '24px', borderRadius: '20px', border: '1px solid #F3F4F6' }}>
                                     <h3 style={{ fontSize: '1.15rem', color: '#FF9F43', display: 'flex', alignItems: 'center', gap: '10px', marginTop: 0, marginBottom: '16px' }}>
                                         <Check weight="bold" size={24} /> Pasos
                                     </h3>
@@ -1016,8 +1016,8 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                         </div>
 
                         {/* Footer Solo de Cierre */}
-                        <div className="modal-footer-modern" style={{ justifyContent: 'center', padding: '20px', background: '#F9FAFB' }}>
-                            <button className="btn-cancel" onClick={handleCloseMealDetails} style={{ width: '100%', maxWidth: '250px', background: 'white', border: '2px solid #E5E7EB' }}>
+                        <div className="modal-footer-modern" style={{ justifyContent: 'center', padding: '20px', background: '#FFF9F2' }}>
+                            <button className="btn-cancel" onClick={handleCloseMealDetails} style={{ width: '100%', maxWidth: '250px', background: 'white', border: '2px solid rgba(230,126,34,0.18)' }}>
                                 Cerrar
                             </button>
                         </div>
@@ -1127,9 +1127,19 @@ function App() {
     }, [isAuthenticated, userProfile.user_id]);
 
     const handleLogin = (user) => {
+        // Conservar una foto de perfil personalizada previa (subida o por enlace)
+        let savedAvatar = null;
+        try {
+            const prev = JSON.parse(localStorage.getItem('neverita_user') || 'null');
+            if (prev && (prev.user_id === user.user_id || prev.username === user.username)
+                && prev.avatar && !String(prev.avatar).includes('pravatar.cc')) {
+                savedAvatar = prev.avatar;
+            }
+        } catch (e) { /* noop */ }
+
         const profile = {
             ...user,
-            avatar: `https://i.pravatar.cc/150?u=${user.user_id || user.username}`,
+            avatar: savedAvatar || `https://i.pravatar.cc/150?u=${user.user_id || user.username}`,
             role: "Admin"
         };
         setUserProfile(profile);
@@ -1137,6 +1147,16 @@ function App() {
         // Guardar sesión en localStorage
         localStorage.setItem('neverita_auth', 'true');
         localStorage.setItem('neverita_user', JSON.stringify(profile));
+    };
+
+    // Actualizar perfil y persistirlo (para que NO se borre al refrescar)
+    const handleUpdateUser = (updated) => {
+        setUserProfile(updated);
+        try {
+            localStorage.setItem('neverita_user', JSON.stringify(updated));
+        } catch (e) {
+            console.warn('No se pudo guardar el perfil (almacenamiento lleno).');
+        }
     };
 
     const handleLogout = () => {
@@ -1401,7 +1421,7 @@ function App() {
                         userFamilies={userFamilies}
                         currentUser={userProfile}
                         userRole={userRole}
-                        onUpdateUser={setUserProfile}
+                        onUpdateUser={handleUpdateUser}
                         onClose={() => setShowFamilyManager(false)}
                         onSwitchFamily={handleSwitchFamily}
                         onCreateNew={() => { setShowFamilyManager(false); setCurrentFamily(null); }}

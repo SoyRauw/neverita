@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, UserCircle, Users, Plus, CaretRight, FloppyDisk, SignOut, Crown, ChefHat, Broom, Trash } from '@phosphor-icons/react';
+import { X, UserCircle, Users, Plus, CaretRight, FloppyDisk, SignOut, Crown, ChefHat, Broom, Trash, UploadSimple } from '@phosphor-icons/react';
 import { userFamilyService } from '../api';
 
 const ROLE_CONFIG = {
@@ -36,6 +36,35 @@ const FamilyManager = ({
             email: editEmail
         });
         setMode('details'); 
+    };
+
+    // Subir foto desde un archivo: la redimensiona a 256x256 (recorte centrado)
+    // y la convierte a data URL liviano para guardarla sin depender de enlaces.
+    const handleAvatarFile = (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+            alert('Por favor selecciona un archivo de imagen.');
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const img = new Image();
+            img.onload = () => {
+                const size = 256;
+                const canvas = document.createElement('canvas');
+                canvas.width = size;
+                canvas.height = size;
+                const ctx = canvas.getContext('2d');
+                const min = Math.min(img.width, img.height);
+                const sx = (img.width - min) / 2;
+                const sy = (img.height - min) / 2;
+                ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+                setEditAvatar(canvas.toDataURL('image/jpeg', 0.85));
+            };
+            img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
     };
 
     // Cargar miembros cuando se abre el panel
@@ -93,8 +122,8 @@ const FamilyManager = ({
             <div className="modal-content family-manager-modal" onClick={e => e.stopPropagation()} style={{ padding: 0, overflow: 'hidden', width: '95%', maxWidth: '450px' }}>
                 
                 {/* HEADER DEL MODAL */}
-                <div style={{ padding: '20px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff' }}>
-                    <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#333' }}>
+                <div style={{ padding: '20px', borderBottom: '1px solid rgba(255,159,67,0.16)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(180deg,#FFFDFB,#FFF8F1)' }}>
+                    <h3 style={{ margin: 0, fontFamily: "'Fraunces', Georgia, serif", fontSize: '1.3rem', fontWeight: 600, color: '#2A2118' }}>
                         {mode === 'details' && 'Gestión de Cuenta'}
                         {mode === 'switch' && 'Mis Familias'}
                         {mode === 'profile' && 'Editar Perfil'}
@@ -116,7 +145,7 @@ const FamilyManager = ({
                                 alt="Avatar" 
                                 style={{ width: '100px', height: '100px', borderRadius: '50%', objectFit: 'cover', marginBottom: '15px', border: '4px solid #fff', boxShadow: '0 5px 15px rgba(0,0,0,0.1)' }} 
                             />
-                            <h2 style={{ margin: '0 0 5px 0', fontSize: '1.5rem' }}>{currentUser.name}</h2>
+                            <h2 style={{ margin: '0 0 5px 0', fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600, fontSize: '1.6rem', color: '#2A2118' }}>{currentUser.name}</h2>
                             <p style={{ color: '#888', margin: 0 }}>{currentUser.email}</p>
                             
                             {/* Badge de rol */}
@@ -285,7 +314,7 @@ const FamilyManager = ({
                                                             onChange={(e) => handleRoleChange(member.user_id, e.target.value)}
                                                             style={{
                                                                 padding: '3px 6px', borderRadius: 6,
-                                                                border: '1px solid #E5E7EB', fontSize: '0.75rem',
+                                                                border: '1px solid rgba(230,126,34,0.22)', fontSize: '0.75rem',
                                                                 fontWeight: 600, cursor: 'pointer',
                                                                 background: ROLE_CONFIG[member.role]?.bg || '#F3F4F6',
                                                                 color: ROLE_CONFIG[member.role]?.color || '#6B7280'
@@ -323,6 +352,34 @@ const FamilyManager = ({
                                 ← Volver
                             </button>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                {/* Vista previa + subir foto */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                                    <img
+                                        src={editAvatar}
+                                        alt="Vista previa"
+                                        style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'cover', border: '3px solid #fff', boxShadow: '0 6px 16px rgba(230,126,34,0.25)' }}
+                                    />
+                                    <div style={{ flex: 1 }}>
+                                        <label
+                                            htmlFor="avatar-file-input"
+                                            className="btn-secondary"
+                                            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '10px 16px' }}
+                                        >
+                                            <UploadSimple size={18} weight="bold" /> Subir foto
+                                        </label>
+                                        <input
+                                            id="avatar-file-input"
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleAvatarFile}
+                                            style={{ display: 'none' }}
+                                        />
+                                        <small style={{ display: 'block', color: '#9b8d7c', fontSize: '0.75rem', marginTop: 6 }}>
+                                            JPG o PNG desde tu dispositivo.
+                                        </small>
+                                    </div>
+                                </div>
+
                                 <div className="form-group">
                                     <label>Nombre</label>
                                     <input className="form-input" value={editName} onChange={(e) => setEditName(e.target.value)} />
@@ -332,9 +389,8 @@ const FamilyManager = ({
                                     <input className="form-input" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
                                 </div>
                                 <div className="form-group">
-                                    <label>URL Avatar</label>
-                                    <input className="form-input" value={editAvatar} onChange={(e) => setEditAvatar(e.target.value)} />
-                                    <small style={{ color: '#999', fontSize: '0.75rem' }}>Pega un enlace de imagen.</small>
+                                    <label>O pega un enlace de imagen</label>
+                                    <input className="form-input" value={editAvatar} onChange={(e) => setEditAvatar(e.target.value)} placeholder="https://..." />
                                 </div>
 
                                 <button 
@@ -351,8 +407,8 @@ const FamilyManager = ({
                 </div>
 
                 {/* FOOTER (Solo Versión) */}
-                <div style={{ background: '#f9f9f9', padding: '15px', borderTop: '1px solid #eee', textAlign: 'center' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#ccc' }}>Neve<strong>rita</strong> v2.0</div>
+                <div style={{ background: '#FFFAF4', padding: '15px', borderTop: '1px solid rgba(255,159,67,0.16)', textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.75rem', color: '#c9b9a6' }}>Neve<strong>rita</strong> v2.0</div>
                 </div>
             </div>
         </div>

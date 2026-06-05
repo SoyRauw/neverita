@@ -74,48 +74,57 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
 
         const fullText = `Receta: ${recipe.name}. Los ingredientes son: ${ingList}. Ahora, las instrucciones. ${stepsList}.`;
 
-        const utterance = new SpeechSynthesisUtterance(fullText);
-        utterance.lang = 'es-ES';
-        utterance.rate = 0.88;   // un poco más lento = más natural
-        utterance.pitch = 1.05;  // ligeramente más agudo = menos robótico
-
-        // Seleccionar la mejor voz disponible en español
+        // Elegir la mejor voz disponible en español
         const pickBestVoice = () => {
             const voices = window.speechSynthesis.getVoices();
-            const esVoices = voices.filter(v =>
-                v.lang.startsWith('es') || v.lang.startsWith('ES')
-            );
+            const esVoices = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith('es'));
 
-            // Prioridad: Google (Chrome) > Microsoft Online Natural (Edge) > cualquier español
-            const preferred = [
-                esVoices.find(v => /Google.*español|Google.*Spanish/i.test(v.name)),
+            // Prioridad: Google (Chrome) > Microsoft Natural (Edge) > cualquier español
+            return [
+                esVoices.find(v => /Google.*(español|spanish)/i.test(v.name)),
                 esVoices.find(v => /Microsoft.*Natural/i.test(v.name)),
                 esVoices.find(v => /Microsoft/i.test(v.name)),
                 esVoices.find(v => v.lang === 'es-ES'),
-                esVoices.find(v => v.lang.startsWith('es')),
+                esVoices.find(v => v.lang.toLowerCase().startsWith('es')),
                 esVoices[0],
-            ].find(Boolean);
+            ].find(Boolean) || null;
+        };
 
-            if (preferred) utterance.voice = preferred;
+        // Hablar SOLO cuando ya tenemos la voz en español asignada
+        let spoken = false;
+        const speakNow = () => {
+            if (spoken) return;
+            spoken = true;
+
+            const utterance = new SpeechSynthesisUtterance(fullText);
+            utterance.lang = 'es-ES';
+            utterance.rate = 0.88;   // un poco más lento = más natural
+            utterance.pitch = 1.05;  // ligeramente más agudo = menos robótico
+
+            const voice = pickBestVoice();
+            if (voice) utterance.voice = voice;
+
+            utterance.onend = () => setSpeechState('idle');
+            utterance.onerror = () => setSpeechState('idle');
+
+            utteranceRef.current = utterance;
+            window.speechSynthesis.speak(utterance);
+            setSpeechState('speaking');
         };
 
         const voices = window.speechSynthesis.getVoices();
         if (voices.length > 0) {
-            pickBestVoice();
+            speakNow();
         } else {
-            // Las voces pueden cargarse de forma asíncrona en algunos navegadores
+            // Las voces cargan de forma asíncrona (Chrome/Edge/iOS):
+            // esperamos a que estén listas para no usar la voz por defecto (inglés).
             window.speechSynthesis.onvoiceschanged = () => {
-                pickBestVoice();
                 window.speechSynthesis.onvoiceschanged = null;
+                speakNow();
             };
+            // Respaldo por si 'onvoiceschanged' no dispara (iOS Safari)
+            setTimeout(speakNow, 300);
         }
-
-        utterance.onend = () => setSpeechState('idle');
-        utterance.onerror = () => setSpeechState('idle');
-
-        utteranceRef.current = utterance;
-        window.speechSynthesis.speak(utterance);
-        setSpeechState('speaking');
     }, [stopSpeech]);
 
     const togglePause = useCallback(() => {
@@ -133,6 +142,17 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
         stopSpeech();
         setViewRecipe(null);
     }, [stopSpeech]);
+
+    // Precargar voces del navegador (para que el primer clic ya tenga voz en español)
+    // y cancelar cualquier lectura al desmontar el componente.
+    useEffect(() => {
+        if (typeof window !== 'undefined' && window.speechSynthesis) {
+            window.speechSynthesis.getVoices();
+        }
+        return () => {
+            try { window.speechSynthesis.cancel(); } catch (e) { /* noop */ }
+        };
+    }, []);
 
     const [viewRecipe, setViewRecipe] = useState(null);
     const [isAdding, setIsAdding] = useState(false);
@@ -465,7 +485,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                             <div key={recipe.id} className="recipe-card" onClick={() => setViewRecipe(recipe)} style={{ position: 'relative' }}>
                                 <img src={recipe.img} alt={recipe.name} className="recipe-img" />
 
-                                <div className="btn-locked-wrapper" style={{ position: 'absolute', top: 8, right: 8 }} data-tooltip={!canDo(userRole) ? '🔒 Sin permiso' : undefined}>
+                                <div className="btn-locked-wrapper" style={{ position: 'absolute', top: 10, right: 10, zIndex: 3 }} data-tooltip={!canDo(userRole) ? '🔒 Sin permiso' : undefined}>
                                     <button
                                         onClick={canDo(userRole) ? (e) => handleDelete(recipe.id, e) : undefined}
                                         className={!canDo(userRole) ? 'btn-locked' : ''}
