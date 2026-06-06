@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { showToast } from '../Toast';
 import { Trash, PlusCircle, X, Warning, WarningOctagon, CheckCircle, Snowflake } from '@phosphor-icons/react';
 import { inventoryService, ingredientsService, aiService } from '../api';
 
@@ -136,7 +137,7 @@ const Inventory = ({ currentFamily, userRole }) => {
             await inventoryService.delete(inventoryId);
             setItems(prev => prev.filter(i => i.inventory_id !== inventoryId));
         } catch (err) {
-            alert('Error al eliminar el ítem.');
+            showToast('Error al eliminar el ítem.');
             console.error(err);
         }
     };
@@ -151,7 +152,7 @@ const Inventory = ({ currentFamily, userRole }) => {
 
     // ---------- Crear ingrediente nuevo ----------
     const handleCreateIngredient = async () => {
-        if (!newIngredient.name.trim()) { alert('Escribe el nombre del ingrediente.'); return; }
+        if (!newIngredient.name.trim()) { showToast('Escribe el nombre del ingrediente.'); return; }
         try {
             const created = await ingredientsService.create({
                 name: newIngredient.name.trim(),
@@ -160,7 +161,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                 average_expiry_days: newIngredient.average_expiry_days,
             });
             if (created.already_existed) {
-                alert(`"${created.name}" ya existe. Lo hemos seleccionado automáticamente.`);
+                showToast(`"${created.name}" ya existe. Lo hemos seleccionado automáticamente.`);
             } else {
                 setIngredients(prev => [...prev, created]);
             }
@@ -169,7 +170,7 @@ const Inventory = ({ currentFamily, userRole }) => {
             setCreatingNew(false);
             setNewIngredient({ name: '', unit: 'g', category: 'otro' });
         } catch (err) {
-            alert('Error al crear el ingrediente.');
+            showToast('Error al crear el ingrediente.');
             console.error(err);
         }
     };
@@ -184,15 +185,15 @@ const Inventory = ({ currentFamily, userRole }) => {
             });
             setItems(prev => prev.map(i => i.inventory_id === item.inventory_id ? { ...i, is_frozen: newValue, expiration_date: updatedItem.expiration_date } : i));
         } catch (err) {
-            alert('Error al actualizar el estado de congelación.');
+            showToast('Error al actualizar el estado de congelación.');
             console.error(err);
         }
     };
 
     // ---------- Agregar al inventario ----------
     const handleAdd = async () => {
-        if (!selectedIngredient) { alert('Selecciona o crea un ingrediente primero.'); return; }
-        if (!quantity || Number(quantity) <= 0) { alert('Indica una cantidad válida.'); return; }
+        if (!selectedIngredient) { showToast('Selecciona o crea un ingrediente primero.'); return; }
+        if (!quantity || Number(quantity) <= 0) { showToast('Indica una cantidad válida.'); return; }
         setSaving(true);
         try {
             const payload = {
@@ -206,7 +207,7 @@ const Inventory = ({ currentFamily, userRole }) => {
             setShowModal(false);
             resetModal();
         } catch (err) {
-            alert('Error al agregar el producto.');
+            showToast('Error al agregar el producto.');
             console.error(err);
         } finally {
             setSaving(false);
@@ -229,7 +230,7 @@ const Inventory = ({ currentFamily, userRole }) => {
             </header>
 
             <div className="calendar-wrapper">
-                {loading && <p style={{ color: '#999', textAlign: 'center', padding: '2rem' }}>Cargando inventario...</p>}
+                {loading && <div className="nv-loading"><div className="nv-spinner" /><span>Cargando inventario…</span></div>}
                 {error && <p style={{ color: '#e74c3c', textAlign: 'center', padding: '2rem' }}>{error}</p>}
 
                 {!loading && !error && (
@@ -247,8 +248,12 @@ const Inventory = ({ currentFamily, userRole }) => {
                             <tbody>
                                 {items.length === 0 ? (
                                     <tr>
-                                        <td colSpan={4} style={{ padding: '2rem', textAlign: 'center', color: '#999' }}>
-                                            No hay ítems en el inventario. ¡Agrega uno!
+                                        <td colSpan={4} style={{ padding: 0 }}>
+                                            <div className="nv-empty">
+                                                <div className="nv-empty-ic"><Snowflake size={40} weight="fill" /></div>
+                                                <h3>Tu nevera está vacía</h3>
+                                                <p>Agrega tu primer producto para empezar a controlar tu inventario.</p>
+                                            </div>
                                         </td>
                                     </tr>
                                 ) : (
@@ -311,9 +316,11 @@ const Inventory = ({ currentFamily, userRole }) => {
                         {/* VISTA MÓVIL: Cards */}
                         <div className="inventory-mobile-list" style={{ display: 'none' }}>
                             {items.length === 0 ? (
-                                <p style={{ textAlign: 'center', color: '#999', padding: '2rem' }}>
-                                    No hay ítems en el inventario. ¡Agrega uno!
-                                </p>
+                                <div className="nv-empty">
+                                    <div className="nv-empty-ic"><Snowflake size={40} weight="fill" /></div>
+                                    <h3>Tu nevera está vacía</h3>
+                                    <p>Agrega tu primer producto para empezar.</p>
+                                </div>
                             ) : (
                                 items.map((item) => {
                                     const status = getExpiryStatus(item.expiration_date, item.is_frozen);
@@ -550,4 +557,3 @@ const Inventory = ({ currentFamily, userRole }) => {
 };
 
 export default Inventory;
-

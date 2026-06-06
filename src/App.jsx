@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { showToast } from './Toast';
 import { HashRouter, Routes, Route } from 'react-router-dom';
-import { Sparkle, CircleNotch, ShoppingCart, Check, X, ChefHat, CalendarBlank, Coffee, UsersThree, CheckCircle } from '@phosphor-icons/react';
+import { Sparkle, CircleNotch, ShoppingCart, Check, X, ChefHat, CalendarBlank, Coffee, UsersThree } from '@phosphor-icons/react';
 
 // --- IMPORTACIÓN DE COMPONENTES ---
 import Sidebar from './components/Sidebar';
@@ -13,7 +14,7 @@ import LandingPage from './components/LandingPage';
 import FamilySelect from './components/FamilySelect';
 import FamilyManager from './components/FamilyManager';
 import ShoppingList from './components/ShoppingList';
-import { familiesService, userFamilyService, menuPlansService, dailyMealsService, aiService, inventoryService, ingredientsService, recipesService, shoppingListService } from './api';
+import { familiesService, userFamilyService, menuPlansService, dailyMealsService, aiService, inventoryService, ingredientsService, recipesService } from './api';
 
 // --- ESTILOS CSS INYECTADOS (MODAL MODERNO) ---
 const modalStyles = `
@@ -329,27 +330,9 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
     const [aiStep, setAiStep] = useState('config');
     const [suggestions, setSuggestions] = useState([]);
     const [aiError, setAiError] = useState(null);
-    const [warningMessage, setWarningMessage] = useState(null);
+    // Receta generada por IA esperando confirmación de personas
     const [aiDish, setAiDish] = useState(null);
     const [aiPlanServings, setAiPlanServings] = useState(1);
-    const [allIngredientsList, setAllIngredientsList] = useState([]);
-    const [proteinQuantity, setProteinQuantity] = useState(1);
-
-    // Autocomplete y Creación para el aviso nutricional
-    const [searchText, setSearchText] = useState('');
-    const [showSuggestions, setShowSuggestions] = useState(false);
-    const [selectedIngredient, setSelectedIngredient] = useState(null);
-    const [creatingNew, setCreatingNew] = useState(false);
-    const [newIngredient, setNewIngredient] = useState({ name: '', unit: 'g', category: 'proteína', average_expiry_days: 7 });
-    const [aiLoading, setAiLoading] = useState(false);
-
-    // Sugerencias filtradas
-    const autocompleteSuggestions = searchText.trim().length >= 1
-        ? allIngredientsList
-            .filter(i => i.category === 'proteína')
-            .filter(i => i.name.toLowerCase().includes(searchText.toLowerCase()))
-            .slice(0, 8)
-        : [];
 
     // Cargar inventario real CADA VEZ que se abre el modal
     useEffect(() => {
@@ -362,7 +345,6 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                     inventoryService.getAll(),
                     ingredientsService.getAll(),
                 ]);
-                setAllIngredientsList(allIngredients);
                 const familyId = currentFamily?.family_id || currentFamily?.id;
                 const filtered = familyId ? inv.filter(i => i.family_id === familyId) : inv;
 
@@ -393,50 +375,6 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         loadInventory();
     }, [showModal]);
 
-    // Debounce IA para nuevo ingrediente en el aviso nutricional
-    useEffect(() => {
-        const name = newIngredient.name.trim();
-        if (!creatingNew || name.length < 3) return;
-        setAiLoading(true);
-        const timer = setTimeout(async () => {
-            try {
-                const info = await aiService.ingredientInfo(name);
-                setNewIngredient(prev => ({
-                    ...prev,
-                    unit: info.unit || prev.unit,
-                    category: info.category || prev.category,
-                    average_expiry_days: info.average_expiry_days || prev.average_expiry_days,
-                }));
-            } catch (e) { /* silencioso */ }
-            finally { setAiLoading(false); }
-        }, 700);
-        return () => clearTimeout(timer);
-    }, [newIngredient.name, creatingNew]);
-
-    const handleCreateIngredient = async () => {
-        if (!newIngredient.name.trim()) { alert('Escribe el nombre del ingrediente.'); return; }
-        try {
-            const created = await ingredientsService.create({
-                name: newIngredient.name.trim(),
-                unit: newIngredient.unit,
-                category: newIngredient.category,
-                average_expiry_days: newIngredient.average_expiry_days,
-            });
-            if (created.already_existed) {
-                alert(`"${created.name}" ya existe. Lo hemos seleccionado automáticamente.`);
-            } else {
-                setAllIngredientsList(prev => [...prev, created]);
-            }
-            setSelectedIngredient(created);
-            setSearchText(created.name);
-            setCreatingNew(false);
-            setNewIngredient({ name: '', unit: 'g', category: 'proteína', average_expiry_days: 7 });
-        } catch (err) {
-            alert('Error al crear el ingrediente.');
-            console.error(err);
-        }
-    };
-
     const toggleSelection = (item, list, setList) => {
         if (list.includes(item)) {
             setList(list.filter(i => i !== item));
@@ -447,8 +385,8 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
 
     // PASO 1: Pedir sugerencias a la IA
     const handleAISuggest = async () => {
-        if (selectedIngredients.length === 0) { alert("Selecciona al menos un ingrediente."); return; }
-        if (selectedSlots.length === 0) { alert("Selecciona al menos un cuadro en el calendario."); return; }
+        if (selectedIngredients.length === 0) { showToast("Selecciona al menos un ingrediente."); return; }
+        if (selectedSlots.length === 0) { showToast("Selecciona al menos un cuadro en el calendario."); return; }
 
         setAiStep('suggestions');
         setIsGenerating(true);
@@ -486,18 +424,8 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
             const ingredientsWithQty = myInventory
                 .filter(i => selectedIngredients.includes(i.id))
                 .map(i => `${i.name} (${i.quantity} ${i.unit})`);
+            // La IA genera para 1 persona. El escalado ocurre en handleConfirmAIServings.
             const data = await aiService.generate(suggestion.title, ingredientsWithQty, currentFamily?.family_id || currentFamily?.id);
-
-            // La IA rechazó la receta porque los ingredientes no son suficientes
-            if (data.rejected) {
-                const missingTxt = data.missing && data.missing.length > 0
-                    ? `\nFaltan: ${data.missing.join(', ')}.`
-                    : '';
-                setAiError(`${data.error}${missingTxt}`);
-                setAiStep('suggestions');
-                return;
-            }
-
             const recipe = data.recipe;
             const ingList = data.ingredients || [];
 
@@ -506,6 +434,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                 cal: recipe.calories_per_serving,
                 time: recipe.preparation_time ? `${recipe.preparation_time} min` : 'N/A',
                 img: recipe.image_url || 'https://images.unsplash.com/photo-1546554137-f86b9593a222?w=400',
+                // Ingredientes como strings para escalar en frontend
                 ingredients: ingList.map(i => {
                     const measurePart = i.measure_qty && i.measure_unit ? `${i.measure_qty} ${i.measure_unit} de ` : '';
                     const qtyPart = i.quantity ? `(${i.quantity} ${i.unit})` : `(${i.unit})`;
@@ -514,12 +443,12 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                 steps: recipe.instructions ? recipe.instructions.split('\n').filter(Boolean) : [],
                 description: recipe.description || '',
                 recipe_id: recipe.recipe_id,
-                servings: 1,
+                servings: 1, // siempre 1, el escalado es responsabilidad del planificador
             };
 
             setAiDish(dish);
             setAiPlanServings(1);
-            setAiStep('servings');
+            setAiStep('servings'); // paso intermedio: elegir cuántas personas
         } catch (err) {
             console.error('Error generando receta:', err);
             setAiError('Error al generar la receta. Intenta con otra opción.');
@@ -580,7 +509,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                         scheduled_date: scheduledDate.toISOString().split('T')[0]
                     });
                     if (!validation.valid) {
-                        alert(`⚠️ No puedes planificar para el día ${DAY_ENUM[dayIndex]}.\n\nIngredientes vencidos:\n- ${validation.expiredIngredients.join('\n- ')}`);
+                        showToast(`⚠️ No puedes planificar para el día ${DAY_ENUM[dayIndex]}.\n\nIngredientes vencidos:\n- ${validation.expiredIngredients.join('\n- ')}`);
                         return;
                     }
                 } catch (err) {
@@ -930,7 +859,6 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                 </div>
                             )}
 
-
                             {/* ── PASO 4: ¿CUÁNTAS PERSONAS? ── */}
                             {aiStep === 'servings' && aiDish && (
                                 <div style={{ textAlign: 'center', padding: '10px 0 20px' }}>
@@ -991,9 +919,6 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                 <button className="btn-generate" onClick={handleAISuggest} disabled={isGenerating || selectedIngredients.length === 0}>
                                     {isGenerating ? <><CircleNotch size={18} className="ph-spin" /> Pensando...</> : <>Generar Menú <Sparkle weight="fill" /></>}
                                 </button>
-                            )}
-                            {aiStep === 'nutrition_warning' && (
-                                <></> // Los botones ya están en la vista
                             )}
                             {aiStep === 'servings' && (
                                 <button className="btn-generate" onClick={handleConfirmAIServings}>
@@ -1267,7 +1192,7 @@ function App() {
             localStorage.setItem('neverita_family', JSON.stringify(fam));
         } catch (error) {
             console.error("Error al crear familia:", error);
-            alert("Ocurrió un error al crear la familia en el servidor.");
+            showToast("Ocurrió un error al crear la familia en el servidor.");
         }
     };
 
@@ -1431,7 +1356,7 @@ function App() {
             });
 
             if (!validation.valid) {
-                alert(`⚠️ No puedes planificar esta receta para ese día.\n\nLos siguientes ingredientes estarán vencidos:\n- ${validation.expiredIngredients.join('\n- ')}`);
+                showToast(`⚠️ No puedes planificar esta receta para ese día.\n\nLos siguientes ingredientes estarán vencidos:\n- ${validation.expiredIngredients.join('\n- ')}`);
                 return; // Bloquear flujo
             }
         } catch (err) {

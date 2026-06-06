@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { showToast } from '../Toast';
 import {
     Plus, Fire, Clock, X, MagnifyingGlass,
     ChefHat, ListNumbers, Check, ArrowRight, Trash, LockSimple, UsersThree,
@@ -207,7 +208,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
             setRecipes(prev => prev.filter(r => r.id !== recipeId));
             if (viewRecipe?.id === recipeId) setViewRecipe(null);
         } catch (err) {
-            alert('Error al remover la receta.');
+            showToast('Error al remover la receta.');
             console.error(err);
         }
     };
@@ -237,7 +238,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
             }
         } catch (error) {
             console.error('Error al vincular receta:', error);
-            alert('Error al agregar receta a la familia');
+            showToast('Error al agregar receta a la familia');
         }
     };
 
@@ -259,7 +260,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
 
     const handleCreateRecipe = async () => {
         if (!newRecipe.name || !newRecipe.cal) {
-            alert("Por favor completa el nombre y las calorías.");
+            showToast("Por favor completa el nombre y las calorías.");
             return;
         }
         setSaving(true);
@@ -288,7 +289,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
             setIsAdding(false);
             setNewRecipe({ name: "", cal: "", time: "", category: [], img: "", imgType: "url", ingredients: "", steps: "", description: "" });
         } catch (err) {
-            alert('Error al guardar la receta.');
+            showToast('Error al guardar la receta.');
             console.error(err);
         } finally {
             setSaving(false);
@@ -330,7 +331,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
     };
 
     const handleConfirmPlan = async () => {
-        if (selectedSlots.length === 0) return alert("Selecciona al menos un espacio.");
+        if (selectedSlots.length === 0) return showToast("Selecciona al menos un espacio.");
         const multiplier = planBaseServings > 0 ? planServings / planBaseServings : 1;
         selectedSlots.forEach(slot => {
             const [dayIndexStr, meal] = slot.split('-');
@@ -473,13 +474,17 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                 </div>
             </header>
 
-            {loading && <p style={{ color: '#999', textAlign: 'center', padding: '3rem' }}>Cargando recetas...</p>}
+            {loading && <div className="nv-loading"><div className="nv-spinner" /><span>Cargando recetas…</span></div>}
             {error && <p style={{ color: '#e74c3c', textAlign: 'center', padding: '3rem' }}>{error}</p>}
 
             {!loading && !error && (
                 <div className="recipes-grid">
                     {filtered.length === 0 ? (
-                        <p style={{ color: '#999', padding: '2rem' }}>No hay recetas. ¡Crea la primera!</p>
+                        <div className="nv-empty">
+                            <div className="nv-empty-ic"><ChefHat size={40} weight="fill" /></div>
+                            <h3>Aún no hay recetas</h3>
+                            <p>Crea tu primera receta o genera una con IA a partir de lo que tienes en la nevera.</p>
+                        </div>
                     ) : (
                         filtered.map(recipe => (
                             <div key={recipe.id} className="recipe-card" onClick={() => setViewRecipe(recipe)} style={{ position: 'relative' }}>

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { showToast } from '../Toast';
 import { X, UserCircle, Users, Plus, CaretRight, FloppyDisk, SignOut, Crown, ChefHat, Broom, Trash, UploadSimple } from '@phosphor-icons/react';
 import { userFamilyService } from '../api';
 
@@ -27,6 +28,7 @@ const FamilyManager = ({
     const [editName, setEditName] = useState(currentUser.name);
     const [editAvatar, setEditAvatar] = useState(currentUser.avatar);
     const [editEmail, setEditEmail] = useState(currentUser.email);
+    const fileInputRef = useRef(null);
 
     const handleSaveProfile = () => {
         onUpdateUser({
@@ -44,7 +46,7 @@ const FamilyManager = ({
         const file = e.target.files && e.target.files[0];
         if (!file) return;
         if (!file.type.startsWith('image/')) {
-            alert('Por favor selecciona un archivo de imagen.');
+            showToast('Por favor selecciona un archivo de imagen.');
             return;
         }
         const reader = new FileReader();
@@ -65,6 +67,8 @@ const FamilyManager = ({
             img.src = ev.target.result;
         };
         reader.readAsDataURL(file);
+        // Permite volver a elegir el mismo archivo otra vez
+        e.target.value = '';
     };
 
     // Cargar miembros cuando se abre el panel
@@ -99,7 +103,7 @@ const FamilyManager = ({
                 m.user_id === targetUserId ? { ...m, role: newRole } : m
             ));
         } catch (err) {
-            alert(err.message || 'Error al cambiar el rol.');
+            showToast(err.message || 'Error al cambiar el rol.');
         }
     };
 
@@ -113,7 +117,7 @@ const FamilyManager = ({
             );
             setMembers(prev => prev.filter(m => m.user_id !== targetUserId));
         } catch (err) {
-            alert(err.message || 'Error al expulsar miembro.');
+            showToast(err.message || 'Error al expulsar miembro.');
         }
     };
 
@@ -360,15 +364,16 @@ const FamilyManager = ({
                                         style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'cover', border: '3px solid #fff', boxShadow: '0 6px 16px rgba(230,126,34,0.25)' }}
                                     />
                                     <div style={{ flex: 1 }}>
-                                        <label
-                                            htmlFor="avatar-file-input"
+                                        <button
+                                            type="button"
                                             className="btn-secondary"
+                                            onClick={() => fileInputRef.current && fileInputRef.current.click()}
                                             style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '10px 16px' }}
                                         >
                                             <UploadSimple size={18} weight="bold" /> Subir foto
-                                        </label>
+                                        </button>
                                         <input
-                                            id="avatar-file-input"
+                                            ref={fileInputRef}
                                             type="file"
                                             accept="image/*"
                                             onChange={handleAvatarFile}

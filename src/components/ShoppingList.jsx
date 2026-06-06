@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { showToast } from '../Toast';
 import { ShoppingCart, CheckCircle, Circle, Trash, MagicWand, X, Check, Snowflake } from '@phosphor-icons/react';
 import { shoppingListService, aiService, ingredientsService, inventoryService, menuPlansService, dailyMealsService } from '../api';
 
@@ -76,7 +77,7 @@ const ShoppingList = ({ currentFamily }) => {
     };
 
     const handleCreateIngredient = async () => {
-        if (!newIngredient.name.trim()) return alert('Escribe el nombre.');
+        if (!newIngredient.name.trim()) return showToast('Escribe el nombre.');
         try {
             const created = await ingredientsService.create({
                 name: newIngredient.name.trim(),
@@ -87,7 +88,7 @@ const ShoppingList = ({ currentFamily }) => {
             setIngredients(prev => [...prev, created]);
             handleSelectSuggestion(created);
         } catch (err) {
-            alert('Error al crear ingrediente.');
+            showToast('Error al crear ingrediente.');
         }
     };
 
@@ -109,7 +110,7 @@ const ShoppingList = ({ currentFamily }) => {
             setQuantity('');
             setUnit('unidad');
         } catch (error) {
-            alert("Error al agregar.");
+            showToast("Error al agregar.");
         }
     };
 
@@ -118,7 +119,7 @@ const ShoppingList = ({ currentFamily }) => {
         try {
             await shoppingListService.delete(id);
             setItems(items.filter(i => i.item_id !== id));
-        } catch (error) { alert("Error eliminando item"); }
+        } catch (error) { showToast("Error eliminando item"); }
     };
 
     const handleClearChecked = async () => {
@@ -126,7 +127,7 @@ const ShoppingList = ({ currentFamily }) => {
         try {
             await shoppingListService.clearChecked(currentFamily.family_id || currentFamily.id);
             setItems(items.filter(i => !i.checked));
-        } catch (error) { alert("Error limpiando items"); }
+        } catch (error) { showToast("Error limpiando items"); }
     };
 
     // --- AI Smart Generation ---
@@ -135,7 +136,7 @@ const ShoppingList = ({ currentFamily }) => {
         try {
             const familyId = currentFamily.family_id || currentFamily.id;
             const [inv, plans] = await Promise.all([
-                inventoryService.getByFamily(familyId),
+                inventoryService.getAll(familyId),
                 menuPlansService.getByFamily(familyId)
             ]);
 
@@ -172,8 +173,7 @@ const ShoppingList = ({ currentFamily }) => {
                 family_id: familyId,
                 member_count: currentFamily.members || 1,
                 current_inventory: inv.map(i => ({ name: i.name, quantity: i.quantity, unit: i.unit, expiration_date: i.expiration_date })),
-                weekly_plan_ingredients: weekly_plan_ingredients.map(i => ({ name: i.name, quantity: i.quantity, unit: i.unit })),
-                current_shopping_list: items.map(i => ({ name: i.name, quantity: i.quantity, unit: i.unit }))
+                weekly_plan_ingredients: weekly_plan_ingredients.map(i => ({ name: i.name, quantity: i.quantity, unit: i.unit }))
             };
 
             const response = await aiService.generateShoppingList(payload);
@@ -193,11 +193,11 @@ const ShoppingList = ({ currentFamily }) => {
                 }
                 setItems([...newItems, ...items]);
             } else {
-                alert("La IA determinó que tienes todo lo necesario para esta semana.");
+                showToast("La IA determinó que tienes todo lo necesario para esta semana.");
             }
 
         } catch (error) {
-            alert("Error generando lista con IA.");
+            showToast("Error generando lista con IA.");
             console.error(error);
         } finally {
             setAiGenerating(false);
@@ -232,7 +232,7 @@ const ShoppingList = ({ currentFamily }) => {
         try {
             await shoppingListService.update(id, { checked: status });
             setItems(items.map(i => i.item_id === id ? { ...i, checked: status } : i));
-        } catch (error) { alert("Error actualizando item."); }
+        } catch (error) { showToast("Error actualizando item."); }
     };
 
     const confirmInventoryAdd = async () => {
@@ -269,7 +269,7 @@ const ShoppingList = ({ currentFamily }) => {
             
             setShowModal(false);
         } catch (error) {
-            alert("Error agregando al inventario.");
+            showToast("Error agregando al inventario.");
         } finally {
             setModalSaving(false);
         }
