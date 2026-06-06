@@ -329,6 +329,36 @@ const LandingPage = ({ onClose, onRegister }) => {
                 </div>
             </section>
 
+            {/* SOBRE NOSOTROS */}
+            <section className="nv-section nv-about-sec" id="sobre-nosotros">
+                <div className="nv-sec-head" data-reveal>
+                    <span className="nv-kicker">Sobre nosotros</span>
+                    <h2 className="nv-h2">Cocinar bien, sin desperdiciar</h2>
+                    <p className="nv-sub">
+                        Neverita nació de una frustración cotidiana: comida que se vence olvidada en la nevera,
+                        recetas que no se nos ocurren y listas de compra que siempre se escapan. Creemos que
+                        organizar la cocina de tu familia debería ser simple, inteligente y hasta divertido.
+                    </p>
+                </div>
+                <div className="nv-about-grid">
+                    <div className="nv-about-card" data-reveal>
+                        <div className="nv-about-ic"><Leaf size={24} weight="fill" /></div>
+                        <h4>Nuestra misión</h4>
+                        <p>Ayudar a las familias a aprovechar al máximo lo que ya tienen, reduciendo el desperdicio de alimentos y el gasto innecesario.</p>
+                    </div>
+                    <div className="nv-about-card" data-reveal style={{ transitionDelay: '.08s' }}>
+                        <div className="nv-about-ic"><Sparkle size={24} weight="fill" /></div>
+                        <h4>Cómo lo hacemos</h4>
+                        <p>Unimos un inventario inteligente, recetas generadas con IA y un planificador semanal — todo en un mismo lugar y pensado para el día a día.</p>
+                    </div>
+                    <div className="nv-about-card" data-reveal style={{ transitionDelay: '.16s' }}>
+                        <div className="nv-about-ic"><UsersThree size={24} weight="fill" /></div>
+                        <h4>Para quién</h4>
+                        <p>Para hogares y familias que quieren comer mejor, coordinarse sin caos y ahorrar tiempo y dinero cada semana.</p>
+                    </div>
+                </div>
+            </section>
+
             {/* CTA FINAL */}
             <section className="nv-cta-band" data-reveal>
                 <div className="nv-cta-inner">
@@ -351,6 +381,12 @@ const LandingPage = ({ onClose, onRegister }) => {
                     <span className="nv-logo-badge"><ForkKnife size={16} weight="fill" color="#fff" /></span>
                     <span className="nv-logo-text">Neve<b>rita.</b></span>
                 </div>
+                <button
+                    className="nv-foot-link"
+                    onClick={() => rootRef.current?.querySelector('#sobre-nosotros')?.scrollIntoView({ behavior: 'smooth' })}
+                >
+                    Sobre nosotros
+                </button>
                 <span className="nv-foot-tx">© 2026 Neverita · Tu cocina inteligente</span>
             </footer>
 
@@ -542,6 +578,17 @@ const CSS = `
 .nv-benefit h4{font-weight:900;font-size:1.08rem;margin:0;}
 .nv-benefit p{color:var(--ink2);font-size:.93rem;line-height:1.5;margin:8px 0 0;font-weight:500;}
 
+/* sobre nosotros */
+.nv-about-grid{max-width:1100px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:repeat(3,1fr);gap:22px;}
+.nv-about-card{background:var(--card);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.6);
+  border-radius:26px;padding:34px 28px;box-shadow:0 16px 40px -22px rgba(160,90,20,.32);
+  transition:transform .3s,box-shadow .3s,border-color .3s;}
+.nv-about-card:hover{transform:translateY(-6px);box-shadow:0 28px 54px -24px rgba(160,90,20,.45);border-color:rgba(255,159,67,.5);}
+.nv-about-ic{width:60px;height:60px;border-radius:18px;display:grid;place-items:center;margin-bottom:18px;
+  background:linear-gradient(135deg,var(--o),var(--o2));color:#fff;box-shadow:0 10px 22px -8px rgba(255,127,80,.6);}
+.nv-about-card h4{font-family:var(--disp);font-weight:600;font-size:1.25rem;margin:0 0 8px;color:var(--ink);}
+.nv-about-card p{color:var(--ink2);font-size:.96rem;line-height:1.55;margin:0;font-weight:500;}
+
 /* cta band */
 .nv-cta-band{max-width:1180px;margin:24px auto 0;padding:0 24px;}
 .nv-cta-inner{background:linear-gradient(135deg,var(--o) 0%,var(--o2) 55%,#FF6A3D 100%);
@@ -563,6 +610,9 @@ const CSS = `
 .nv-footer{max-width:1180px;margin:0 auto;padding:42px 24px;display:flex;align-items:center;
   justify-content:space-between;gap:16px;flex-wrap:wrap;border-top:1px solid rgba(255,159,67,.18);margin-top:64px;}
 .nv-foot-tx{color:var(--ink3);font-weight:700;font-size:.9rem;}
+.nv-foot-link{background:none;border:none;cursor:pointer;color:var(--ink2);font-weight:800;font-size:.9rem;
+  font-family:inherit;padding:6px 0;transition:color .2s;}
+.nv-foot-link:hover{color:var(--o2);}
 
 /* close fab */
 .nv-close-fab{position:fixed;top:18px;right:18px;z-index:40;width:42px;height:42px;border-radius:14px;border:none;
@@ -596,6 +646,8 @@ const CSS = `
   .nv-steps{grid-template-columns:repeat(2,1fr);gap:34px 20px;}
   .nv-steps-line{display:none;}
   .nv-benefits{grid-template-columns:repeat(2,1fr);}
+  .nv-about-grid{grid-template-columns:repeat(2,1fr);}
+  .nv-about-card:last-child{grid-column:1 / -1;}
 }
 @media (max-width:640px){
   .nv-nav{padding:10px 0;}
@@ -612,6 +664,7 @@ const CSS = `
   .nv-feat{padding:24px;border-radius:24px;}
   .nv-feat-art .nv-feat-card{max-width:100%;}
   .nv-benefits{grid-template-columns:1fr;}
+  .nv-about-grid{grid-template-columns:1fr;}
   .nv-cta-inner{padding:44px 22px;border-radius:30px;}
   .nv-cta-actions{flex-direction:column;width:100%;}
   .nv-footer{justify-content:center;text-align:center;flex-direction:column;}
