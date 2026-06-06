@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FF9F43"/>
+      <stop offset="1" stop-color="#FF7F50"/>
+    </linearGradient>
+  </defs>
+  <rect x="6" y="6" width="88" height="88" rx="24" fill="url(#g)"/>
+  <g fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Tenedor -->
+    <path d="M37 30 L37 44 M44 30 L44 44 M30 30 L30 44 Q30 50 37 50 L37 50 Q44 50 44 44"/>
+    <path d="M37 50 L37 72"/>
+    <!-- Cuchillo -->
+    <path d="M64 30 Q72 36 72 50 L64 50 Z" fill="#fff" stroke="none"/>
+    <path d="M64 50 L64 72"/>
+  </g>
+</svg>
