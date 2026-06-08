@@ -276,12 +276,17 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     background: rgba(255, 255, 255, 0.26);
 }
 .today-meal-img {
+    position: relative;
     width: 100%;
-    aspect-ratio: 1 / 1;
+    padding-top: 100%;            /* relación 1:1 a prueba de iOS Safari */
     border-radius: 14px;
     overflow: hidden;
-    display: grid;
-    place-items: center;
+}
+.today-meal-img > img,
+.today-meal-img > svg {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    margin: auto;                 /* centra el ícono "+" del estado vacío */
 }
 .today-meal-img.filled { box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2); }
 .today-meal-img.filled img { width: 100%; height: 100%; object-fit: cover; }
