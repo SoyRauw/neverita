@@ -64,16 +64,31 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
     const startSpeech = useCallback((recipe) => {
         stopSpeech();
 
+        // Pluraliza unidades contables en español cuando la cantidad no es 1
+        // (ej: "2 unidad" -> "2 unidades", "3 diente" -> "3 dientes").
+        const PLURAL_UNITS = ['unidad', 'diente', 'taza', 'cucharada', 'cucharadita', 'rebanada', 'pizca', 'lata', 'hoja', 'rama', 'rodaja', 'porcion', 'porción', 'trozo', 'manojo', 'vaso', 'sobre', 'paquete'];
+        const pluralizeUnits = (txt) => txt.replace(/(\d+(?:[.,]\d+)?)\s+([a-záéíóúñ]+)/gi, (full, num, unit) => {
+            const n = parseFloat(String(num).replace(',', '.'));
+            if (n === 1) return full;
+            if (!PLURAL_UNITS.includes(unit.toLowerCase())) return full;
+            const plural = /[aeiouáéíóú]$/i.test(unit) ? unit + 's' : unit + 'es';
+            return `${num} ${plural}`;
+        });
+
         // Texto natural con pausas (comas extra entre secciones)
         const ingList = recipe.ingredients && recipe.ingredients.length > 0
-            ? recipe.ingredients.join(', ')
+            ? recipe.ingredients.map(pluralizeUnits).join(', ')
             : 'Sin ingredientes registrados';
 
         const stepsList = recipe.steps && recipe.steps.length > 0
             ? recipe.steps.map((s, i) => `Paso ${i + 1}: ${s.replace(/^\d+[.\-]?\s*/, '')}`).join('. ')
             : 'Sin pasos registrados';
 
-        const fullText = `Receta: ${recipe.name}. Los ingredientes son: ${ingList}. Ahora, las instrucciones. ${stepsList}.`;
+        const personas = recipe.servings
+            ? `Para ${recipe.servings} ${Number(recipe.servings) === 1 ? 'persona' : 'personas'}. `
+            : '';
+
+        const fullText = `Receta: ${recipe.name}. ${personas}Los ingredientes son: ${ingList}. Ahora, las instrucciones. ${stepsList}.`;
 
         // Elegir la mejor voz disponible en español
         const pickBestVoice = () => {

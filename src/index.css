@@ -50,9 +50,9 @@
     --font-body: 'Nunito', 'Inter', sans-serif;
 
     /* Elevación / sombras */
-    --sh-sm: 0 4px 14px rgba(180, 100, 30, 0.08);
-    --sh-md: 0 12px 30px rgba(180, 100, 30, 0.12);
-    --sh-lg: 0 24px 60px rgba(180, 100, 30, 0.16);
+    --sh-sm: 0 4px 14px rgba(150, 80, 20, 0.13);
+    --sh-md: 0 12px 30px rgba(150, 80, 20, 0.17);
+    --sh-lg: 0 24px 60px rgba(150, 80, 20, 0.23);
     --sh-primary: 0 14px 30px rgba(255, 127, 80, 0.42);
     --sh-primary-hover: 0 22px 44px rgba(255, 127, 80, 0.52);
 
@@ -124,10 +124,10 @@
 
 body {
     background:
-        radial-gradient(58% 50% at 88% 4%, rgba(255, 159, 67, 0.22), transparent 60%),
-        radial-gradient(50% 45% at 8% 14%, rgba(255, 127, 80, 0.14), transparent 60%),
-        radial-gradient(60% 55% at 50% 102%, rgba(255, 210, 125, 0.24), transparent 62%),
-        linear-gradient(160deg, #FFF6EC 0%, #FFEBD6 52%, #FFE0C2 100%);
+        radial-gradient(58% 50% at 88% 4%, rgba(255, 140, 50, 0.30), transparent 60%),
+        radial-gradient(50% 45% at 8% 14%, rgba(255, 110, 70, 0.20), transparent 60%),
+        radial-gradient(60% 55% at 50% 102%, rgba(245, 178, 108, 0.34), transparent 62%),
+        linear-gradient(160deg, #FBE7CF 0%, #F7D6B4 52%, #F1C49B 100%);
     background-attachment: fixed;
     color: var(--text-dark);
     min-height: 100vh;

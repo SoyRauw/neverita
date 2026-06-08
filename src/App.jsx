@@ -164,6 +164,22 @@ const modalStyles = `
 
 
 // ==========================================
+// Pluraliza unidades contables cuando la cantidad ≠ 1
+// "2 unidad" -> "2 unidades", "3 diente" -> "3 dientes". No toca g/ml/kg/l.
+// ==========================================
+const PLURAL_UNITS = ['unidad', 'diente', 'taza', 'cucharada', 'cucharadita', 'rebanada', 'pizca', 'lata', 'hoja', 'rama', 'rodaja', 'porcion', 'porción', 'trozo', 'manojo', 'vaso', 'sobre', 'paquete'];
+const pluralizeUnits = (txt) => {
+    if (typeof txt !== 'string') return txt;
+    return txt.replace(/(\d+(?:[.,]\d+)?)\s+([a-záéíóúñ]+)/gi, (full, num, unit) => {
+        const n = parseFloat(String(num).replace(',', '.'));
+        if (n === 1) return full;
+        if (!PLURAL_UNITS.includes(unit.toLowerCase())) return full;
+        const plural = /[aeiouáéíóú]$/i.test(unit) ? unit + 's' : unit + 'es';
+        return `${num} ${plural}`;
+    });
+};
+
+// ==========================================
 // PÁGINA DEL PLANIFICADOR
 // ==========================================
 const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan, currentFamily, weekLabel, userRole, weekOffset, onNavigateWeek }) => {
@@ -186,8 +202,11 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         if (!recipe) return;
 
         let textToRead = `Receta: ${recipe.name}. `;
+        if (recipe.servings) {
+            textToRead += `Para ${recipe.servings} ${Number(recipe.servings) === 1 ? 'persona' : 'personas'}. `;
+        }
         if (recipe.ingredients && recipe.ingredients.length > 0) {
-            textToRead += `Ingredientes: ${recipe.ingredients.join(', ')}. `;
+            textToRead += `Ingredientes: ${recipe.ingredients.map(pluralizeUnits).join(', ')}. `;
         }
         if (recipe.steps && recipe.steps.length > 0) {
             textToRead += `Pasos a seguir: ${recipe.steps.map(s => s.replace(/^\\d+[\\.\\-]?\\s*/, '')).join('. ')}.`;
@@ -333,6 +352,8 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
     // Receta generada por IA esperando confirmación de personas
     const [aiDish, setAiDish] = useState(null);
     const [aiPlanServings, setAiPlanServings] = useState(1);
+    const [aiChosenTurn, setAiChosenTurn] = useState(null);   // turno elegido en sugerencias
+    const [suggestionTurns, setSuggestionTurns] = useState({}); // turno por cada sugerencia (índice -> turno)
 
     // Cargar inventario real CADA VEZ que se abre el modal
     useEffect(() => {
@@ -392,6 +413,8 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         setIsGenerating(true);
         setAiError(null);
         setSuggestions([]);
+        setSuggestionTurns({});
+        setAiChosenTurn(null);
 
         try {
             const ingredientsWithQty = myInventory
@@ -415,7 +438,8 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
     };
 
     // PASO 2: Generar receta (para 1 persona) y pasar al paso de personas
-    const handlePickSuggestion = async (suggestion) => {
+    const handlePickSuggestion = async (suggestion, turn) => {
+        setAiChosenTurn(turn || null);
         setAiStep('generating');
         setIsGenerating(true);
         setAiError(null);
@@ -438,7 +462,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                 ingredients: ingList.map(i => {
                     const measurePart = i.measure_qty && i.measure_unit ? `${i.measure_qty} ${i.measure_unit} de ` : '';
                     const qtyPart = i.quantity ? `(${i.quantity} ${i.unit})` : `(${i.unit})`;
-                    return `${measurePart}${i.name} ${qtyPart}`;
+                    return pluralizeUnits(`${measurePart}${i.name} ${qtyPart}`);
                 }),
                 steps: recipe.instructions ? recipe.instructions.split('\n').filter(Boolean) : [],
                 description: recipe.description || '',
@@ -474,9 +498,9 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
             const scaledBQty = Math.round(bQty * persons * 100) / 100;
             if (mQty) {
                 const scaledMQty = Math.round(mQty * persons * 100) / 100;
-                return `${scaledMQty} ${mUnit} de ${name} (${scaledBQty} ${bUnit})`;
+                return pluralizeUnits(`${scaledMQty} ${mUnit} de ${name} (${scaledBQty} ${bUnit})`);
             } else {
-                return `${name} (${scaledBQty} ${bUnit})`;
+                return pluralizeUnits(`${name} (${scaledBQty} ${bUnit})`);
             }
         });
     };
@@ -491,11 +515,19 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         const scaledDish = {
             ...aiDish,
             ingredients: scaleAIDish(aiDish, aiPlanServings),
+            servings: aiPlanServings, // guarda para cuántas personas se planificó
         };
+
+        // Si se eligió un turno en el paso de sugerencias, se aplica a los DÍAS
+        // seleccionados (el día viene de la cuadrícula; el turno, del selector).
+        // Si no, se usan los slots tal cual se eligieron.
+        const targetSlots = aiChosenTurn
+            ? [...new Set(selectedSlots.map(s => parseInt(s.split('-')[0], 10)))].map(d => `${d}-${aiChosenTurn}`)
+            : selectedSlots;
 
         // -- VALIDAR CADUCIDAD PARA LOS SLOTS --
         if (currentMenuPlan && aiDish.recipe_id) {
-            for (const slot of selectedSlots) {
+            for (const slot of targetSlots) {
                 const [dayIndexStr] = slot.split('-');
                 const dayIndex = parseInt(dayIndexStr, 10);
                 const startDateStr = currentMenuPlan.start_date.split('T')[0];
@@ -520,12 +552,12 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
 
         // Agregar al planner UI
         const newMenu = { ...plannerData };
-        selectedSlots.forEach(slot => { newMenu[slot] = { ...scaledDish }; });
+        targetSlots.forEach(slot => { newMenu[slot] = { ...scaledDish }; });
         setPlannerData(newMenu);
 
         // Persistir en BD
         if (currentMenuPlan && aiDish.recipe_id) {
-            for (const slot of selectedSlots) {
+            for (const slot of targetSlots) {
                 const [dayIndexStr, type] = slot.split('-');
                 const dayIndex = parseInt(dayIndexStr, 10);
                 try {
@@ -562,6 +594,8 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         setAiDish(null);
         setAiPlanServings(1);
         setSelectedSlots([]);
+        setAiChosenTurn(null);
+        setSuggestionTurns({});
     };
 
     // Resetear al cerrar modal
@@ -573,6 +607,8 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         setAiDish(null);
         setAiPlanServings(1);
         setSelectedSlots([]);
+        setAiChosenTurn(null);
+        setSuggestionTurns({});
     };
 
     // Determinar si podemos incrementar personas según inventario para IA
@@ -826,25 +862,62 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                         </div>
                                     ) : (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
-                                            {suggestions.map((sug, i) => (
-                                                <div
-                                                    key={i}
-                                                    onClick={() => handlePickSuggestion(sug)}
-                                                    style={{
-                                                        background: '#FFF9F2', border: '2px solid rgba(230,126,34,0.18)', borderRadius: 16,
-                                                        padding: '18px 20px', cursor: 'pointer', transition: 'all 0.2s',
-                                                    }}
-                                                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#FF9F43'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(255,159,67,0.15)'; }}
-                                                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(230,126,34,0.18)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
-                                                >
-                                                    <h4 style={{ margin: '0 0 6px', fontSize: '1.1rem', fontWeight: 700, color: '#2A2118' }}>
-                                                        {sug.title}
-                                                    </h4>
-                                                    <p style={{ margin: 0, color: '#6B5E4F', fontSize: '0.9rem' }}>
-                                                        {sug.description}
-                                                    </p>
-                                                </div>
-                                            ))}
+                                            {(() => {
+                                                const slotMeals = selectedSlots.map(s => s.split('-')[1]);
+                                                const defaultTurn = slotMeals[0] || 'Almuerzo';
+                                                return suggestions.map((sug, i) => {
+                                                    const turn = suggestionTurns[i] || defaultTurn;
+                                                    return (
+                                                        <div
+                                                            key={i}
+                                                            style={{
+                                                                background: '#FFF9F2', border: '2px solid rgba(230,126,34,0.18)', borderRadius: 16,
+                                                                padding: '18px 20px',
+                                                            }}
+                                                        >
+                                                            <h4 style={{ margin: '0 0 6px', fontSize: '1.1rem', fontWeight: 700, color: '#2A2118' }}>
+                                                                {sug.title}
+                                                            </h4>
+                                                            <p style={{ margin: '0 0 14px', color: '#6B5E4F', fontSize: '0.9rem' }}>
+                                                                {sug.description}
+                                                            </p>
+
+                                                            <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#9b8d7c', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
+                                                                ¿Para qué turno?
+                                                            </div>
+                                                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+                                                                {mealTypesOptions.map(t => {
+                                                                    const active = turn === t;
+                                                                    return (
+                                                                        <button
+                                                                            key={t}
+                                                                            onClick={() => setSuggestionTurns(prev => ({ ...prev, [i]: t }))}
+                                                                            style={{
+                                                                                padding: '7px 14px', borderRadius: 999, cursor: 'pointer',
+                                                                                fontWeight: 700, fontSize: '0.85rem',
+                                                                                border: active ? '2px solid #FF9F43' : '2px solid rgba(230,126,34,0.2)',
+                                                                                background: active ? 'linear-gradient(135deg, #FF9F43, #FF7F50)' : 'white',
+                                                                                color: active ? '#fff' : '#6B5E4F',
+                                                                                transition: 'all 0.18s',
+                                                                            }}
+                                                                        >
+                                                                            {t}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+
+                                                            <button
+                                                                className="btn-generate"
+                                                                style={{ width: '100%', justifyContent: 'center' }}
+                                                                onClick={() => handlePickSuggestion(sug, turn)}
+                                                            >
+                                                                Elegir para {turn} <Check weight="bold" />
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                });
+                                            })()}
                                         </div>
                                     )}
                                 </>
@@ -1352,9 +1425,10 @@ function App() {
                         cal: meal.calories_per_serving,
                         time: meal.preparation_time ? `${meal.preparation_time} min` : 'N/A',
                         img: meal.image_url || 'https://images.unsplash.com/photo-1546554137-f86b9593a222?w=400',
-                        ingredients: Array.isArray(meal.ingredients) ? meal.ingredients : [],
+                        ingredients: Array.isArray(meal.ingredients) ? meal.ingredients.map(pluralizeUnits) : [],
                         steps: meal.instructions ? meal.instructions.split('\n').filter(Boolean) : [],
                         description: meal.description || '',
+                        servings: meal.servings ?? meal.servings_count ?? null,
                         category: ['Almuerzo'],
                     };
                 }
