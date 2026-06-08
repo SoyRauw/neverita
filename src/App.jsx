@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { showToast } from './Toast';
 import { HashRouter, Routes, Route } from 'react-router-dom';
-import { Sparkle, CircleNotch, ShoppingCart, Check, X, ChefHat, CalendarBlank, Coffee, UsersThree } from '@phosphor-icons/react';
+import { Sparkle, CircleNotch, ShoppingCart, Check, X, ChefHat, CalendarBlank, Coffee, UsersThree, Plus, Sun } from '@phosphor-icons/react';
 
 // --- IMPORTACIÓN DE COMPONENTES ---
 import Sidebar from './components/Sidebar';
@@ -1025,6 +1025,43 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                     </div>
                 </div>
             )}
+
+            {/* === DESTACADO: PLAN DE HOY (solo semana actual) === */}
+            {weekOffset === 0 && (() => {
+                const todayIndex = (new Date().getDay() + 6) % 7; // 0=Lunes ... 6=Domingo
+                const todayName = weekDays[todayIndex];
+                const mealTypes = ['Desayuno', 'Almuerzo', 'Cena'];
+                return (
+                    <div className="today-highlight">
+                        <div className="today-glow" aria-hidden="true"></div>
+                        <div className="today-head">
+                            <span className="today-badge"><Sun size={16} weight="fill" /> HOY · {todayName}</span>
+                            <span className="today-sub">Lo que toca hoy</span>
+                        </div>
+                        <div className="today-meals">
+                            {mealTypes.map((type, i) => {
+                                const meal = plannerData ? plannerData[`${todayIndex}-${type}`] : null;
+                                return (
+                                    <div
+                                        key={type}
+                                        className="today-meal"
+                                        style={{ animationDelay: `${0.15 + i * 0.08}s` }}
+                                        onClick={() => meal && setSelectedMealDetails(meal)}
+                                    >
+                                        <div className={`today-meal-img ${meal ? 'filled' : 'empty'}`}>
+                                            {meal
+                                                ? <img src={meal.img} alt={meal.name} />
+                                                : <Plus size={24} weight="bold" />}
+                                        </div>
+                                        <span className="today-meal-type">{type}</span>
+                                        <span className="today-meal-name">{meal ? meal.name : 'Sin asignar'}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            })()}
 
             <div
                 key={weekOffset}
