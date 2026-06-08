@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { showToast } from './Toast';
 import { HashRouter, Routes, Route } from 'react-router-dom';
-import { Sparkle, CircleNotch, ShoppingCart, Check, X, ChefHat, CalendarBlank, Coffee, UsersThree, Plus, Sun } from '@phosphor-icons/react';
+import { Sparkle, CircleNotch, ShoppingCart, Check, X, ChefHat, CalendarBlank, Coffee, UsersThree, Plus, Sun, Warning, BookOpen, MagnifyingGlass, Trash } from '@phosphor-icons/react';
 
 // --- IMPORTACIÓN DE COMPONENTES ---
 import Sidebar from './components/Sidebar';
@@ -14,7 +14,7 @@ import LandingPage from './components/LandingPage';
 import FamilySelect from './components/FamilySelect';
 import FamilyManager from './components/FamilyManager';
 import ShoppingList from './components/ShoppingList';
-import { familiesService, userFamilyService, menuPlansService, dailyMealsService, aiService, inventoryService, ingredientsService, recipesService } from './api';
+import { familiesService, userFamilyService, menuPlansService, dailyMealsService, aiService, inventoryService, ingredientsService, recipesService, familyRecipesService } from './api';
 
 // --- ESTILOS CSS INYECTADOS (MODAL MODERNO) ---
 const modalStyles = `
@@ -284,6 +284,14 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
     // Estados de selección
     const [selectedIngredients, setSelectedIngredients] = useState([]);
     const [selectedSlots, setSelectedSlots] = useState([]);
+
+    // Recetas existentes (modo "agregar receta ya creada")
+    const [existingRecipes, setExistingRecipes] = useState([]);
+    const [loadingExisting, setLoadingExisting] = useState(false);
+    const [recipeSearch, setRecipeSearch] = useState('');
+
+    // Confirmación de borrado (capa con aviso)
+    const [pendingDelete, setPendingDelete] = useState(null); // { dayIndex, type, name }
 
     const toggleSlot = (dayIndex, meal) => {
         const slotKey = `${dayIndex}-${meal}`;
@@ -609,7 +617,183 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         setSelectedSlots([]);
         setAiChosenTurn(null);
         setSuggestionTurns({});
+        setRecipeSearch('');
     };
+
+    // Abrir el planificador para un cuadro (día+turno) concreto → muestra el selector
+    // de modo (IA / receta existente). El backend hace upsert por slot.
+    const handlePlanSlot = (dayIndex, type) => {
+        if (userRole === 'ayudante') { showToast('No tienes permiso para planificar.'); return; }
+        setSelectedSlots([`${dayIndex}-${type}`]);
+        setAiStep('choose');
+        setShowModal(true);
+    };
+
+    // Cargar las recetas que ya tiene la familia (modo "agregar receta existente")
+    const loadExistingRecipes = async () => {
+        const familyId = currentFamily?.family_id || currentFamily?.id;
+        if (!familyId) return;
+        setLoadingExisting(true);
+        try {
+            const data = await familyRecipesService.getByFamily(familyId);
+            setExistingRecipes(Array.isArray(data) ? data : []);
+        } catch (e) {
+            console.error('Error cargando recetas existentes:', e);
+            setExistingRecipes([]);
+            showToast('No se pudieron cargar tus recetas.', 'error');
+        } finally {
+            setLoadingExisting(false);
+        }
+    };
+
+    // Ir al paso de receta existente
+    const goToExisting = () => {
+        setAiStep('existing');
+        loadExistingRecipes();
+    };
+
+    // Agregar una receta YA CREADA a los slots seleccionados
+    const handleAddExistingToSlots = async (r) => {
+        if (selectedSlots.length === 0) { showToast('Selecciona al menos un cuadro en el calendario.'); return; }
+        const DAY_ENUM = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+        const MEAL_ENUM = { 'Desayuno': 'desayuno', 'Almuerzo': 'almuerzo', 'Cena': 'cena' };
+
+        const meal = {
+            name: r.title,
+            cal: r.calories_per_serving,
+            time: r.preparation_time ? `${r.preparation_time} min` : 'N/A',
+            img: r.image_url || 'https://images.unsplash.com/photo-1546554137-f86b9593a222?w=400',
+            ingredients: (Array.isArray(r.ingredients) ? r.ingredients : []).map(pluralizeUnits),
+            steps: r.instructions ? r.instructions.split('\n').filter(Boolean) : [],
+            description: r.description || '',
+            recipe_id: r.recipe_id,
+            servings: r.servings || 2,
+        };
+
+        // UI inmediata
+        const newMenu = { ...plannerData };
+        selectedSlots.forEach(slot => { newMenu[slot] = { ...meal }; });
+        setPlannerData(newMenu);
+
+        // Persistir (el backend reemplaza si el slot ya estaba ocupado)
+        if (currentMenuPlan && r.recipe_id) {
+            for (const slot of selectedSlots) {
+                const [dayIndexStr, type] = slot.split('-');
+                const dayIndex = parseInt(dayIndexStr, 10);
+                try {
+                    const saved = await dailyMealsService.save({
+                        menu_plan_id: currentMenuPlan.menu_plan_id,
+                        recipe_id: r.recipe_id,
+                        meal_type: MEAL_ENUM[type] || type.toLowerCase(),
+                        day_of_week: DAY_ENUM[dayIndex],
+                    });
+                    setPlannerData(prev => ({ ...prev, [slot]: { ...prev[slot], daily_meal_id: saved.daily_meal_id } }));
+                } catch (e) {
+                    console.error('Error guardando receta existente:', e);
+                }
+            }
+        }
+        showToast('Receta agregada al plan.', 'success');
+        handleCloseModal();
+    };
+
+    // ── BORRADO CON CONFIRMACIÓN ──
+    // Lo que llama el botón de la papelera: abre la capa de confirmación.
+    const requestDeleteMeal = (dayIndex, type) => {
+        if (userRole === 'ayudante') { showToast('No tienes permiso para editar el plan.'); return; }
+        const meal = plannerData[`${dayIndex}-${type}`];
+        if (!meal) return;
+        setPendingDelete({ dayIndex, type, name: meal.name });
+    };
+
+    // Borrado real (tras confirmar)
+    const confirmDeleteMeal = async () => {
+        if (!pendingDelete) return;
+        const { dayIndex, type } = pendingDelete;
+        const key = `${dayIndex}-${type}`;
+        const meal = plannerData[key];
+        setPendingDelete(null);
+        if (!meal) return;
+        setPlannerData(prev => { const n = { ...prev }; delete n[key]; return n; });
+        try {
+            if (meal.daily_meal_id) await dailyMealsService.delete(meal.daily_meal_id);
+            showToast('Receta eliminada del plan.', 'success');
+        } catch (e) {
+            console.error('Error al eliminar la comida:', e);
+            showToast('No se pudo eliminar. Intenta de nuevo.', 'error');
+        }
+    };
+
+    // Cuadrícula de slots reutilizable (paso IA y paso receta existente)
+    const renderSlotGrid = () => (
+        <>
+            <div className="section-title" style={{ marginTop: '20px' }}><CalendarBlank weight="fill" color="#FF9F43" /> ¿Dónde quieres agregar la receta?</div>
+            <p style={{ fontSize: '0.85rem', color: '#9b8d7c', marginBottom: '15px' }}>Toca los cuadros para elegir los días y comidas.</p>
+
+            {expiredDayIndexes.size > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '8px 12px', marginBottom: 12, fontSize: '0.82rem', color: '#DC2626' }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444', flexShrink: 0 }} />
+                    Los días en rojo tienen ingredientes vencidos y no están disponibles.
+                </div>
+            )}
+
+            {(() => {
+                const now = new Date();
+                const currentDayIndex = now.getDay() === 0 ? 6 : now.getDay() - 1;
+                const currentHour = now.getHours();
+                const isSlotDisabled = (dayIndex, meal) => {
+                    if (dayIndex < currentDayIndex) return true;
+                    if (dayIndex === currentDayIndex) {
+                        if (meal === 'Desayuno' && currentHour >= 11) return true;
+                        if (meal === 'Almuerzo' && currentHour >= 17) return true;
+                        if (meal === 'Cena' && currentHour >= 22) return true;
+                    }
+                    return false;
+                };
+                return (
+                    <div className="plan-mini-grid" style={{ display: 'grid', gridTemplateColumns: '70px repeat(7, 1fr)', gap: 8, overflowX: 'auto', paddingBottom: '10px' }}>
+                        <div></div>
+                        {weekDays.map((d, dayIndex) => {
+                            const isBlocked = expiredDayIndexes.has(dayIndex);
+                            return (
+                                <div key={d} style={{ textAlign: 'center', fontSize: '0.75rem', fontWeight: 800, color: isBlocked ? '#EF4444' : '#a0aec0', textTransform: 'uppercase' }} title={isBlocked ? 'Ingrediente vencido este día' : ''}>
+                                    {d.substring(0, 3)}{isBlocked && ' 🚫'}
+                                </div>
+                            );
+                        })}
+                        {mealTypesOptions.map(meal => (
+                            <React.Fragment key={meal}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', fontSize: '0.85rem', fontWeight: 700, color: '#4a5568', paddingRight: 8 }}>
+                                    {meal}
+                                </div>
+                                {weekDays.map((_, dayIndex) => {
+                                    const slotKey = `${dayIndex}-${meal}`;
+                                    const isSelected = selectedSlots.includes(slotKey);
+                                    const isExpiredBlocked = expiredDayIndexes.has(dayIndex);
+                                    const isTimeDisabled = isSlotDisabled(dayIndex, meal);
+                                    const isBlocked = isExpiredBlocked || isTimeDisabled;
+                                    return (
+                                        <div key={slotKey} onClick={() => { if (!isBlocked) toggleSlot(dayIndex, meal); }} style={{
+                                            aspectRatio: '1', borderRadius: '8px',
+                                            border: isExpiredBlocked ? '2px solid #FECACA' : (isTimeDisabled ? '2px solid #e2e8f0' : (isSelected ? '2px solid #FF9F43' : '2px dashed #e2e8f0')),
+                                            background: isExpiredBlocked ? '#FEF2F2' : (isTimeDisabled ? '#f1f5f9' : (isSelected ? '#fffaf0' : 'transparent')),
+                                            cursor: isBlocked ? 'not-allowed' : 'pointer',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            transition: 'all 0.2s', minWidth: '40px',
+                                            opacity: isBlocked ? 0.6 : 1,
+                                        }} title={isExpiredBlocked ? 'Ingrediente vencido este día' : (isTimeDisabled ? 'Horario pasado' : '')}>
+                                            {isBlocked && <span style={{ fontSize: '0.8rem', color: isExpiredBlocked ? '#DC2626' : '#cbd5e1' }}>{isExpiredBlocked ? '🚫' : '✕'}</span>}
+                                            {!isBlocked && isSelected && <Check size={18} weight="bold" color="#FF9F43" />}
+                                        </div>
+                                    );
+                                })}
+                            </React.Fragment>
+                        ))}
+                    </div>
+                );
+            })()}
+        </>
+    );
 
     // Determinar si podemos incrementar personas según inventario para IA
     let canIncrementAI = aiPlanServings < 20;
@@ -641,7 +825,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                         <div className="btn-locked-wrapper" data-tooltip={userRole === 'ayudante' ? '🔒 Sin permiso' : undefined}>
                             <button
                                 className={`btn-primary${userRole === 'ayudante' ? ' btn-locked' : ''}`}
-                                onClick={userRole !== 'ayudante' ? () => setShowModal(true) : undefined}
+                                onClick={userRole !== 'ayudante' ? () => { setSelectedSlots([]); setAiStep('choose'); setShowModal(true); } : undefined}
                                 disabled={isGenerating}
                             >
                                 {isGenerating ? <CircleNotch size={20} className="ph-spin" /> : <Sparkle size={20} weight="fill" />}
@@ -704,10 +888,10 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                         <div className="modal-header-modern">
                             <div>
                                 <h2 style={{ margin: 0, fontSize: '1.5rem', color: '#111827', fontWeight: '800' }}>
-                                    {aiStep === 'config' ? '🍳 Chef Inteligente' : aiStep === 'suggestions' ? '🍽️ Elige una Receta' : aiStep === 'servings' ? '👥 ¿Para cuántas personas?' : '🍳 Generando...'}
+                                    {aiStep === 'choose' ? '🍽️ ¿Cómo quieres planificar?' : aiStep === 'existing' ? '📖 Tus recetas' : aiStep === 'config' ? '🍳 Chef Inteligente' : aiStep === 'suggestions' ? '🍽️ Elige una Receta' : aiStep === 'servings' ? '👥 ¿Para cuántas personas?' : '🍳 Generando...'}
                                 </h2>
                                 <p style={{ margin: '4px 0 0', color: '#6B5E4F', fontSize: '0.95rem' }}>
-                                    {aiStep === 'config' ? 'Personaliza tu menú con IA' : aiStep === 'suggestions' ? 'La IA sugiere estos platos para ti' : aiStep === 'servings' ? 'Los ingredientes se escalarán automáticamente' : 'Creando tu receta completa...'}
+                                    {aiStep === 'choose' ? 'Elige cómo agregar la receta' : aiStep === 'existing' ? 'Agrega una receta que ya tienes' : aiStep === 'config' ? 'Personaliza tu menú con IA' : aiStep === 'suggestions' ? 'La IA sugiere estos platos para ti' : aiStep === 'servings' ? 'Los ingredientes se escalarán automáticamente' : 'Creando tu receta completa...'}
                                 </p>
                             </div>
                             <button onClick={handleCloseModal} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 5 }}>
@@ -753,6 +937,110 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                 </div>
                             )}
 
+                            {/* ── PASO 0: ELEGIR MODO ── */}
+                            {aiStep === 'choose' && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 18 }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAiStep('config')}
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: 16, textAlign: 'left',
+                                            background: 'linear-gradient(135deg, #FFF3E6, #FFE7CF)',
+                                            border: '2px solid rgba(255,159,67,0.35)', borderRadius: 18,
+                                            padding: '20px 22px', cursor: 'pointer', transition: 'all 0.2s',
+                                        }}
+                                        onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 12px 28px rgba(255,159,67,0.25)'; }}
+                                        onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+                                    >
+                                        <div style={{ width: 52, height: 52, borderRadius: 14, flexShrink: 0, display: 'grid', placeItems: 'center', background: 'linear-gradient(135deg, #FF9F43, #FF7F50)', color: '#fff' }}>
+                                            <Sparkle size={26} weight="fill" />
+                                        </div>
+                                        <div>
+                                            <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#2A2118' }}>Generar con IA</div>
+                                            <div style={{ fontSize: '0.88rem', color: '#6B5E4F' }}>La IA crea una receta con tus ingredientes</div>
+                                        </div>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={goToExisting}
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: 16, textAlign: 'left',
+                                            background: '#FFF9F2',
+                                            border: '2px solid rgba(230,126,34,0.2)', borderRadius: 18,
+                                            padding: '20px 22px', cursor: 'pointer', transition: 'all 0.2s',
+                                        }}
+                                        onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 12px 28px rgba(230,126,34,0.18)'; e.currentTarget.style.borderColor = '#FF9F43'; }}
+                                        onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.borderColor = 'rgba(230,126,34,0.2)'; }}
+                                    >
+                                        <div style={{ width: 52, height: 52, borderRadius: 14, flexShrink: 0, display: 'grid', placeItems: 'center', background: 'linear-gradient(135deg, #FFB774, #FF9F43)', color: '#fff' }}>
+                                            <BookOpen size={26} weight="fill" />
+                                        </div>
+                                        <div>
+                                            <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#2A2118' }}>Agregar receta existente</div>
+                                            <div style={{ fontSize: '0.88rem', color: '#6B5E4F' }}>Elige una de las recetas que ya tienes</div>
+                                        </div>
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* ── PASO ALTERNATIVO: RECETA EXISTENTE ── */}
+                            {aiStep === 'existing' && (
+                                <>
+                                    {renderSlotGrid()}
+
+                                    <div className="section-title" style={{ marginTop: 24 }}><BookOpen weight="fill" color="#FF9F43" /> Elige una receta</div>
+
+                                    <div style={{ position: 'relative', marginBottom: 14 }}>
+                                        <MagnifyingGlass size={18} color="#9b8d7c" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} />
+                                        <input
+                                            type="text"
+                                            value={recipeSearch}
+                                            onChange={e => setRecipeSearch(e.target.value)}
+                                            placeholder="Buscar receta..."
+                                            style={{ width: '100%', padding: '12px 14px 12px 42px', borderRadius: 12, border: '2px solid rgba(230,126,34,0.2)', background: '#FFF9F2', fontSize: '0.95rem', color: '#2A2118', outline: 'none' }}
+                                        />
+                                    </div>
+
+                                    {loadingExisting ? (
+                                        <div style={{ textAlign: 'center', padding: '30px 0' }}>
+                                            <CircleNotch size={40} className="ph-spin" color="#FF9F43" />
+                                            <p style={{ color: '#6B5E4F', marginTop: 12, fontWeight: 600 }}>Cargando tus recetas...</p>
+                                        </div>
+                                    ) : (() => {
+                                        const q = recipeSearch.trim().toLowerCase();
+                                        const list = existingRecipes.filter(r => !q || (r.title || '').toLowerCase().includes(q));
+                                        if (existingRecipes.length === 0) {
+                                            return <p style={{ color: '#9b8d7c', fontSize: '0.9rem', textAlign: 'center', padding: '20px 0' }}>No tienes recetas guardadas todavía. Créalas en la sección Recetas.</p>;
+                                        }
+                                        if (list.length === 0) {
+                                            return <p style={{ color: '#9b8d7c', fontSize: '0.9rem', textAlign: 'center', padding: '20px 0' }}>Ninguna receta coincide con "{recipeSearch}".</p>;
+                                        }
+                                        return (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                                {list.map(r => (
+                                                    <div key={r.recipe_id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#FFF9F2', border: '1px solid rgba(230,126,34,0.18)', borderRadius: 14, padding: 10 }}>
+                                                        <img src={r.image_url || 'https://images.unsplash.com/photo-1546554137-f86b9593a222?w=200'} alt={r.title} style={{ width: 56, height: 56, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
+                                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                                            <div style={{ fontWeight: 700, color: '#2A2118', fontSize: '0.98rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.title}</div>
+                                                            <div style={{ fontSize: '0.8rem', color: '#9b8d7c' }}>🔥 {r.calories_per_serving || '—'} kcal · ⏱️ {r.preparation_time ? `${r.preparation_time} min` : 'N/A'}</div>
+                                                        </div>
+                                                        <button
+                                                            className="btn-generate"
+                                                            style={{ flexShrink: 0, padding: '9px 14px' }}
+                                                            disabled={selectedSlots.length === 0}
+                                                            onClick={() => handleAddExistingToSlots(r)}
+                                                        >
+                                                            Agregar <Check weight="bold" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        );
+                                    })()}
+                                </>
+                            )}
+
                             {/* ── PASO 1: CONFIGURACIÓN ── */}
                             {aiStep === 'config' && (
                                 <>
@@ -783,72 +1071,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                     )}
 
                                     {/* 2. Cuadrícula de Planificación */}
-                                    <div className="section-title" style={{ marginTop: '20px' }}><CalendarBlank weight="fill" color="#FF9F43" /> ¿Dónde quieres agregar la receta?</div>
-                                    <p style={{ fontSize: '0.85rem', color: '#9b8d7c', marginBottom: '15px' }}>Toca los cuadros para elegir los días y comidas.</p>
-                                    
-                                    {expiredDayIndexes.size > 0 && (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '8px 12px', marginBottom: 12, fontSize: '0.82rem', color: '#DC2626' }}>
-                                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444', flexShrink: 0 }} />
-                                            Los días en rojo tienen ingredientes vencidos y no están disponibles.
-                                        </div>
-                                    )}
-
-                                    {(() => {
-                                        const now = new Date();
-                                        const currentDayIndex = now.getDay() === 0 ? 6 : now.getDay() - 1;
-                                        const currentHour = now.getHours();
-                                        const isSlotDisabled = (dayIndex, meal) => {
-                                            if (dayIndex < currentDayIndex) return true;
-                                            if (dayIndex === currentDayIndex) {
-                                                if (meal === 'Desayuno' && currentHour >= 11) return true;
-                                                if (meal === 'Almuerzo' && currentHour >= 17) return true;
-                                                if (meal === 'Cena' && currentHour >= 22) return true;
-                                            }
-                                            return false;
-                                        };
-                                        return (
-                                            <div className="plan-mini-grid" style={{ display: 'grid', gridTemplateColumns: '70px repeat(7, 1fr)', gap: 8, overflowX: 'auto', paddingBottom: '10px' }}>
-                                        <div></div>
-                                        {weekDays.map((d, dayIndex) => {
-                                            const isBlocked = expiredDayIndexes.has(dayIndex);
-                                            return (
-                                                <div key={d} style={{ textAlign: 'center', fontSize: '0.75rem', fontWeight: 800, color: isBlocked ? '#EF4444' : '#a0aec0', textTransform: 'uppercase' }} title={isBlocked ? 'Ingrediente vencido este día' : ''}>
-                                                    {d.substring(0, 3)}{isBlocked && ' 🚫'}
-                                                </div>
-                                            );
-                                        })}
-                                        {mealTypesOptions.map(meal => (
-                                            <React.Fragment key={meal}>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', fontSize: '0.85rem', fontWeight: 700, color: '#4a5568', paddingRight: 8 }}>
-                                                    {meal}
-                                                </div>
-                                                {weekDays.map((_, dayIndex) => {
-                                                    const slotKey = `${dayIndex}-${meal}`;
-                                                    const isSelected = selectedSlots.includes(slotKey);
-                                                    const isExpiredBlocked = expiredDayIndexes.has(dayIndex);
-                                                    const isTimeDisabled = isSlotDisabled(dayIndex, meal);
-                                                    const isBlocked = isExpiredBlocked || isTimeDisabled;
-                                                    
-                                                    return (
-                                                        <div key={slotKey} onClick={() => { if (!isBlocked) toggleSlot(dayIndex, meal); }} style={{
-                                                            aspectRatio: '1', borderRadius: '8px',
-                                                            border: isExpiredBlocked ? '2px solid #FECACA' : (isTimeDisabled ? '2px solid #e2e8f0' : (isSelected ? '2px solid #FF9F43' : '2px dashed #e2e8f0')),
-                                                            background: isExpiredBlocked ? '#FEF2F2' : (isTimeDisabled ? '#f1f5f9' : (isSelected ? '#fffaf0' : 'transparent')),
-                                                            cursor: isBlocked ? 'not-allowed' : 'pointer',
-                                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                            transition: 'all 0.2s', minWidth: '40px',
-                                                            opacity: isBlocked ? 0.6 : 1,
-                                                        }} title={isExpiredBlocked ? 'Ingrediente vencido este día' : (isTimeDisabled ? 'Horario pasado' : '')}>
-                                                            {isBlocked && <span style={{ fontSize: '0.8rem', color: isExpiredBlocked ? '#DC2626' : '#cbd5e1' }}>{isExpiredBlocked ? '🚫' : '✕'}</span>}
-                                                            {!isBlocked && isSelected && <Check size={18} weight="bold" color="#FF9F43" />}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </React.Fragment>
-                                        ))}
-                                    </div>
-                                    );
-                                    })()}
+                                    {renderSlotGrid()}
                                 </>
                             )}
 
@@ -981,6 +1204,12 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
 
                         {/* Footer */}
                         <div className="modal-footer-modern">
+                            {aiStep === 'config' && (
+                                <button className="btn-cancel" onClick={() => setAiStep('choose')}>← Volver</button>
+                            )}
+                            {aiStep === 'existing' && (
+                                <button className="btn-cancel" onClick={() => setAiStep('choose')}>← Volver</button>
+                            )}
                             {aiStep === 'suggestions' && !isGenerating && (
                                 <button className="btn-cancel" onClick={() => { setAiStep('config'); setSuggestions([]); }}>← Volver</button>
                             )}
@@ -1099,6 +1328,25 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                 </div>
             )}
 
+            {/* === CONFIRMACIÓN DE BORRADO === */}
+            {pendingDelete && (
+                <div className="modal-overlay" onClick={() => setPendingDelete(null)}>
+                    <div className="nv-confirm-card" onClick={e => e.stopPropagation()}>
+                        <div className="nv-confirm-icon"><Warning size={38} weight="fill" /></div>
+                        <h3 className="nv-confirm-title">¿Eliminar esta receta?</h3>
+                        <p className="nv-confirm-text">
+                            Vas a quitar <strong>{pendingDelete.name}</strong> del plan
+                            {' '}({pendingDelete.type} · {weekDays[pendingDelete.dayIndex]}).
+                            <br />Esta acción no se puede deshacer.
+                        </p>
+                        <div className="nv-confirm-actions">
+                            <button className="nv-confirm-cancel" onClick={() => setPendingDelete(null)}>Cancelar</button>
+                            <button className="nv-confirm-del" onClick={confirmDeleteMeal}><Trash size={18} weight="bold" /> Eliminar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* === DESTACADO: PLAN DE HOY (solo semana actual) === */}
             {weekOffset === 0 && (() => {
                 const todayIndex = (new Date().getDay() + 6) % 7; // 0=Lunes ... 6=Domingo
@@ -1119,7 +1367,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                         key={type}
                                         className="today-meal"
                                         style={{ animationDelay: `${0.15 + i * 0.08}s` }}
-                                        onClick={() => meal && setSelectedMealDetails(meal)}
+                                        onClick={() => meal ? setSelectedMealDetails(meal) : handlePlanSlot(todayIndex, type)}
                                     >
                                         <div className={`today-meal-img ${meal ? 'filled' : 'empty'}`}>
                                             {meal
@@ -1146,7 +1394,14 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                         {weekDays.map(d => <div key={d} className="day-label">{d}</div>)}
                     </div>
                     {/* AQUÍ SE PASA LA FUNCIÓN AL CALENDARIO */}
-                    <CalendarGrid data={plannerData} onMealClick={setSelectedMealDetails} />
+                    <CalendarGrid
+                        data={plannerData}
+                        onMealClick={setSelectedMealDetails}
+                        onEmptyClick={handlePlanSlot}
+                        onChangeMeal={handlePlanSlot}
+                        onDeleteMeal={requestDeleteMeal}
+                        canEdit={userRole !== 'ayudante'}
+                    />
                 </div>
             </div>
         </div>

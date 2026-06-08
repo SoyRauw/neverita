@@ -124,10 +124,10 @@
 
 body {
     background:
-        radial-gradient(58% 50% at 88% 4%, rgba(255, 140, 50, 0.18), transparent 60%),
-        radial-gradient(50% 45% at 8% 14%, rgba(255, 110, 70, 0.12), transparent 60%),
-        radial-gradient(60% 55% at 50% 102%, rgba(245, 178, 108, 0.20), transparent 62%),
-        linear-gradient(160deg, #FFFBF6 0%, #FFF5EB 52%, #FFF1E6 100%);
+        radial-gradient(58% 50% at 88% 4%, rgba(255, 140, 50, 0.30), transparent 60%),
+        radial-gradient(50% 45% at 8% 14%, rgba(255, 110, 70, 0.20), transparent 60%),
+        radial-gradient(60% 55% at 50% 102%, rgba(245, 178, 108, 0.34), transparent 62%),
+        linear-gradient(160deg, #FBE7CF 0%, #F7D6B4 52%, #F1C49B 100%);
     background-attachment: fixed;
     color: var(--text-dark);
     min-height: 100vh;
@@ -995,6 +995,81 @@ header {
         opacity: 1;
     }
 }
+
+/* === CAPA DE CONFIRMACIÓN DE BORRADO === */
+.nv-confirm-card {
+    background: #fff;
+    width: 100%;
+    max-width: 380px;
+    border-radius: 24px;
+    padding: 32px 26px 24px;
+    text-align: center;
+    border: 1px solid rgba(255, 159, 67, 0.18);
+    box-shadow: 0 30px 70px rgba(60, 30, 0, 0.34);
+    animation: nv-pop 0.42s var(--ease-spring);
+}
+.nv-confirm-icon {
+    width: 76px;
+    height: 76px;
+    margin: 0 auto 18px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    background: linear-gradient(135deg, #FF7043, #E53935);
+    position: relative;
+    animation: nv-alert-bounce 1.7s ease-in-out infinite;
+}
+.nv-confirm-icon::before {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 50%;
+    border: 3px solid rgba(229, 57, 53, 0.35);
+    animation: nv-alert-ring 1.7s ease-out infinite;
+}
+@keyframes nv-alert-ring {
+    0%   { transform: scale(0.82); opacity: 0.85; }
+    100% { transform: scale(1.5); opacity: 0; }
+}
+@keyframes nv-alert-bounce {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-6px); }
+}
+.nv-confirm-title {
+    font-family: var(--font-display, 'Fraunces'), serif;
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #2A2118;
+    margin: 0 0 8px;
+}
+.nv-confirm-text {
+    color: #6B5E4F;
+    font-size: 0.95rem;
+    margin: 0 0 22px;
+    line-height: 1.5;
+}
+.nv-confirm-actions {
+    display: flex;
+    gap: 12px;
+}
+.nv-confirm-actions button {
+    flex: 1;
+    padding: 13px;
+    border-radius: 14px;
+    font-weight: 800;
+    font-size: 0.95rem;
+    cursor: pointer;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    transition: transform 0.15s, filter 0.15s;
+}
+.nv-confirm-actions button:hover { transform: translateY(-2px); filter: brightness(1.04); }
+.nv-confirm-cancel { background: #F3EADF; color: #6B5E4F; }
+.nv-confirm-del { background: linear-gradient(135deg, #FF7043, #E53935); color: #fff; }
 
 .modal-header {
     padding: 22px 28px;
