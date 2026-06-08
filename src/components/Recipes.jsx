@@ -7,6 +7,22 @@ import {
 } from '@phosphor-icons/react';
 import { recipesService, familyRecipesService, inventoryService, ingredientsService } from '../api';
 
+// ==========================================
+// Pluraliza unidades contables cuando la cantidad ≠ 1
+// "2 unidad" -> "2 unidades", "3 diente" -> "3 dientes". No toca g/ml/kg/l.
+// ==========================================
+const PLURAL_UNITS = ['unidad', 'diente', 'taza', 'cucharada', 'cucharadita', 'rebanada', 'pizca', 'lata', 'hoja', 'rama', 'rodaja', 'porcion', 'porción', 'trozo', 'manojo', 'vaso', 'sobre', 'paquete'];
+const pluralizeUnits = (txt) => {
+    if (typeof txt !== 'string') return txt;
+    return txt.replace(/(\d+(?:[.,]\d+)?)\s+([a-záéíóúñ]+)/gi, (full, num, unit) => {
+        const n = parseFloat(String(num).replace(',', '.'));
+        if (n === 1) return full;
+        if (!PLURAL_UNITS.includes(unit.toLowerCase())) return full;
+        const plural = /[aeiouáéíóú]$/i.test(unit) ? unit + 's' : unit + 'es';
+        return `${num} ${plural}`;
+    });
+};
+
 // Permisos por rol
 // creador: todo
 // chef: todo menos gestionar miembros
@@ -63,17 +79,6 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
 
     const startSpeech = useCallback((recipe) => {
         stopSpeech();
-
-        // Pluraliza unidades contables en español cuando la cantidad no es 1
-        // (ej: "2 unidad" -> "2 unidades", "3 diente" -> "3 dientes").
-        const PLURAL_UNITS = ['unidad', 'diente', 'taza', 'cucharada', 'cucharadita', 'rebanada', 'pizca', 'lata', 'hoja', 'rama', 'rodaja', 'porcion', 'porción', 'trozo', 'manojo', 'vaso', 'sobre', 'paquete'];
-        const pluralizeUnits = (txt) => txt.replace(/(\d+(?:[.,]\d+)?)\s+([a-záéíóúñ]+)/gi, (full, num, unit) => {
-            const n = parseFloat(String(num).replace(',', '.'));
-            if (n === 1) return full;
-            if (!PLURAL_UNITS.includes(unit.toLowerCase())) return full;
-            const plural = /[aeiouáéíóú]$/i.test(unit) ? unit + 's' : unit + 'es';
-            return `${num} ${plural}`;
-        });
 
         // Texto natural con pausas (comas extra entre secciones)
         const ingList = recipe.ingredients && recipe.ingredients.length > 0
@@ -323,7 +328,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
     const getScaledIngredients = (recipe, persons) => {
         const base = recipe.servings || 2;
         const factor = persons / base;
-        if (factor === 1 || !recipe.ingredients || recipe.ingredients.length === 0) return recipe.ingredients || [];
+        if (factor === 1 || !recipe.ingredients || recipe.ingredients.length === 0) return (recipe.ingredients || []).map(pluralizeUnits);
         return recipe.ingredients.map(ing => {
             // Formato: "1 cucharada de Nombre (cantidad unidad)" o "Nombre (cantidad unidad)" o solo "Nombre"
             const match = ing.match(/^(?:([\d.]+)\s+(.+?)\s+de\s+)?(.+?)\s*\(([\d.]+)\s*(.+?)\)$/);
@@ -338,9 +343,9 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
             const scaledBQty = Math.round(bQty * factor * 100) / 100;
             if (mQty) {
                 const scaledMQty = Math.round(mQty * factor * 100) / 100;
-                return `${scaledMQty} ${mUnit} de ${name} (${scaledBQty} ${bUnit})`;
+                return pluralizeUnits(`${scaledMQty} ${mUnit} de ${name} (${scaledBQty} ${bUnit})`);
             } else {
-                return `${name} (${scaledBQty} ${bUnit})`;
+                return pluralizeUnits(`${name} (${scaledBQty} ${bUnit})`);
             }
         });
     };
@@ -837,7 +842,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                                     <h4><ChefHat size={24} weight="duotone" /> Ingredientes</h4>
                                     <ul className="detail-list">
                                         {viewRecipe.ingredients && viewRecipe.ingredients.length > 0
-                                            ? viewRecipe.ingredients.map((ing, i) => <li key={i}>{ing}</li>)
+                                            ? viewRecipe.ingredients.map((ing, i) => <li key={i}>{pluralizeUnits(ing)}</li>)
                                             : <li style={{ color: '#c9b9a6' }}>Sin ingredientes registrados</li>}
                                     </ul>
                                 </div>

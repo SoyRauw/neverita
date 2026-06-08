@@ -1127,7 +1127,6 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                                 : <Plus size={24} weight="bold" />}
                                         </div>
                                         <span className="today-meal-type">{type}</span>
-                                        <span className="today-meal-name">{meal ? meal.name : 'Sin asignar'}</span>
                                     </div>
                                 );
                             })}
