@@ -178,6 +178,27 @@ body {
 
 html { scroll-behavior: smooth; }
 
+/* Ocultar el menú inferior cuando hay un modal abierto (evita que tape botones) */
+body.nv-modal-open .mobile-nav { display: none !important; }
+
+/* Normalizar inputs de fecha (iOS los pinta grises y empuja el valor a la derecha) */
+input[type="date"] {
+    -webkit-appearance: none;
+    appearance: none;
+    background: #FFF9F2;
+    text-align: center;
+    font-family: inherit;
+    color: var(--ink);
+}
+input[type="date"]::-webkit-date-and-time-value {
+    text-align: center;
+    margin: 0;
+}
+input[type="date"]::-webkit-calendar-picker-indicator {
+    margin-left: 4px;
+    opacity: 0.5;
+}
+
 /* === ESTADOS DE CARGA Y VACÍO === */
 .nv-empty {
     grid-column: 1 / -1;
