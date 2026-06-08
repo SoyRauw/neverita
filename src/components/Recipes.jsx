@@ -450,7 +450,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                 </div>
                 <div className="header-actions">
                     <div className="search-wrapper" style={{ position: 'relative' }}>
-                        <MagnifyingGlass size={18} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#999' }} />
+                        <MagnifyingGlass size={18} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9b8d7c' }} />
                         <input
                             className="form-input"
                             style={{ paddingLeft: 40, width: '100%', maxWidth: 250 }}
@@ -534,7 +534,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                         <div className="modal-header">
                             <div>
                                 <h3 style={{ margin: 0, fontWeight: 800 }}>Nueva Receta</h3>
-                                <p style={{ margin: 0, color: '#999', fontSize: '0.9rem' }}>Comparte tu talento culinario</p>
+                                <p style={{ margin: 0, color: '#9b8d7c', fontSize: '0.9rem' }}>Comparte tu talento culinario</p>
                             </div>
                             <button onClick={() => setIsAdding(false)} className="btn-secondary" style={{ padding: 8, border: 'none' }}><X size={24} /></button>
                         </div>
@@ -573,8 +573,8 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                             <div style={{ marginBottom: 20 }}>
                                 <label className="ia-label">Imagen</label>
                                 <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-                                    <button className={`btn-secondary ${newRecipe.imgType === 'url' ? 'active' : ''}`} style={{ flex: 1, borderColor: newRecipe.imgType === 'url' ? '#F7B27B' : '#ddd' }} onClick={() => setNewRecipe({ ...newRecipe, imgType: 'url' })}>Enlace URL</button>
-                                    <button className={`btn-secondary ${newRecipe.imgType === 'upload' ? 'active' : ''}`} style={{ flex: 1, borderColor: newRecipe.imgType === 'upload' ? '#F7B27B' : '#ddd' }} onClick={() => setNewRecipe({ ...newRecipe, imgType: 'upload' })}>Subir Archivo</button>
+                                    <button className={`btn-secondary ${newRecipe.imgType === 'url' ? 'active' : ''}`} style={{ flex: 1, borderColor: newRecipe.imgType === 'url' ? '#F7B27B' : '#EADBC7' }} onClick={() => setNewRecipe({ ...newRecipe, imgType: 'url' })}>Enlace URL</button>
+                                    <button className={`btn-secondary ${newRecipe.imgType === 'upload' ? 'active' : ''}`} style={{ flex: 1, borderColor: newRecipe.imgType === 'upload' ? '#F7B27B' : '#EADBC7' }} onClick={() => setNewRecipe({ ...newRecipe, imgType: 'upload' })}>Subir Archivo</button>
                                 </div>
                                 {newRecipe.imgType === 'url' ? (
                                     <input className="form-input" placeholder="https://..." value={newRecipe.img} onChange={e => setNewRecipe({ ...newRecipe, img: e.target.value })} />
@@ -611,19 +611,19 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                         <div style={{ width: 60, height: 60, background: '#FFF7ED', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 18px' }}>
                             <UsersThree size={30} weight="fill" color="#FF9F43" />
                         </div>
-                        <h3 style={{ margin: '0 0 6px', fontSize: '1.3rem', fontWeight: 800, color: '#1F2937' }}>¿Para cuántas personas?</h3>
-                        <p style={{ margin: '0 0 24px', color: '#6B7280', fontSize: '0.9rem' }}>Los ingredientes se escalarán automáticamente.</p>
+                        <h3 style={{ margin: '0 0 6px', fontSize: '1.3rem', fontWeight: 800, color: '#2A2118' }}>¿Para cuántas personas?</h3>
+                        <p style={{ margin: '0 0 24px', color: '#6B5E4F', fontSize: '0.9rem' }}>Los ingredientes se escalarán automáticamente.</p>
 
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 20 }}>
                             <button
                                 onClick={() => setPlanServings(p => Math.max(1, p - 1))}
-                                style={{ width: 40, height: 40, borderRadius: '50%', border: '2px solid #E5E7EB', background: 'white', cursor: 'pointer', fontSize: '1.4rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
+                                style={{ width: 40, height: 40, borderRadius: '50%', border: '2px solid #EADBC7', background: 'white', cursor: 'pointer', fontSize: '1.4rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
                                 onMouseEnter={e => { e.currentTarget.style.background = '#FFF7ED'; e.currentTarget.style.borderColor = '#FF9F43'; }}
-                                onMouseLeave={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#E5E7EB'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#EADBC7'; }}
                             >&minus;</button>
                             <div style={{ textAlign: 'center' }}>
-                                <span style={{ display: 'block', fontSize: '2.2rem', fontWeight: 900, color: '#1F2937', lineHeight: 1 }}>{planServings}</span>
-                                <span style={{ fontSize: '0.8rem', color: '#9CA3AF' }}>{planServings === 1 ? 'persona' : 'personas'}</span>
+                                <span style={{ display: 'block', fontSize: '2.2rem', fontWeight: 900, color: '#2A2118', lineHeight: 1 }}>{planServings}</span>
+                                <span style={{ fontSize: '0.8rem', color: '#9b8d7c' }}>{planServings === 1 ? 'persona' : 'personas'}</span>
                             </div>
                             <button
                                 disabled={!canIncrementPlan}
@@ -631,7 +631,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                                     if (canIncrementPlan) setPlanServings(p => p + 1);
                                 }}
                                 style={{ 
-                                    width: 40, height: 40, borderRadius: '50%', border: '2px solid #E5E7EB', 
+                                    width: 40, height: 40, borderRadius: '50%', border: '2px solid #EADBC7', 
                                     background: 'white', fontSize: '1.4rem', fontWeight: 700, 
                                     display: 'flex', alignItems: 'center', justifyContent: 'center', 
                                     transition: 'all 0.15s',
@@ -639,16 +639,16 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                                     opacity: canIncrementPlan ? 1 : 0.4
                                 }}
                                 onMouseEnter={e => { if (canIncrementPlan) { e.currentTarget.style.background = '#FFF7ED'; e.currentTarget.style.borderColor = '#FF9F43'; } }}
-                                onMouseLeave={e => { if (canIncrementPlan) { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#E5E7EB'; } }}
+                                onMouseLeave={e => { if (canIncrementPlan) { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#EADBC7'; } }}
                             >+</button>
                         </div>
 
                         {/* Preview de ingredientes escalados */}
                         {pendingRecipe.ingredients && pendingRecipe.ingredients.length > 0 && (
-                            <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 10, padding: '10px 14px', marginBottom: 20, textAlign: 'left', maxHeight: 130, overflowY: 'auto' }}>
-                                <p style={{ margin: '0 0 6px', fontSize: '0.78rem', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Ingredientes escalados</p>
+                            <div style={{ background: '#FFF9F2', border: '1px solid #EADBC7', borderRadius: 10, padding: '10px 14px', marginBottom: 20, textAlign: 'left', maxHeight: 130, overflowY: 'auto' }}>
+                                <p style={{ margin: '0 0 6px', fontSize: '0.78rem', fontWeight: 700, color: '#9b8d7c', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Ingredientes escalados</p>
                                 {getScaledIngredients(pendingRecipe, planServings).map((ing, i) => (
-                                    <div key={i} style={{ fontSize: '0.85rem', color: '#374151', padding: '2px 0', borderBottom: i < pendingRecipe.ingredients.length - 1 ? '1px dashed #E5E7EB' : 'none' }}>
+                                    <div key={i} style={{ fontSize: '0.85rem', color: '#2A2118', padding: '2px 0', borderBottom: i < pendingRecipe.ingredients.length - 1 ? '1px dashed #EADBC7' : 'none' }}>
                                         🥄 {ing}
                                     </div>
                                 ))}
@@ -674,8 +674,8 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                                 <img src={planRecipe.img} alt={planRecipe.name} style={{ width: 50, height: 50, borderRadius: 10, objectFit: 'cover' }} />
                                 <div>
                                     <h3 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800, color: '#2d3436' }}>Planificar Plato</h3>
-                                    <p style={{ margin: 0, color: '#888', fontSize: '0.9rem' }}>Toca donde quieres comer <span style={{ color: '#F7B27B', fontWeight: 600 }}>{planRecipe.name}</span></p>
-                                    <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: '#9CA3AF' }}>
+                                    <p style={{ margin: 0, color: '#9b8d7c', fontSize: '0.9rem' }}>Toca donde quieres comer <span style={{ color: '#F7B27B', fontWeight: 600 }}>{planRecipe.name}</span></p>
+                                    <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: '#9b8d7c' }}>
                                         <UsersThree size={13} weight="fill" style={{ verticalAlign: 'middle', marginRight: 3 }} />
                                         Para {planServings} {planServings === 1 ? 'persona' : 'personas'}
                                     </p>
@@ -733,13 +733,13 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                         <div className="modal-header">
                             <div>
                                 <h3 style={{ margin: 0, fontWeight: 800 }}>Importar Receta</h3>
-                                <p style={{ margin: 0, color: '#999', fontSize: '0.9rem' }}>Agrega recetas del sistema a tu familia</p>
+                                <p style={{ margin: 0, color: '#9b8d7c', fontSize: '0.9rem' }}>Agrega recetas del sistema a tu familia</p>
                             </div>
                             <button onClick={() => setIsAddingExisting(false)} className="btn-secondary" style={{ padding: 8, border: 'none' }}><X size={24} /></button>
                         </div>
                         <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
                             {availableRecipes.length === 0 ? (
-                                <p style={{ color: '#999', textAlign: 'center', padding: '2rem' }}>No hay recetas adicionales disponibles en el sistema.</p>
+                                <p style={{ color: '#9b8d7c', textAlign: 'center', padding: '2rem' }}>No hay recetas adicionales disponibles en el sistema.</p>
                             ) : (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                                     {availableRecipes.map(recipe => (
@@ -748,7 +748,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                                                 <img src={recipe.img} alt={recipe.name} style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover' }} />
                                                 <div>
                                                     <span style={{ fontWeight: 600, display: 'block' }}>{recipe.name}</span>
-                                                    <span style={{ fontSize: '0.8rem', color: '#888' }}><Fire size={12} style={{verticalAlign: 'middle'}}/> {recipe.cal || '—'} kcal | <Clock size={12} style={{verticalAlign: 'middle'}}/> {recipe.time}</span>
+                                                    <span style={{ fontSize: '0.8rem', color: '#9b8d7c' }}><Fire size={12} style={{verticalAlign: 'middle'}}/> {recipe.cal || '—'} kcal | <Clock size={12} style={{verticalAlign: 'middle'}}/> {recipe.time}</span>
                                                 </div>
                                             </div>
                                             <div style={{ display: 'flex', gap: 10 }}>
@@ -773,7 +773,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                 <div className="modal-overlay" style={{ zIndex: 6000 }} onClick={handleCloseViewRecipe}>
                     <div className="modal-modern" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h3 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 800, color: '#2d3436' }}>{viewRecipe.name}</h3>
+                            <h3 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 800, color: '#2A2118' }}>{viewRecipe.name}</h3>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 {/* Botón TTS */}
                                 <button
@@ -803,19 +803,19 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                                     ))}
                                 </div>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'center', gap: 30, marginBottom: 30, padding: '10px 0', borderBottom: '1px dashed #eee' }}>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', color: '#555', fontWeight: 700 }}>
+                            <div className="recipe-detail-stats" style={{ display: 'flex', justifyContent: 'center', gap: 30, marginBottom: 30, padding: '10px 0', borderBottom: '1px dashed #EADBC7' }}>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', color: '#6B5E4F', fontWeight: 700 }}>
                                     <Fire weight="fill" color="#F7B27B" size={22} /> {viewRecipe.cal || '—'} kcal
                                 </span>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', color: '#555', fontWeight: 700 }}>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', color: '#6B5E4F', fontWeight: 700 }}>
                                     <Clock weight="fill" color="#F7B27B" size={22} /> {viewRecipe.time}
                                 </span>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', color: '#555', fontWeight: 700 }}>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', color: '#6B5E4F', fontWeight: 700 }}>
                                     <UsersThree weight="fill" color="#F7B27B" size={22} /> {viewRecipe.servings || 2} personas
                                 </span>
                             </div>
                             {viewRecipe.description && (
-                                <p style={{ color: '#555', marginBottom: 20, fontStyle: 'italic' }}>{viewRecipe.description}</p>
+                                <p style={{ color: '#6B5E4F', marginBottom: 20, fontStyle: 'italic' }}>{viewRecipe.description}</p>
                             )}
                             <div className="detail-grid-responsive" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                                 <div className="detail-card-section">
@@ -823,7 +823,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                                     <ul className="detail-list">
                                         {viewRecipe.ingredients && viewRecipe.ingredients.length > 0
                                             ? viewRecipe.ingredients.map((ing, i) => <li key={i}>{ing}</li>)
-                                            : <li style={{ color: '#aaa' }}>Sin ingredientes registrados</li>}
+                                            : <li style={{ color: '#c9b9a6' }}>Sin ingredientes registrados</li>}
                                     </ul>
                                 </div>
                                 <div className="detail-card-section">
@@ -835,7 +835,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                                                     <span style={{ fontWeight: '800', color: '#F7B27B', marginRight: 5 }}>{i + 1}.</span> {step.replace(/^\d+[\.\-]?\s*/, '')}
                                                 </li>
                                             ))
-                                            : <li style={{ color: '#aaa' }}>Sin instrucciones registradas</li>}
+                                            : <li style={{ color: '#c9b9a6' }}>Sin instrucciones registradas</li>}
                                     </ol>
                                 </div>
                             </div>
@@ -874,11 +874,11 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                         <div style={{ width: 64, height: 64, background: '#FEF2F2', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', color: '#EF4444' }}>
                             <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 256 256"><path fill="currentColor" d="M236.8 188.09L149.35 36.22a24.76 24.76 0 0 0-42.7 0L19.2 188.09a23.51 23.51 0 0 0 0 23.72A24.35 24.35 0 0 0 40.55 224h174.9a24.35 24.35 0 0 0 21.35-12.19a23.51 23.51 0 0 0 0-23.72Zm-13.6 15.68A8.32 8.32 0 0 1 215.45 208H40.55a8.32 8.32 0 0 1-7.75-4.23a7.51 7.51 0 0 1 0-7.86l87.45-151.87a8.75 8.75 0 0 1 15.5 0l87.45 151.87a7.51 7.51 0 0 1 0 7.86ZM128 136a8 8 0 0 1-8-8v-32a8 8 0 0 1 16 0v32a8 8 0 0 1-8 8Zm0 48a12 12 0 1 1 12-12a12 12 0 0 1-12 12Z"/></svg>
                         </div>
-                        <h3 style={{ margin: '0 0 10px', fontSize: '1.4rem', color: '#1F2937' }}>Faltan ingredientes</h3>
-                        <p style={{ margin: '0 0 20px', color: '#6B7280', fontSize: '0.95rem' }}>Para preparar esta receta, necesitas agregar lo siguiente a tu inventario:</p>
+                        <h3 style={{ margin: '0 0 10px', fontSize: '1.4rem', color: '#2A2118' }}>Faltan ingredientes</h3>
+                        <p style={{ margin: '0 0 20px', color: '#6B5E4F', fontSize: '0.95rem' }}>Para preparar esta receta, necesitas agregar lo siguiente a tu inventario:</p>
                         
-                        <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 12, padding: '15px', textAlign: 'left', marginBottom: 25, maxHeight: 150, overflowY: 'auto' }}>
-                            <ul style={{ margin: 0, paddingLeft: 20, color: '#4B5563', lineHeight: 1.6 }}>
+                        <div style={{ background: '#FFF9F2', border: '1px solid #EADBC7', borderRadius: 12, padding: '15px', textAlign: 'left', marginBottom: 25, maxHeight: 150, overflowY: 'auto' }}>
+                            <ul style={{ margin: 0, paddingLeft: 20, color: '#6B5E4F', lineHeight: 1.6 }}>
                                 {missingIngredients.map((ing, i) => (
                                     <li key={i}>{ing}</li>
                                 ))}

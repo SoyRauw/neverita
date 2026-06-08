@@ -26,7 +26,7 @@ const EXPIRY_STYLES = {
     critical: { bg: '#FFF7ED', color: '#EA580C', badgeBg: '#FFEDD5', badgeColor: '#EA580C', label: 'Vence hoy',   icon: <Warning size={15} weight="fill" /> },
     warning:  { bg: '#FEFCE8', color: '#CA8A04', badgeBg: '#FEF9C3', badgeColor: '#CA8A04', label: 'Por vencer',  icon: <Warning size={15} weight="fill" /> },
     ok:       { bg: 'transparent', color: '#16A34A', badgeBg: '#DCFCE7', badgeColor: '#16A34A', label: null,      icon: null },
-    none:     { bg: 'transparent', color: '#9CA3AF', badgeBg: '#F3F4F6', badgeColor: '#9CA3AF', label: null,      icon: null },
+    none:     { bg: 'transparent', color: '#9b8d7c', badgeBg: '#FFF6EC', badgeColor: '#9b8d7c', label: null,      icon: null },
 };
 
 const Inventory = ({ currentFamily, userRole }) => {
@@ -273,7 +273,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                                                     </span>
                                                 )}
                                             </td>
-                                            <td style={{ color: status === 'expired' ? '#9CA3AF' : 'inherit' }}>{item.quantity} {item.unit}</td>
+                                            <td style={{ color: status === 'expired' ? '#9b8d7c' : 'inherit' }}>{item.quantity} {item.unit}</td>
                                             <td>
                                                 <span style={{
                                                     backgroundColor: style.badgeBg,
@@ -293,7 +293,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                                             <td style={{ display: 'flex', gap: 10 }}>
                                                 <button
                                                     onClick={() => handleToggleFrozen(item)}
-                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: item.is_frozen ? '#0EA5E9' : '#9CA3AF' }}
+                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: item.is_frozen ? '#0EA5E9' : '#9b8d7c' }}
                                                     title={item.is_frozen ? "Descongelar" : "Congelar"}
                                                 >
                                                     <Snowflake size={20} weight={item.is_frozen ? "fill" : "regular"} />
@@ -337,7 +337,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                                                     </span>
                                                 )}
                                             </h4>
-                                            <p style={{ color: status === 'expired' ? '#9CA3AF' : 'inherit' }}>{item.quantity} {item.unit}</p>
+                                            <p style={{ color: status === 'expired' ? '#9b8d7c' : 'inherit' }}>{item.quantity} {item.unit}</p>
                                             {item.expiration_date && (
                                                 <span className="inv-card-expiry" style={{ 
                                                     color: style.badgeColor, 
@@ -354,7 +354,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                                                 className="inv-card-delete"
                                                 onClick={() => handleToggleFrozen(item)}
                                                 title={item.is_frozen ? "Descongelar" : "Congelar"}
-                                                style={{ color: item.is_frozen ? '#0EA5E9' : '#9CA3AF' }}
+                                                style={{ color: item.is_frozen ? '#0EA5E9' : '#9b8d7c' }}
                                             >
                                                 <Snowflake size={18} weight={item.is_frozen ? "fill" : "regular"} />
                                             </button>
@@ -383,7 +383,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                         <div style={{ padding: '24px 24px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <h3 style={{ margin: 0, fontWeight: 800 }}>Agregar Producto</h3>
                             <button onClick={() => { setShowModal(false); resetModal(); }} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                                <X size={22} color="#9CA3AF" />
+                                <X size={22} color="#9b8d7c" />
                             </button>
                         </div>
 
@@ -410,7 +410,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                                             onChange={e => { setSearchText(e.target.value); setSelectedIngredient(null); setShowSuggestions(true); }}
                                             onFocus={() => setShowSuggestions(true)}
                                             onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                                            style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: selectedIngredient ? '2px solid #22C55E' : '2px solid #E5E7EB', fontSize: '1rem', outline: 'none', boxSizing: 'border-box', background: selectedIngredient ? '#F0FFF4' : 'white' }}
+                                            style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: selectedIngredient ? '2px solid #22C55E' : '2px solid #EADBC7', fontSize: '1rem', outline: 'none', boxSizing: 'border-box', background: selectedIngredient ? '#F0FFF4' : 'white' }}
                                         />
                                         {selectedIngredient && (
                                             <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#22C55E', fontWeight: 700 }}>
@@ -420,17 +420,17 @@ const Inventory = ({ currentFamily, userRole }) => {
 
                                         {/* Lista de sugerencias */}
                                         {showSuggestions && suggestions.length > 0 && (
-                                            <div style={{ position: 'absolute', top: '110%', left: 0, right: 0, zIndex: 999, background: 'white', border: '2px solid #E5E7EB', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', maxHeight: 220, overflowY: 'auto' }}>
+                                            <div style={{ position: 'absolute', top: '110%', left: 0, right: 0, zIndex: 999, background: 'white', border: '2px solid #EADBC7', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', maxHeight: 220, overflowY: 'auto' }}>
                                                 {suggestions.map(ing => (
                                                     <div
                                                         key={ing.ingredient_id}
                                                         onMouseDown={() => handleSelectSuggestion(ing)}
-                                                        style={{ padding: '10px 14px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #F3F4F6', fontSize: '0.95rem' }}
+                                                        style={{ padding: '10px 14px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #FFF6EC', fontSize: '0.95rem' }}
                                                         onMouseEnter={e => e.currentTarget.style.background = '#FFF7ED'}
                                                         onMouseLeave={e => e.currentTarget.style.background = 'white'}
                                                     >
                                                         <span style={{ fontWeight: 600 }}>{ing.name}</span>
-                                                        <span style={{ fontSize: '0.78rem', color: '#9CA3AF', background: '#F3F4F6', padding: '2px 8px', borderRadius: 20 }}>{ing.unit}</span>
+                                                        <span style={{ fontSize: '0.78rem', color: '#9b8d7c', background: '#FFF6EC', padding: '2px 8px', borderRadius: 20 }}>{ing.unit}</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -457,7 +457,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                                                 placeholder="Nombre del ingrediente (Ej: Harina Pan)"
                                                 value={newIngredient.name}
                                                 onChange={e => setNewIngredient({ ...newIngredient, name: e.target.value })}
-                                                style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '2px solid #E5E7EB', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }}
+                                                style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '2px solid #EADBC7', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }}
                                             />
                                             {aiLoading && (
                                                 <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: '0.75rem', color: '#FF9F43', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -475,7 +475,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                                         )}
 
                                         <div style={{ display: 'flex', gap: 8 }}>
-                                            <select value={newIngredient.unit} onChange={e => setNewIngredient({ ...newIngredient, unit: e.target.value })} style={{ flex: 1, padding: '8px 10px', borderRadius: 10, border: '2px solid #E5E7EB', fontSize: '0.9rem' }}>
+                                            <select value={newIngredient.unit} onChange={e => setNewIngredient({ ...newIngredient, unit: e.target.value })} style={{ flex: 1, padding: '8px 10px', borderRadius: 10, border: '2px solid #EADBC7', fontSize: '0.9rem' }}>
                                                 <option value="g">Gramos (g)</option>
                                                 <option value="kg">Kilogramos (kg)</option>
                                                 <option value="ml">Mililitros (ml)</option>
@@ -483,7 +483,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                                                 <option value="cup">Taza</option>
                                                 <option value="unidad">Unidad</option>
                                             </select>
-                                            <select value={newIngredient.category} onChange={e => setNewIngredient({ ...newIngredient, category: e.target.value })} style={{ flex: 1, padding: '8px 10px', borderRadius: 10, border: '2px solid #E5E7EB', fontSize: '0.9rem' }}>
+                                            <select value={newIngredient.category} onChange={e => setNewIngredient({ ...newIngredient, category: e.target.value })} style={{ flex: 1, padding: '8px 10px', borderRadius: 10, border: '2px solid #EADBC7', fontSize: '0.9rem' }}>
                                                 <option value="vegetal">Vegetal</option>
                                                 <option value="fruta">Fruta</option>
                                                 <option value="proteína">Proteína</option>
@@ -495,7 +495,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                                                 <option value="otro">Otro</option>
                                             </select>
                                         </div>
-                                        <button onClick={handleCreateIngredient} disabled={aiLoading} style={{ background: aiLoading ? '#E5E7EB' : '#FF9F43', color: aiLoading ? '#9CA3AF' : 'white', border: 'none', borderRadius: 10, padding: '8px 16px', fontWeight: 700, cursor: aiLoading ? 'not-allowed' : 'pointer', fontSize: '0.9rem' }}>
+                                        <button onClick={handleCreateIngredient} disabled={aiLoading} style={{ background: aiLoading ? '#EADBC7' : '#FF9F43', color: aiLoading ? '#9b8d7c' : 'white', border: 'none', borderRadius: 10, padding: '8px 16px', fontWeight: 700, cursor: aiLoading ? 'not-allowed' : 'pointer', fontSize: '0.9rem' }}>
                                             {aiLoading ? '✨ Consultando IA...' : 'Crear y seleccionar'}
                                         </button>
                                     </div>
@@ -512,12 +512,12 @@ const Inventory = ({ currentFamily, userRole }) => {
                                         value={quantity}
                                         onChange={e => setQuantity(e.target.value)}
                                         placeholder="Ej: 500"
-                                        style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: '2px solid #E5E7EB', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }}
+                                        style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: '2px solid #EADBC7', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }}
                                     />
                                 </div>
                                 <div style={{ flex: 1 }}>
                                     <label style={{ fontWeight: 600, fontSize: '0.9rem', color: '#555', display: 'block', marginBottom: 6 }}>Unidad</label>
-                                    <div style={{ padding: '10px 14px', borderRadius: 12, border: '2px solid #E5E7EB', fontSize: '1rem', background: '#F3F4F6', color: '#6B7280', textAlign: 'center' }}>
+                                    <div style={{ padding: '10px 14px', borderRadius: 12, border: '2px solid #EADBC7', fontSize: '1rem', background: '#FFF6EC', color: '#6B5E4F', textAlign: 'center' }}>
                                         {selectedIngredient ? selectedIngredient.unit : '—'}
                                     </div>
                                 </div>
@@ -526,16 +526,16 @@ const Inventory = ({ currentFamily, userRole }) => {
                             {/* ---- FECHA VENCIMIENTO ---- */}
                             <div>
                                 <label style={{ fontWeight: 600, fontSize: '0.9rem', color: '#555', display: 'block', marginBottom: 6 }}>
-                                    Fecha de vencimiento <span style={{ fontWeight: 400, color: '#9CA3AF' }}>(opcional)</span>
+                                    Fecha de vencimiento <span style={{ fontWeight: 400, color: '#9b8d7c' }}>(opcional)</span>
                                 </label>
                                 <input
                                     type="date"
                                     value={expirationDate}
                                     onChange={e => setExpirationDate(e.target.value)}
-                                    style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: '2px solid #E5E7EB', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }}
+                                    style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: '2px solid #EADBC7', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }}
                                 />
                                 {estimatedExpiry && (
-                                    <p style={{ margin: '6px 0 0', fontSize: '0.8rem', color: '#6B7280', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <p style={{ margin: '6px 0 0', fontSize: '0.8rem', color: '#6B5E4F', display: 'flex', alignItems: 'center', gap: 4 }}>
                                         <CheckCircle size={14} color="#22C55E" weight="fill" />
                                         Se usará fecha estimada: <strong style={{ marginLeft: 3 }}>{new Date(estimatedExpiry + 'T12:00:00').toLocaleDateString()}</strong>&nbsp;({selectedIngredient.average_expiry_days} días)
                                     </p>

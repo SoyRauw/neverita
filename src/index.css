@@ -241,12 +241,16 @@ html { scroll-behavior: smooth; }
     max-width: 1400px;
     margin: 0 auto;
     min-height: 100vh;
-    animation: nv-page-in 0.5s var(--ease-out) both;
+    animation: nv-page-in 0.45s var(--ease-out) both;
 }
 
+/* IMPORTANTE: solo opacidad, sin transform.
+   Un transform persistente aquí crea un stacking context y convierte a
+   .main-content en el bloque contenedor de los position:fixed, lo que hacía
+   que el menú inferior tapara los botones de los modales. */
 @keyframes nv-page-in {
-    from { opacity: 0; transform: translateY(16px); }
-    to   { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; }
+    to   { opacity: 1; }
 }
 
 /* === TOASTS (notificaciones) === */
@@ -820,6 +824,7 @@ header {
     background-color: #fff;
     width: 95%;
     max-width: 650px;
+    max-height: 90vh;
     border-radius: 26px;
     border: 1px solid rgba(255, 159, 67, 0.18);
     box-shadow: 0 30px 70px rgba(60, 30, 0, 0.3);
@@ -985,9 +990,9 @@ header {
     gap: 7px;
     padding: 9px 16px;
     border-radius: 50px;
-    border: 1.5px solid #ccc;
+    border: 1.5px solid #EADBC7;
     background: white;
-    color: #555;
+    color: var(--ink-soft);
     font-size: 0.9rem;
     font-weight: 700;
     cursor: pointer;
@@ -2589,6 +2594,19 @@ header {
         grid-template-columns: 1fr !important;
     }
 
+    .recipe-detail-stats {
+        gap: 12px !important;
+        flex-wrap: wrap;
+        justify-content: space-around !important;
+    }
+    .recipe-detail-stats span {
+        font-size: 0.88rem !important;
+    }
+    .recipe-hero-wrapper {
+        height: 185px !important;
+        margin-bottom: 18px !important;
+    }
+
     .create-recipe-top-grid {
         grid-template-columns: 1fr !important;
     }
@@ -2737,15 +2755,28 @@ header {
 
     .modal-header {
         padding: 16px 18px !important;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .modal-header h3 {
+        font-size: 1.18rem !important;
+        flex: 1;
+        min-width: 0;
+    }
+    .btn-speech {
+        padding: 8px 13px !important;
+        font-size: 0.8rem !important;
     }
 
     .modal-body {
-        padding: 18px !important;
-        max-height: 60vh !important;
+        padding: 18px 18px calc(18px + env(safe-area-inset-bottom)) !important;
+        max-height: none !important;
+        flex: 1;
+        min-height: 0;
     }
 
     .modal-footer {
-        padding: 14px 18px !important;
+        padding: 14px 18px calc(14px + env(safe-area-inset-bottom)) !important;
         flex-wrap: wrap;
     }
 

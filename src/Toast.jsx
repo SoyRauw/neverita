@@ -61,6 +61,28 @@ export function ToastHost() {
         return () => window.removeEventListener('nv-toast', onToast);
     }, [remove]);
 
+    // Bloquear el scroll del fondo cuando hay cualquier modal abierto (.modal-overlay).
+    // Usa un MutationObserver, así cubre TODOS los modales de la app sin tocar cada uno.
+    // Bloquea tanto <html> como <body> para que funcione en todos los navegadores.
+    useEffect(() => {
+        if (typeof document === 'undefined') return;
+        const html = document.documentElement;
+        const body = document.body;
+        const apply = () => {
+            const open = !!document.querySelector('.modal-overlay');
+            html.style.overflow = open ? 'hidden' : '';
+            body.style.overflow = open ? 'hidden' : '';
+        };
+        const observer = new MutationObserver(apply);
+        observer.observe(document.body, { childList: true, subtree: true });
+        apply();
+        return () => {
+            observer.disconnect();
+            html.style.overflow = '';
+            body.style.overflow = '';
+        };
+    }, []);
+
     if (toasts.length === 0) return null;
 
     return (

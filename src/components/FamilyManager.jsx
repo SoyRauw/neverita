@@ -6,7 +6,7 @@ import { userFamilyService } from '../api';
 const ROLE_CONFIG = {
     creador: { label: 'Creador', emoji: '🏠', color: '#FF9F43', bg: '#FFF7ED' },
     chef: { label: 'Chef', emoji: '👨‍🍳', color: '#10B981', bg: '#ECFDF5' },
-    ayudante: { label: 'Ayudante', emoji: '🧹', color: '#6B7280', bg: '#F3F4F6' },
+    ayudante: { label: 'Ayudante', emoji: '🧹', color: '#6B5E4F', bg: '#FFF6EC' },
 };
 
 const FamilyManager = ({ 
@@ -133,7 +133,7 @@ const FamilyManager = ({
                         {mode === 'profile' && 'Editar Perfil'}
                         {mode === 'members' && 'Miembros de la Familia'}
                     </h3>
-                    <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#999' }}>
+                    <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9b8d7c' }}>
                         <X size={20} weight="bold" />
                     </button>
                 </div>
@@ -150,15 +150,15 @@ const FamilyManager = ({
                                 style={{ width: '100px', height: '100px', borderRadius: '50%', objectFit: 'cover', marginBottom: '15px', border: '4px solid #fff', boxShadow: '0 5px 15px rgba(0,0,0,0.1)' }} 
                             />
                             <h2 style={{ margin: '0 0 5px 0', fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600, fontSize: '1.6rem', color: '#2A2118' }}>{currentUser.name}</h2>
-                            <p style={{ color: '#888', margin: 0 }}>{currentUser.email}</p>
+                            <p style={{ color: '#9b8d7c', margin: 0 }}>{currentUser.email}</p>
                             
                             {/* Badge de rol */}
                             {userRole && (
                                 <div style={{
                                     display: 'inline-flex', alignItems: 'center', gap: 6,
                                     marginTop: 10, padding: '4px 14px', borderRadius: 20,
-                                    background: ROLE_CONFIG[userRole]?.bg || '#F3F4F6',
-                                    color: ROLE_CONFIG[userRole]?.color || '#6B7280',
+                                    background: ROLE_CONFIG[userRole]?.bg || '#FFF6EC',
+                                    color: ROLE_CONFIG[userRole]?.color || '#6B5E4F',
                                     fontWeight: 700, fontSize: '0.85rem'
                                 }}>
                                     {ROLE_CONFIG[userRole]?.emoji} {ROLE_CONFIG[userRole]?.label}
@@ -233,16 +233,16 @@ const FamilyManager = ({
                                             padding: '15px', borderRadius: '12px', border: '1px solid #eee',
                                             cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                             background: activeFamily.id === fam.id ? '#FFF3E0' : 'white',
-                                            borderColor: activeFamily.id === fam.id ? 'var(--color-primary)' : '#eee'
+                                            borderColor: activeFamily.id === fam.id ? 'var(--color-primary)' : '#EADBC7'
                                         }}
                                     >
                                         <div>
-                                            <span style={{ fontWeight: 'bold', color: '#333' }}>{fam.name}</span>
+                                            <span style={{ fontWeight: 'bold', color: '#2A2118' }}>{fam.name}</span>
                                             <div style={{
                                                 display: 'inline-flex', alignItems: 'center', gap: 4,
                                                 marginLeft: 10, padding: '2px 8px', borderRadius: 10,
-                                                background: ROLE_CONFIG[fam.role]?.bg || '#F3F4F6',
-                                                color: ROLE_CONFIG[fam.role]?.color || '#6B7280',
+                                                background: ROLE_CONFIG[fam.role]?.bg || '#FFF6EC',
+                                                color: ROLE_CONFIG[fam.role]?.color || '#6B5E4F',
                                                 fontSize: '0.7rem', fontWeight: 700
                                             }}>
                                                 {ROLE_CONFIG[fam.role]?.emoji} {ROLE_CONFIG[fam.role]?.label}
@@ -256,7 +256,7 @@ const FamilyManager = ({
                                     onClick={onCreateNew}
                                     style={{
                                         padding: '15px', borderRadius: '12px', border: '2px dashed #ddd',
-                                        background: 'transparent', color: '#888', cursor: 'pointer', fontWeight: 'bold',
+                                        background: 'transparent', color: '#9b8d7c', cursor: 'pointer', fontWeight: 'bold',
                                         display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginTop: '10px'
                                     }}
                                 >
@@ -274,7 +274,7 @@ const FamilyManager = ({
                             </button>
 
                             {loadingMembers ? (
-                                <p style={{ textAlign: 'center', color: '#999' }}>Cargando miembros...</p>
+                                <p style={{ textAlign: 'center', color: '#9b8d7c' }}>Cargando miembros...</p>
                             ) : (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                                     {members.map(member => {
@@ -283,7 +283,7 @@ const FamilyManager = ({
                                         return (
                                             <div key={member.user_id} style={{
                                                 padding: '12px', borderRadius: 14,
-                                                border: `1px solid ${isCreator ? '#FFE4B5' : '#eee'}`,
+                                                border: `1px solid ${isCreator ? '#FFE4B5' : '#EADBC7'}`,
                                                 background: isCreator ? '#FFFBF5' : '#fff',
                                             }}>
                                                 {/* Fila superior: Avatar + Nombre */}
@@ -294,10 +294,10 @@ const FamilyManager = ({
                                                         style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
                                                     />
                                                     <div style={{ flex: 1, minWidth: 0 }}>
-                                                        <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                        <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#2A2118', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                             {member.name}
                                                         </div>
-                                                        <div style={{ fontSize: '0.75rem', color: '#999', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.email}</div>
+                                                        <div style={{ fontSize: '0.75rem', color: '#9b8d7c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.email}</div>
                                                     </div>
                                                     {isCreator && (
                                                         <div style={{
@@ -320,8 +320,8 @@ const FamilyManager = ({
                                                                 padding: '3px 6px', borderRadius: 6,
                                                                 border: '1px solid rgba(230,126,34,0.22)', fontSize: '0.75rem',
                                                                 fontWeight: 600, cursor: 'pointer',
-                                                                background: ROLE_CONFIG[member.role]?.bg || '#F3F4F6',
-                                                                color: ROLE_CONFIG[member.role]?.color || '#6B7280'
+                                                                background: ROLE_CONFIG[member.role]?.bg || '#FFF6EC',
+                                                                color: ROLE_CONFIG[member.role]?.color || '#6B5E4F'
                                                             }}
                                                         >
                                                             <option value="chef">👨‍🍳 Chef</option>

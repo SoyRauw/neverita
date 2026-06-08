@@ -320,9 +320,9 @@ const ShoppingList = ({ currentFamily }) => {
                         {showSuggestions && suggestions.length > 0 && (
                             <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999, background: 'white', border: '2px solid rgba(230,126,34,0.18)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', maxHeight: 200, overflowY: 'auto', marginTop: 4 }}>
                                 {suggestions.map(ing => (
-                                    <div key={ing.ingredient_id} onMouseDown={() => handleSelectSuggestion(ing)} style={{ padding: '10px 14px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #F3F4F6' }}>
+                                    <div key={ing.ingredient_id} onMouseDown={() => handleSelectSuggestion(ing)} style={{ padding: '10px 14px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #FFF6EC' }}>
                                         <span style={{ fontWeight: 600 }}>{ing.name}</span>
-                                        <span style={{ fontSize: '0.8rem', color: '#9CA3AF' }}>{ing.unit}</span>
+                                        <span style={{ fontSize: '0.8rem', color: '#9b8d7c' }}>{ing.unit}</span>
                                     </div>
                                 ))}
                             </div>
@@ -368,7 +368,7 @@ const ShoppingList = ({ currentFamily }) => {
                     <span style={{ background: '#FEE2E2', color: '#DC2626', padding: '3px 12px', borderRadius: 999, fontSize: '0.8rem', fontWeight: 800 }}>{toBuy.length}</span>
                 </h3>
                 <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 30px 0' }}>
-                    {loading ? <p style={{ color: '#9CA3AF' }}>Cargando...</p> : toBuy.length === 0 ? <p style={{ color: '#9CA3AF', fontSize: '0.9rem' }}>Todo al día.</p> : toBuy.map(item => (
+                    {loading ? <p style={{ color: '#9b8d7c' }}>Cargando...</p> : toBuy.length === 0 ? <p style={{ color: '#9b8d7c', fontSize: '0.9rem' }}>Todo al día.</p> : toBuy.map(item => (
                         <li key={item.item_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 12px', borderBottom: '1px solid rgba(255,159,67,0.12)', transition: 'background 0.2s', borderRadius: 10 }} onMouseEnter={e => e.currentTarget.style.background = '#FFF6EC'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer', flex: 1 }} onClick={() => openInventoryModal(item)}>
                                 <Circle size={28} color="#FFC48A" />
@@ -400,7 +400,7 @@ const ShoppingList = ({ currentFamily }) => {
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer', flex: 1 }} onClick={() => openInventoryModal(item)}>
                                         <CheckCircle size={28} color="#10B981" weight="fill" />
                                         <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                            <span style={{ fontSize: '1.05rem', color: '#9CA3AF', fontWeight: 600, textDecoration: 'line-through' }}>{item.name}</span>
+                                            <span style={{ fontSize: '1.05rem', color: '#9b8d7c', fontWeight: 600, textDecoration: 'line-through' }}>{item.name}</span>
                                             <span style={{ fontSize: '0.85rem', color: '#D1D5DB' }}>{item.quantity} {item.unit}</span>
                                         </div>
                                     </div>
@@ -421,13 +421,13 @@ const ShoppingList = ({ currentFamily }) => {
             {showModal && modalItem && (
                 <div className="modal-overlay" onClick={() => setShowModal(false)}>
                     <div className="modal-modern" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
-                        <div style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,159,67,0.16)' }}>
+                        <div className="modal-header" style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,159,67,0.16)' }}>
                             <h3 style={{ margin: 0, fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600, color: '#2A2118' }}>Confirmar Ingreso</h3>
                             <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
                                 <X size={22} color="#9b8d7c" />
                             </button>
                         </div>
-                        <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                             <div style={{ background: 'linear-gradient(180deg,#FFFBF6,#FFF5EB)', padding: '16px', borderRadius: 14, textAlign: 'center', border: '1px solid rgba(255,159,67,0.18)' }}>
                                 <h2 style={{ margin: 0, fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600, color: '#2A2118' }}>{modalItem.name}</h2>
                                 <p style={{ margin: '4px 0 0', color: '#6B5E4F', fontSize: '0.9rem' }}>Se guardará en la nevera</p>
@@ -440,7 +440,7 @@ const ShoppingList = ({ currentFamily }) => {
                                 </div>
                                 <div style={{ width: 80 }}>
                                     <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#6B5E4F', marginBottom: 6, display: 'block' }}>Unidad</label>
-                                    <input type="text" value={modalItem.unit} disabled style={{ width: '100%', padding: '10px', borderRadius: 8, border: '2px solid rgba(230,126,34,0.18)', background: '#F9FAFB', color: '#9CA3AF', boxSizing: 'border-box' }} />
+                                    <input type="text" value={modalItem.unit} disabled style={{ width: '100%', padding: '10px', borderRadius: 8, border: '2px solid rgba(230,126,34,0.18)', background: '#FFF9F2', color: '#9b8d7c', boxSizing: 'border-box' }} />
                                 </div>
                             </div>
 

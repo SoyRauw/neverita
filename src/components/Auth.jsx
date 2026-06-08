@@ -32,7 +32,7 @@ const PasswordField = ({ name, placeholder, value, onChange, showPw, onToggleSho
             style={{
                 position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)',
                 background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                color: '#9CA3AF', display: 'flex', alignItems: 'center',
+                color: '#9b8d7c', display: 'flex', alignItems: 'center',
             }}
             title={showPw ? 'Ocultar contraseña' : 'Mostrar contraseña'}
         >
@@ -232,7 +232,7 @@ const Auth = ({ onLogin, onShowLanding, forceRegister }) => {
                         {resetPassword.length > 0 && (
                             <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                 {resetPasswordRules.map(rule => (
-                                    <div key={rule.label} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: rule.ok ? '#16a34a' : '#9CA3AF' }}>
+                                    <div key={rule.label} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: rule.ok ? '#16a34a' : '#9b8d7c' }}>
                                         {rule.ok ? <CheckCircle size={14} weight="fill" color="#16a34a" /> : <XCircle size={14} weight="fill" color="#D1D5DB" />}
                                         {rule.label}
                                     </div>
@@ -395,7 +395,7 @@ const Auth = ({ onLogin, onShowLanding, forceRegister }) => {
                                         {formData.password.length > 0 && (
                                             <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                                 {passwordRules.map(rule => (
-                                                    <div key={rule.label} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: rule.ok ? '#16a34a' : '#9CA3AF', transition: 'color 0.2s' }}>
+                                                    <div key={rule.label} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: rule.ok ? '#16a34a' : '#9b8d7c', transition: 'color 0.2s' }}>
                                                         {rule.ok ? <CheckCircle size={14} weight="fill" color="#16a34a" /> : <XCircle size={14} weight="fill" color="#D1D5DB" />}
                                                         {rule.label}
                                                     </div>

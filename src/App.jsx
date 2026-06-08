@@ -39,7 +39,7 @@ const modalStyles = `
     padding: 0 24px 24px; overflow-y: auto;
   }
   .section-title {
-    font-size: 0.85rem; font-weight: 700; color: #9CA3AF; text-transform: uppercase;
+    font-size: 0.85rem; font-weight: 700; color: #9b8d7c; text-transform: uppercase;
     margin: 24px 0 12px; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px;
   }
   .chips-container {
@@ -670,12 +670,12 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                 <h2 style={{ margin: 0, fontSize: '1.5rem', color: '#111827', fontWeight: '800' }}>
                                     {aiStep === 'config' ? '🍳 Chef Inteligente' : aiStep === 'suggestions' ? '🍽️ Elige una Receta' : aiStep === 'servings' ? '👥 ¿Para cuántas personas?' : '🍳 Generando...'}
                                 </h2>
-                                <p style={{ margin: '4px 0 0', color: '#6B7280', fontSize: '0.95rem' }}>
+                                <p style={{ margin: '4px 0 0', color: '#6B5E4F', fontSize: '0.95rem' }}>
                                     {aiStep === 'config' ? 'Personaliza tu menú con IA' : aiStep === 'suggestions' ? 'La IA sugiere estos platos para ti' : aiStep === 'servings' ? 'Los ingredientes se escalarán automáticamente' : 'Creando tu receta completa...'}
                                 </p>
                             </div>
                             <button onClick={handleCloseModal} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 5 }}>
-                                <X size={24} color="#9CA3AF" />
+                                <X size={24} color="#9b8d7c" />
                             </button>
                         </div>
 
@@ -723,9 +723,9 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                     {/* 1. Ingredientes del inventario real */}
                                     <div className="section-title"><ChefHat weight="fill" color="#FF9F43" /> Ingredientes en tu inventario</div>
                                     {loadingInventory ? (
-                                        <p style={{ color: '#999', fontSize: '0.9rem' }}>Cargando inventario...</p>
+                                        <p style={{ color: '#9b8d7c', fontSize: '0.9rem' }}>Cargando inventario...</p>
                                     ) : myInventory.length === 0 ? (
-                                        <p style={{ color: '#999', fontSize: '0.9rem' }}>No tienes ingredientes en el inventario. Agrega algunos primero.</p>
+                                        <p style={{ color: '#9b8d7c', fontSize: '0.9rem' }}>No tienes ingredientes en el inventario. Agrega algunos primero.</p>
                                     ) : (
                                         <div className="chips-container">
                                             {myInventory.map(item => {
@@ -748,7 +748,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
 
                                     {/* 2. Cuadrícula de Planificación */}
                                     <div className="section-title" style={{ marginTop: '20px' }}><CalendarBlank weight="fill" color="#FF9F43" /> ¿Dónde quieres agregar la receta?</div>
-                                    <p style={{ fontSize: '0.85rem', color: '#888', marginBottom: '15px' }}>Toca los cuadros para elegir los días y comidas.</p>
+                                    <p style={{ fontSize: '0.85rem', color: '#9b8d7c', marginBottom: '15px' }}>Toca los cuadros para elegir los días y comidas.</p>
                                     
                                     {expiredDayIndexes.size > 0 && (
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '8px 12px', marginBottom: 12, fontSize: '0.82rem', color: '#DC2626' }}>
@@ -822,7 +822,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                     {isGenerating ? (
                                         <div style={{ textAlign: 'center', padding: '40px 0' }}>
                                             <CircleNotch size={48} className="ph-spin" color="#FF9F43" />
-                                            <p style={{ color: '#6B7280', marginTop: 16, fontWeight: 600 }}>Consultando al Chef IA...</p>
+                                            <p style={{ color: '#6B5E4F', marginTop: 16, fontWeight: 600 }}>Consultando al Chef IA...</p>
                                         </div>
                                     ) : (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
@@ -837,10 +837,10 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                                     onMouseEnter={e => { e.currentTarget.style.borderColor = '#FF9F43'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(255,159,67,0.15)'; }}
                                                     onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(230,126,34,0.18)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
                                                 >
-                                                    <h4 style={{ margin: '0 0 6px', fontSize: '1.1rem', fontWeight: 700, color: '#1F2937' }}>
+                                                    <h4 style={{ margin: '0 0 6px', fontSize: '1.1rem', fontWeight: 700, color: '#2A2118' }}>
                                                         {sug.title}
                                                     </h4>
-                                                    <p style={{ margin: 0, color: '#6B7280', fontSize: '0.9rem' }}>
+                                                    <p style={{ margin: 0, color: '#6B5E4F', fontSize: '0.9rem' }}>
                                                         {sug.description}
                                                     </p>
                                                 </div>
@@ -854,8 +854,8 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                             {aiStep === 'generating' && (
                                 <div style={{ textAlign: 'center', padding: '50px 0' }}>
                                     <CircleNotch size={56} className="ph-spin" color="#FF9F43" />
-                                    <p style={{ color: '#1F2937', marginTop: 20, fontWeight: 700, fontSize: '1.1rem' }}>Cocinando tu receta...</p>
-                                    <p style={{ color: '#6B7280', fontSize: '0.9rem' }}>Gemini está generando ingredientes, pasos y calorías</p>
+                                    <p style={{ color: '#2A2118', marginTop: 20, fontWeight: 700, fontSize: '1.1rem' }}>Cocinando tu receta...</p>
+                                    <p style={{ color: '#6B5E4F', fontSize: '0.9rem' }}>Gemini está generando ingredientes, pasos y calorías</p>
                                 </div>
                             )}
 
@@ -870,8 +870,8 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                             onMouseLeave={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = 'rgba(230,126,34,0.18)'; }}
                                         >&minus;</button>
                                         <div>
-                                            <span style={{ display: 'block', fontSize: '2.8rem', fontWeight: 900, color: '#1F2937', lineHeight: 1 }}>{aiPlanServings}</span>
-                                            <span style={{ fontSize: '0.85rem', color: '#9CA3AF' }}>{aiPlanServings === 1 ? 'persona' : 'personas'}</span>
+                                            <span style={{ display: 'block', fontSize: '2.8rem', fontWeight: 900, color: '#2A2118', lineHeight: 1 }}>{aiPlanServings}</span>
+                                            <span style={{ fontSize: '0.85rem', color: '#9b8d7c' }}>{aiPlanServings === 1 ? 'persona' : 'personas'}</span>
                                         </div>
                                         <button
                                             disabled={!canIncrementAI}
@@ -894,9 +894,9 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                     {/* Preview escalado */}
                                     {aiDish.ingredients && aiDish.ingredients.length > 0 && (
                                         <div style={{ background: '#FFF9F2', border: '1px solid rgba(230,126,34,0.18)', borderRadius: 12, padding: '12px 16px', textAlign: 'left', maxHeight: 160, overflowY: 'auto', marginTop: 12 }}>
-                                            <p style={{ margin: '0 0 8px', fontSize: '0.78rem', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Ingredientes para {aiPlanServings} {aiPlanServings === 1 ? 'persona' : 'personas'}</p>
+                                            <p style={{ margin: '0 0 8px', fontSize: '0.78rem', fontWeight: 700, color: '#9b8d7c', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Ingredientes para {aiPlanServings} {aiPlanServings === 1 ? 'persona' : 'personas'}</p>
                                             {scaleAIDish(aiDish, aiPlanServings).map((ing, i) => (
-                                                <div key={i} style={{ fontSize: '0.88rem', color: '#374151', padding: '3px 0', borderBottom: i < aiDish.ingredients.length - 1 ? '1px dashed rgba(230,126,34,0.2)' : 'none' }}>
+                                                <div key={i} style={{ fontSize: '0.88rem', color: '#2A2118', padding: '3px 0', borderBottom: i < aiDish.ingredients.length - 1 ? '1px dashed rgba(230,126,34,0.2)' : 'none' }}>
                                                     🥄 {ing}
                                                 </div>
                                             ))}
@@ -941,7 +941,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
 
                             {/* Botón Cerrar Flotante */}
                             <button onClick={handleCloseMealDetails} style={{ position: 'absolute', top: '15px', right: '15px', background: 'white', border: 'none', borderRadius: '50%', width: '36px', height: '36px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-                                <X size={20} weight="bold" color="#4B5563" />
+                                <X size={20} weight="bold" color="#6B5E4F" />
                             </button>
 
                             {/* Botón Flotante Leer Receta */}
@@ -973,43 +973,43 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
 
                             {/* Píldora de Kcal y Tiempo */}
                             <div className="planner-detail-pill" style={{ position: 'absolute', bottom: '-20px', left: '50%', transform: 'translateX(-50%)', background: 'white', padding: '10px 24px', borderRadius: '50px', display: 'flex', gap: '20px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', whiteSpace: 'nowrap' }}>
-                                <span style={{ fontWeight: '700', color: '#4B5563', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '6px' }}>🔥 {selectedMealDetails.cal || 'N/A'} kcal</span>
-                                <span style={{ fontWeight: '700', color: '#4B5563', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '6px' }}>⏱️ {selectedMealDetails.time || '30 min'}</span>
+                                <span style={{ fontWeight: '700', color: '#6B5E4F', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '6px' }}>🔥 {selectedMealDetails.cal || 'N/A'} kcal</span>
+                                <span style={{ fontWeight: '700', color: '#6B5E4F', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '6px' }}>⏱️ {selectedMealDetails.time || '30 min'}</span>
                             </div>
                         </div>
 
                         {/* Contenido: Ingredientes y Pasos */}
                         <div className="modal-scroll-content" style={{ padding: '45px 30px 30px', marginTop: '10px' }}>
-                            <h2 style={{ textAlign: 'center', marginTop: 0, color: '#1F2937', fontSize: '1.8rem', fontWeight: '800' }}>{selectedMealDetails.name}</h2>
+                            <h2 style={{ textAlign: 'center', marginTop: 0, color: '#2A2118', fontSize: '1.8rem', fontWeight: '800' }}>{selectedMealDetails.name}</h2>
 
                             <div className="planner-detail-cols" style={{ display: 'flex', gap: '24px', marginTop: '24px', flexWrap: 'wrap' }}>
 
                                 {/* Caja Ingredientes */}
-                                <div style={{ flex: 1, minWidth: '220px', background: '#FFF9F2', padding: '24px', borderRadius: '20px', border: '1px solid #F3F4F6' }}>
+                                <div style={{ flex: 1, minWidth: '220px', background: '#FFF9F2', padding: '24px', borderRadius: '20px', border: '1px solid #FFF6EC' }}>
                                     <h3 style={{ fontSize: '1.15rem', color: '#FF9F43', display: 'flex', alignItems: 'center', gap: '10px', marginTop: 0, marginBottom: '16px' }}>
                                         <ChefHat weight="fill" size={24} /> Ingredientes
                                     </h3>
-                                    <ul style={{ paddingLeft: '20px', color: '#4B5563', lineHeight: '1.8', margin: 0, fontSize: '1rem' }}>
+                                    <ul style={{ paddingLeft: '20px', color: '#6B5E4F', lineHeight: '1.8', margin: 0, fontSize: '1rem' }}>
                                         {selectedMealDetails.ingredients ?
                                             selectedMealDetails.ingredients.map((ing, i) => <li key={i}>{ing}</li>)
-                                            : <li style={{ color: '#9CA3AF' }}>No hay ingredientes detallados para este plato.</li>
+                                            : <li style={{ color: '#9b8d7c' }}>No hay ingredientes detallados para este plato.</li>
                                         }
                                     </ul>
                                 </div>
 
                                 {/* Caja Pasos */}
-                                <div style={{ flex: 1, minWidth: '220px', background: '#FFF9F2', padding: '24px', borderRadius: '20px', border: '1px solid #F3F4F6' }}>
+                                <div style={{ flex: 1, minWidth: '220px', background: '#FFF9F2', padding: '24px', borderRadius: '20px', border: '1px solid #FFF6EC' }}>
                                     <h3 style={{ fontSize: '1.15rem', color: '#FF9F43', display: 'flex', alignItems: 'center', gap: '10px', marginTop: 0, marginBottom: '16px' }}>
                                         <Check weight="bold" size={24} /> Pasos
                                     </h3>
-                                    <ol style={{ paddingLeft: '20px', color: '#4B5563', lineHeight: '1.8', margin: 0, fontSize: '1rem' }}>
+                                    <ol style={{ paddingLeft: '20px', color: '#6B5E4F', lineHeight: '1.8', margin: 0, fontSize: '1rem' }}>
                                         {selectedMealDetails.steps && selectedMealDetails.steps.length > 0 ?
                                             selectedMealDetails.steps.map((step, i) => (
                                                 <li key={i} style={{ marginBottom: '8px' }}>
                                                     {step.replace(/^\d+[\.\-]?\s*/, '')}
                                                 </li>
                                             ))
-                                            : <li style={{ color: '#9CA3AF' }}>No hay instrucciones para este plato.</li>
+                                            : <li style={{ color: '#9b8d7c' }}>No hay instrucciones para este plato.</li>
                                         }
                                     </ol>
                                 </div>
@@ -1272,7 +1272,6 @@ function App() {
 
                 // 3. Si no existe plan para esa semana Y es la semana actual o futura, crear uno nuevo
                 if (!plan && offset >= 0) {
-                    console.log('📅 No hay plan para esta semana. Creando nuevo...');
                     plan = await menuPlansService.create({
                         plan_name: `Menú de ${currentFamily.name}`,
                         start_date: targetMondayStr,

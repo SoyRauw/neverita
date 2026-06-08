@@ -652,8 +652,8 @@ const CSS = `
 @media (max-width:640px){
   .nv-nav{padding:10px 0;}
   .nv-nav-inner{padding:0 16px;}
-  .nv-nav-cta{display:none;}
-  .nv-close-fab{display:grid;}
+  .nv-nav-cta{display:inline-flex !important; width:auto !important; padding:9px 15px !important; font-size:.85rem;}
+  .nv-close-fab{display:none;}
   .nv-hero{padding:24px 18px 16px;}
   .nv-h1{font-size:clamp(2.3rem,10vw,3rem);}
   .nv-lead{font-size:1.05rem;}
@@ -667,7 +667,10 @@ const CSS = `
   .nv-about-grid{grid-template-columns:1fr;}
   .nv-cta-inner{padding:44px 22px;border-radius:30px;}
   .nv-cta-actions{flex-direction:column;width:100%;}
-  .nv-footer{justify-content:center;text-align:center;flex-direction:column;}
+  .nv-footer{justify-content:center;text-align:center;flex-direction:column;gap:14px;padding:32px 20px;}
+  .nv-foot-tx{order:3;font-size:.82rem;}
+  .nv-foot-link{order:2;}
+  .nv-logo-sm{order:1;}
   .nv-phone{width:230px;height:466px;}
 }
 @media (prefers-reduced-motion:reduce){
