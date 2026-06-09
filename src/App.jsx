@@ -1341,20 +1341,21 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                 </div>
                             </div>
                         </div>
-                        <div className="modal-footer" style={{ flexWrap: 'wrap', gap: 10 }}>
-                            <button className="btn-secondary" onClick={handleCloseMealDetails}>Cerrar</button>
+                        <div className="modal-footer nv-detail-footer">
+                            <button className="btn-secondary nv-df-close" onClick={handleCloseMealDetails}>Cerrar</button>
                             {canEditMeal && (
                                 <>
                                     <button
-                                        className="btn-secondary"
+                                        className="btn-secondary nv-df-change"
                                         onClick={() => { handleCloseMealDetails(); handlePlanSlot(mealSlot.dayIndex, mealSlot.type); }}
-                                        style={{ color: '#e67e22', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 7 }}
+                                        style={{ color: '#e67e22', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}
                                     >
                                         <ArrowsClockwise size={18} weight="bold" /> Cambiar
                                     </button>
                                     <button
+                                        className="nv-df-del"
                                         onClick={() => { handleCloseMealDetails(); requestDeleteMeal(mealSlot.dayIndex, mealSlot.type); }}
-                                        style={{ background: 'linear-gradient(135deg, #FF7043, #E53935)', border: 'none', color: '#fff', fontWeight: 800, borderRadius: 14, padding: '12px 22px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7 }}
+                                        style={{ background: 'linear-gradient(135deg, #FF7043, #E53935)', border: 'none', color: '#fff', fontWeight: 800, borderRadius: 14, padding: '12px 22px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}
                                     >
                                         <Trash size={18} weight="bold" /> Eliminar
                                     </button>

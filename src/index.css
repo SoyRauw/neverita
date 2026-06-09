@@ -1071,6 +1071,23 @@ header {
 .nv-confirm-cancel { background: #F3EADF; color: #6B5E4F; }
 .nv-confirm-del { background: linear-gradient(135deg, #FF7043, #E53935); color: #fff; }
 
+/* === PIE DEL DETALLE DEL PLATO (Cerrar / Cambiar / Eliminar) === */
+.nv-detail-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: flex-end;
+}
+.nv-detail-footer .nv-df-close { margin-right: auto; }
+.nv-detail-footer .nv-df-del { padding: 12px 26px; }
+@media (max-width: 768px) {
+    .nv-detail-footer { gap: 10px; }
+    .nv-detail-footer .nv-df-close,
+    .nv-detail-footer .nv-df-change { flex: 1 1 calc(50% - 5px); margin-right: 0; }
+    .nv-detail-footer .nv-df-del { flex: 1 1 100%; width: 100%; }
+}
+
 .modal-header {
     padding: 22px 28px;
     border-bottom: 1px solid rgba(255, 159, 67, 0.14);
