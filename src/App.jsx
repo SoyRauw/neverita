@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { showToast } from './Toast';
 import { HashRouter, Routes, Route } from 'react-router-dom';
-import { Sparkle, CircleNotch, ShoppingCart, Check, X, ChefHat, CalendarBlank, Coffee, UsersThree, Plus, Sun, Warning, BookOpen, MagnifyingGlass, Trash } from '@phosphor-icons/react';
+import { Sparkle, CircleNotch, ShoppingCart, Check, X, ChefHat, CalendarBlank, Coffee, UsersThree, Plus, Sun, Warning, BookOpen, MagnifyingGlass, Trash, ArrowsClockwise, Fire, Clock, ListNumbers, SpeakerHigh, Pause, Play } from '@phosphor-icons/react';
 
 // --- IMPORTACIÓN DE COMPONENTES ---
 import Sidebar from './components/Sidebar';
@@ -179,6 +179,16 @@ const pluralizeUnits = (txt) => {
     });
 };
 
+// Color por turno (para el badge del detalle)
+const getMealColor = (type) => {
+    switch (type) {
+        case 'Desayuno': return '#f6b93b';
+        case 'Almuerzo': return '#e55039';
+        case 'Cena': return '#4a69bd';
+        default: return '#e67e22';
+    }
+};
+
 // ==========================================
 // PÁGINA DEL PLANIFICADOR
 // ==========================================
@@ -186,6 +196,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
     const [isGenerating, setIsGenerating] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [selectedMealDetails, setSelectedMealDetails] = useState(null);
+    const [selectedMealSlot, setSelectedMealSlot] = useState(null); // { dayIndex, type } del cuadro abierto
     const [slideDir, setSlideDir] = useState(''); // '' | 'left' | 'right'
 
     // --- TTS (Texto a Voz) ---
@@ -263,9 +274,33 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         }
     }, [speechState]);
 
+    const openMealDetails = (meal, dayIndex, type) => {
+        setSelectedMealSlot((dayIndex !== undefined && type) ? { dayIndex, type } : null);
+        setSelectedMealDetails(meal);
+    };
+
+    // Deduce el cuadro (día/turno) de la receta abierta. Usa el slot explícito si
+    // existe; si no, lo busca en el plan por daily_meal_id (o por nombre como respaldo).
+    // Así Cambiar/Eliminar funcionan en CUALQUIER semana y desde cualquier cuadro.
+    const resolveMealSlot = () => {
+        if (selectedMealSlot) return selectedMealSlot;
+        if (!selectedMealDetails || !plannerData) return null;
+        const id = selectedMealDetails.daily_meal_id;
+        const name = selectedMealDetails.name;
+        for (const [key, m] of Object.entries(plannerData)) {
+            if (!m) continue;
+            if ((id && m.daily_meal_id === id) || (!id && m.name === name)) {
+                const [d, t] = key.split('-');
+                return { dayIndex: parseInt(d, 10), type: t };
+            }
+        }
+        return null;
+    };
+
     const handleCloseMealDetails = () => {
         stopSpeech();
         setSelectedMealDetails(null);
+        setSelectedMealSlot(null);
     };
 
     const handleNavigate = (dir) => {
@@ -1232,101 +1267,104 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                 </div>
             )}
 
-            {/* --- MODAL DETALLE DEL PLATO (SOLO LECTURA) --- */}
-            {selectedMealDetails && (
+            {/* --- MODAL DETALLE DEL PLATO (mismo diseño que Recetas) --- */}
+            {selectedMealDetails && (() => {
+                const mealSlot = resolveMealSlot();
+                const badgeType = mealSlot ? mealSlot.type : (Array.isArray(selectedMealDetails.category) ? selectedMealDetails.category[0] : null);
+                const canEditMeal = userRole !== 'ayudante' && mealSlot;
+                return (
                 <div className="modal-overlay" onClick={handleCloseMealDetails}>
-                    <div className="modal-modern" onClick={e => e.stopPropagation()} style={{ padding: 0, maxWidth: '650px' }}>
-
-                        {/* Cabecera con Imagen */}
-                        <div style={{ position: 'relative', height: '220px' }}>
-                            <img src={selectedMealDetails.img} alt={selectedMealDetails.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-
-                            {/* Botón Cerrar Flotante */}
-                            <button onClick={handleCloseMealDetails} style={{ position: 'absolute', top: '15px', right: '15px', background: 'white', border: 'none', borderRadius: '50%', width: '36px', height: '36px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-                                <X size={20} weight="bold" color="#6B5E4F" />
-                            </button>
-
-                            {/* Botón Flotante Leer Receta */}
-                            <button
-                                className={`btn-speech ${speechState !== 'idle' ? 'active' : ''}`}
-                                onClick={() => {
-                                    if (speechState === 'idle') {
-                                        startSpeech(selectedMealDetails);
-                                    } else {
-                                        togglePause();
-                                    }
-                                }}
-                                style={{
-                                    position: 'absolute', top: '15px', right: '60px',
-                                    background: speechState === 'idle' ? 'rgba(255, 255, 255, 0.9)' : '#FF9F43',
-                                    color: speechState === 'idle' ? '#FF9F43' : 'white',
-                                    border: 'none', borderRadius: '50px',
-                                    padding: '8px 16px', cursor: 'pointer',
-                                    display: 'flex', alignItems: 'center', gap: '8px',
-                                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-                                    fontWeight: 'bold', fontSize: '0.9rem',
-                                    transition: 'all 0.3s ease'
-                                }}
-                            >
-                                {speechState === 'idle' && <>🔊 Leer Receta</>}
-                                {speechState === 'speaking' && <>⏸️ Pausar</>}
-                                {speechState === 'paused' && <>▶️ Reanudar</>}
-                            </button>
-
-                            {/* Píldora de Kcal y Tiempo */}
-                            <div className="planner-detail-pill" style={{ position: 'absolute', bottom: '-20px', left: '50%', transform: 'translateX(-50%)', background: 'white', padding: '10px 24px', borderRadius: '50px', display: 'flex', gap: '20px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', whiteSpace: 'nowrap' }}>
-                                <span style={{ fontWeight: '700', color: '#6B5E4F', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '6px' }}>🔥 {selectedMealDetails.cal || 'N/A'} kcal</span>
-                                <span style={{ fontWeight: '700', color: '#6B5E4F', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '6px' }}>⏱️ {selectedMealDetails.time || '30 min'}</span>
+                    <div className="modal-modern" onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 800, color: '#2A2118' }}>{selectedMealDetails.name}</h3>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <button
+                                    onClick={() => speechState === 'idle' ? startSpeech(selectedMealDetails) : togglePause()}
+                                    title={speechState === 'idle' ? 'Leer receta en voz alta' : speechState === 'speaking' ? 'Pausar lectura' : 'Reanudar lectura'}
+                                    className={`btn-speech${speechState === 'speaking' ? ' speaking' : speechState === 'paused' ? ' paused' : ''}`}
+                                >
+                                    {speechState === 'idle' && <SpeakerHigh size={20} weight="fill" />}
+                                    {speechState === 'speaking' && <Pause size={20} weight="fill" />}
+                                    {speechState === 'paused' && <Play size={20} weight="fill" />}
+                                    <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>
+                                        {speechState === 'idle' && 'Leer'}
+                                        {speechState === 'speaking' && 'Pausar'}
+                                        {speechState === 'paused' && 'Reanudar'}
+                                    </span>
+                                </button>
+                                <button onClick={handleCloseMealDetails} className="btn-secondary" style={{ padding: 8, border: 'none' }}><X size={24} /></button>
                             </div>
                         </div>
-
-                        {/* Contenido: Ingredientes y Pasos */}
-                        <div className="modal-scroll-content" style={{ padding: '45px 30px 30px', marginTop: '10px' }}>
-                            <h2 style={{ textAlign: 'center', marginTop: 0, color: '#2A2118', fontSize: '1.8rem', fontWeight: '800' }}>{selectedMealDetails.name}</h2>
-
-                            <div className="planner-detail-cols" style={{ display: 'flex', gap: '24px', marginTop: '24px', flexWrap: 'wrap' }}>
-
-                                {/* Caja Ingredientes */}
-                                <div style={{ flex: 1, minWidth: '220px', background: '#FFF9F2', padding: '24px', borderRadius: '20px', border: '1px solid #FFF6EC' }}>
-                                    <h3 style={{ fontSize: '1.15rem', color: '#FF9F43', display: 'flex', alignItems: 'center', gap: '10px', marginTop: 0, marginBottom: '16px' }}>
-                                        <ChefHat weight="fill" size={24} /> Ingredientes
-                                    </h3>
-                                    <ul style={{ paddingLeft: '20px', color: '#6B5E4F', lineHeight: '1.8', margin: 0, fontSize: '1rem' }}>
-                                        {selectedMealDetails.ingredients ?
-                                            selectedMealDetails.ingredients.map((ing, i) => <li key={i}>{ing}</li>)
-                                            : <li style={{ color: '#9b8d7c' }}>No hay ingredientes detallados para este plato.</li>
-                                        }
+                        <div className="modal-body">
+                            <div className="recipe-hero-wrapper">
+                                <img src={selectedMealDetails.img} className="recipe-hero-img" alt={selectedMealDetails.name} />
+                                {badgeType && (
+                                    <div className="hero-badges-overlay">
+                                        <span className="mini-badge" style={{ background: 'rgba(255,255,255,0.95)', color: getMealColor(badgeType), boxShadow: '0 4px 10px rgba(0,0,0,0.2)' }}>{badgeType}</span>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="recipe-detail-stats" style={{ display: 'flex', justifyContent: 'center', gap: 30, marginBottom: 30, padding: '10px 0', borderBottom: '1px dashed #EADBC7', flexWrap: 'wrap' }}>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', color: '#6B5E4F', fontWeight: 700 }}>
+                                    <Fire weight="fill" color="#F7B27B" size={22} /> {selectedMealDetails.cal || '—'} kcal
+                                </span>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', color: '#6B5E4F', fontWeight: 700 }}>
+                                    <Clock weight="fill" color="#F7B27B" size={22} /> {selectedMealDetails.time || '30 min'}
+                                </span>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', color: '#6B5E4F', fontWeight: 700 }}>
+                                    <UsersThree weight="fill" color="#F7B27B" size={22} /> {selectedMealDetails.servings || 2} {Number(selectedMealDetails.servings) === 1 ? 'persona' : 'personas'}
+                                </span>
+                            </div>
+                            {selectedMealDetails.description && (
+                                <p style={{ color: '#6B5E4F', marginBottom: 20, fontStyle: 'italic' }}>{selectedMealDetails.description}</p>
+                            )}
+                            <div className="detail-grid-responsive" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                                <div className="detail-card-section">
+                                    <h4><ChefHat size={24} weight="duotone" /> Ingredientes</h4>
+                                    <ul className="detail-list">
+                                        {selectedMealDetails.ingredients && selectedMealDetails.ingredients.length > 0
+                                            ? selectedMealDetails.ingredients.map((ing, i) => <li key={i}>{pluralizeUnits(ing)}</li>)
+                                            : <li style={{ color: '#c9b9a6' }}>Sin ingredientes registrados</li>}
                                     </ul>
                                 </div>
-
-                                {/* Caja Pasos */}
-                                <div style={{ flex: 1, minWidth: '220px', background: '#FFF9F2', padding: '24px', borderRadius: '20px', border: '1px solid #FFF6EC' }}>
-                                    <h3 style={{ fontSize: '1.15rem', color: '#FF9F43', display: 'flex', alignItems: 'center', gap: '10px', marginTop: 0, marginBottom: '16px' }}>
-                                        <Check weight="bold" size={24} /> Pasos
-                                    </h3>
-                                    <ol style={{ paddingLeft: '20px', color: '#6B5E4F', lineHeight: '1.8', margin: 0, fontSize: '1rem' }}>
-                                        {selectedMealDetails.steps && selectedMealDetails.steps.length > 0 ?
-                                            selectedMealDetails.steps.map((step, i) => (
-                                                <li key={i} style={{ marginBottom: '8px' }}>
-                                                    {step.replace(/^\d+[\.\-]?\s*/, '')}
+                                <div className="detail-card-section">
+                                    <h4><ListNumbers size={24} weight="duotone" /> Pasos</h4>
+                                    <ol className="detail-list" style={{ listStyle: 'none', padding: 0 }}>
+                                        {selectedMealDetails.steps && selectedMealDetails.steps.length > 0
+                                            ? selectedMealDetails.steps.map((step, i) => (
+                                                <li key={i} style={{ marginBottom: 15 }}>
+                                                    <span style={{ fontWeight: '800', color: '#F7B27B', marginRight: 5 }}>{i + 1}.</span> {step.replace(/^\d+[\.\-]?\s*/, '')}
                                                 </li>
                                             ))
-                                            : <li style={{ color: '#9b8d7c' }}>No hay instrucciones para este plato.</li>
-                                        }
+                                            : <li style={{ color: '#c9b9a6' }}>Sin instrucciones registradas</li>}
                                     </ol>
                                 </div>
                             </div>
                         </div>
-
-                        {/* Footer Solo de Cierre */}
-                        <div className="modal-footer-modern" style={{ justifyContent: 'center', padding: '20px', background: '#FFF9F2' }}>
-                            <button className="btn-cancel" onClick={handleCloseMealDetails} style={{ width: '100%', maxWidth: '250px', background: 'white', border: '2px solid rgba(230,126,34,0.18)' }}>
-                                Cerrar
-                            </button>
+                        <div className="modal-footer" style={{ flexWrap: 'wrap', gap: 10 }}>
+                            <button className="btn-secondary" onClick={handleCloseMealDetails}>Cerrar</button>
+                            {canEditMeal && (
+                                <>
+                                    <button
+                                        className="btn-secondary"
+                                        onClick={() => { handleCloseMealDetails(); handlePlanSlot(mealSlot.dayIndex, mealSlot.type); }}
+                                        style={{ color: '#e67e22', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 7 }}
+                                    >
+                                        <ArrowsClockwise size={18} weight="bold" /> Cambiar
+                                    </button>
+                                    <button
+                                        onClick={() => { handleCloseMealDetails(); requestDeleteMeal(mealSlot.dayIndex, mealSlot.type); }}
+                                        style={{ background: 'linear-gradient(135deg, #FF7043, #E53935)', border: 'none', color: '#fff', fontWeight: 800, borderRadius: 14, padding: '12px 22px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7 }}
+                                    >
+                                        <Trash size={18} weight="bold" /> Eliminar
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>
-            )}
+                );
+            })()}
 
             {/* === CONFIRMACIÓN DE BORRADO === */}
             {pendingDelete && (
@@ -1367,7 +1405,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                         key={type}
                                         className="today-meal"
                                         style={{ animationDelay: `${0.15 + i * 0.08}s` }}
-                                        onClick={() => meal ? setSelectedMealDetails(meal) : handlePlanSlot(todayIndex, type)}
+                                        onClick={() => meal ? openMealDetails(meal, todayIndex, type) : handlePlanSlot(todayIndex, type)}
                                     >
                                         <div className={`today-meal-img ${meal ? 'filled' : 'empty'}`}>
                                             {meal
@@ -1396,10 +1434,8 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                     {/* AQUÍ SE PASA LA FUNCIÓN AL CALENDARIO */}
                     <CalendarGrid
                         data={plannerData}
-                        onMealClick={setSelectedMealDetails}
+                        onMealClick={openMealDetails}
                         onEmptyClick={handlePlanSlot}
-                        onChangeMeal={handlePlanSlot}
-                        onDeleteMeal={requestDeleteMeal}
                         canEdit={userRole !== 'ayudante'}
                     />
                 </div>

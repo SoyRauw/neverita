@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     ForkKnife, Snowflake, Sparkle, CalendarBlank, ShoppingCart, UsersThree,
     ArrowRight, X, Check, Clock, Leaf, PiggyBank, BellRinging, CaretDown,
-    Plus, Fire, Carrot, Egg, Fish, Cheese,
+    Plus, Fire, Carrot, Egg, Fish, Cheese, SpeakerHigh, Sun, BookOpen,
 } from '@phosphor-icons/react';
 
 /* =====================================================================
@@ -56,16 +56,16 @@ const FEATURES = [
         icon: Sparkle,
         tag: 'Recetas con IA',
         title: 'Recetas con lo que ya tienes',
-        text: 'La inteligencia artificial mira tu inventario y te sugiere platos que puedes preparar ahora mismo. ¿Te gustó una idea? La genera completa: pasos, cantidades y porciones.',
-        bullets: ['Sugerencias según tu stock', 'Recetas generadas al detalle', 'Ajuste por porciones'],
+        text: 'La inteligencia artificial mira tu inventario y te sugiere platos que puedes preparar ahora mismo. ¿Te gustó una idea? La genera completa, la ajusta a las personas que comen y hasta te la lee en voz alta mientras cocinas.',
+        bullets: ['Sugerencias según tu stock', 'Pasos, cantidades y porciones', 'Lectura en voz alta'],
         accent: '#FF7F50',
     },
     {
         icon: CalendarBlank,
         tag: 'Planificador',
         title: 'Planifica tu semana en minutos',
-        text: 'Arma tu menú semanal arrastrando comidas a cada día. Desayuno, almuerzo y cena organizados de un vistazo, para ti y para toda tu familia.',
-        bullets: ['Menú semanal visual', 'Comidas por día y franja', 'Vista de toda la familia'],
+        text: 'Toca el día y la comida que quieras y elige cómo llenarlo: deja que la IA cree el plato o usa una receta que ya tienes. Cámbiala o elimínala cuando quieras, y mira de un vistazo "lo que toca hoy".',
+        bullets: ['IA o tus propias recetas', 'Desayuno, almuerzo y cena por día', 'Edita, cambia o elimina'],
         accent: '#F9A03F',
     },
     {
@@ -89,7 +89,7 @@ const FEATURES = [
 const STEPS = [
     { n: '01', icon: Snowflake, title: 'Carga tu heladera', text: 'Añade los alimentos que tienes en casa con sus fechas.' },
     { n: '02', icon: Sparkle, title: 'Pide ideas a la IA', text: 'Recibe recetas hechas con tus ingredientes disponibles.' },
-    { n: '03', icon: CalendarBlank, title: 'Planifica la semana', text: 'Organiza tus comidas día por día en tu calendario.' },
+    { n: '03', icon: CalendarBlank, title: 'Planifica la semana', text: 'Toca cada día y elige: que la IA cocine por ti o usa una receta tuya.' },
     { n: '04', icon: ShoppingCart, title: 'Compra sin olvidos', text: 'Genera tu lista con lo justo y necesario.' },
 ];
 
@@ -164,8 +164,8 @@ const LandingPage = ({ onClose, onRegister }) => {
                         </h1>
                         <p className="nv-lead nv-pop" style={{ animationDelay: '.34s' }}>
                             Neverita organiza tu heladera, te sugiere recetas con lo que ya tienes,
-                            planifica tu semana y arma tu lista de compras. Todo en un solo lugar,
-                            y en familia.
+                            planifica tu semana, arma tu lista de compras y hasta te lee las recetas
+                            en voz alta. Todo en un solo lugar, y en familia.
                         </p>
                         <div className="nv-hero-cta nv-pop" style={{ animationDelay: '.46s' }}>
                             <button className="nv-btn nv-btn-primary" onClick={onRegister}>
