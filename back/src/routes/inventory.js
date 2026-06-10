@@ -108,7 +108,14 @@ router.put('/:id', async (req, res, next) => {
 
     await db.query(query, params);
     
-    res.json({ inventory_id: Number(req.params.id), family_id, ingredient_id, quantity, expiration_date: finalExpDate, is_frozen });
+    let returnedFrozenAt = current.frozen_at;
+    if (is_frozen !== undefined) {
+      const isNowFrozen = is_frozen ? 1 : 0;
+      if (isNowFrozen === 1 && current.is_frozen === 0) returnedFrozenAt = new Date();
+      else if (isNowFrozen === 0) returnedFrozenAt = null;
+    }
+    
+    res.json({ inventory_id: Number(req.params.id), family_id, ingredient_id, quantity, expiration_date: finalExpDate, is_frozen, frozen_at: returnedFrozenAt });
   } catch (err) { next(err); }
 });
 

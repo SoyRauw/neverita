@@ -183,7 +183,12 @@ const Inventory = ({ currentFamily, userRole }) => {
                 ...item,
                 is_frozen: newValue
             });
-            setItems(prev => prev.map(i => i.inventory_id === item.inventory_id ? { ...i, is_frozen: newValue, expiration_date: updatedItem.expiration_date } : i));
+            setItems(prev => prev.map(i => i.inventory_id === item.inventory_id ? { 
+                ...i, 
+                is_frozen: newValue, 
+                expiration_date: updatedItem.expiration_date,
+                frozen_at: updatedItem.frozen_at
+            } : i));
         } catch (err) {
             showToast('Error al actualizar el estado de congelación.');
             console.error(err);
@@ -275,20 +280,30 @@ const Inventory = ({ currentFamily, userRole }) => {
                                             </td>
                                             <td style={{ color: status === 'expired' ? '#9b8d7c' : 'inherit' }}>{item.quantity} {item.unit}</td>
                                             <td>
-                                                <span style={{
-                                                    backgroundColor: style.badgeBg,
-                                                    color: style.badgeColor,
-                                                    padding: '4px 8px',
-                                                    borderRadius: '8px',
-                                                    fontSize: '0.9rem',
-                                                    fontWeight: status !== 'ok' && status !== 'none' ? 700 : 400,
-                                                    textDecoration: status === 'frozen' ? 'line-through' : 'none',
-                                                    opacity: status === 'frozen' ? 0.6 : 1
-                                                }}>
-                                                    {item.expiration_date
-                                                        ? new Date((item.expiration_date.includes('T') ? item.expiration_date.split('T')[0] : item.expiration_date) + 'T12:00:00').toLocaleDateString()
-                                                        : '—'}
-                                                </span>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                    <span style={{
+                                                        backgroundColor: style.badgeBg,
+                                                        color: style.badgeColor,
+                                                        padding: '4px 8px',
+                                                        borderRadius: '8px',
+                                                        fontSize: '0.9rem',
+                                                        fontWeight: status !== 'ok' && status !== 'none' ? 700 : 400,
+                                                        textDecoration: status === 'frozen' ? 'line-through' : 'none',
+                                                        opacity: status === 'frozen' ? 0.6 : 1,
+                                                        width: 'fit-content'
+                                                    }}>
+                                                        {item.expiration_date
+                                                            ? new Date((item.expiration_date.includes('T') ? item.expiration_date.split('T')[0] : item.expiration_date) + 'T12:00:00').toLocaleDateString()
+                                                            : '—'}
+                                                    </span>
+                                                    {status === 'frozen' && item.frozen_at && (
+                                                        <span style={{ fontSize: '0.75rem', color: '#0EA5E9', fontWeight: 600 }}>
+                                                            Desde: {new Date(item.frozen_at).toLocaleDateString()}
+                                                            <br/>
+                                                            ({Math.floor(Math.abs(new Date() - new Date(item.frozen_at)) / (1000 * 60 * 60 * 24))} días congelado)
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td style={{ display: 'flex', gap: 10 }}>
                                                 <button
@@ -339,14 +354,21 @@ const Inventory = ({ currentFamily, userRole }) => {
                                             </h4>
                                             <p style={{ color: status === 'expired' ? '#9b8d7c' : 'inherit' }}>{item.quantity} {item.unit}</p>
                                             {item.expiration_date && (
-                                                <span className="inv-card-expiry" style={{ 
-                                                    color: style.badgeColor, 
-                                                    fontWeight: status !== 'ok' && status !== 'none' ? 700 : 400,
-                                                    textDecoration: status === 'frozen' ? 'line-through' : 'none',
-                                                    opacity: status === 'frozen' ? 0.6 : 1
-                                                }}>
-                                                    {status === 'expired' ? 'Venció: ' : 'Vence: '}{new Date((item.expiration_date.includes('T') ? item.expiration_date.split('T')[0] : item.expiration_date) + 'T12:00:00').toLocaleDateString()}
-                                                </span>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
+                                                    <span className="inv-card-expiry" style={{ 
+                                                        color: style.badgeColor, 
+                                                        fontWeight: status !== 'ok' && status !== 'none' ? 700 : 400,
+                                                        textDecoration: status === 'frozen' ? 'line-through' : 'none',
+                                                        opacity: status === 'frozen' ? 0.6 : 1
+                                                    }}>
+                                                        {status === 'expired' ? 'Venció: ' : 'Vence: '}{new Date((item.expiration_date.includes('T') ? item.expiration_date.split('T')[0] : item.expiration_date) + 'T12:00:00').toLocaleDateString()}
+                                                    </span>
+                                                    {status === 'frozen' && item.frozen_at && (
+                                                        <span style={{ fontSize: '0.75rem', color: '#0EA5E9', fontWeight: 600 }}>
+                                                            ❄️ Desde: {new Date(item.frozen_at).toLocaleDateString()} ({Math.floor(Math.abs(new Date() - new Date(item.frozen_at)) / (1000 * 60 * 60 * 24))} d)
+                                                        </span>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

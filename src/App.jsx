@@ -413,21 +413,36 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                 const filtered = familyId ? inv.filter(i => i.family_id === familyId) : inv;
 
                 // Map to individual items instead of grouping them
+                const now = new Date();
+                now.setHours(12, 0, 0, 0);
+                
                 const inventoryItems = filtered.map(item => {
                     const ing = allIngredients.find(i => i.ingredient_id === item.ingredient_id);
                     const name = ing ? ing.name : `Ingrediente #${item.ingredient_id}`;
                     const unit = ing ? ing.unit : '';
+                    
+                    let isExpired = false;
+                    if (item.expiration_date && !item.is_frozen) {
+                        const dateStr = typeof item.expiration_date === 'string' && item.expiration_date.includes('T') ? item.expiration_date.split('T')[0] : item.expiration_date;
+                        const exp = new Date(dateStr + 'T12:00:00');
+                        exp.setHours(12, 0, 0, 0);
+                        if (exp < now) isExpired = true;
+                    }
+
                     return {
                         id: item.inventory_id,
                         name,
                         quantity: Number(item.quantity) || 0,
                         unit,
-                        expiration_date: item.expiration_date
+                        expiration_date: item.expiration_date,
+                        is_frozen: item.is_frozen,
+                        frozen_at: item.frozen_at,
+                        isExpired
                     };
                 });
                 
                 setMyInventory(inventoryItems);
-                setSelectedIngredients(inventoryItems.map(i => i.id)); // pre-seleccionar todos por ID
+                setSelectedIngredients(inventoryItems.filter(i => !i.isExpired).map(i => i.id)); // pre-seleccionar solo los NO vencidos
             } catch (err) {
                 console.error('Error cargando inventario:', err);
                 setMyInventory([]);
@@ -1088,17 +1103,21 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                     ) : (
                                         <div className="chips-container">
                                             {myInventory.map(item => {
-                                                const dateStr = item.expiration_date.includes('T') ? item.expiration_date.split('T')[0] : item.expiration_date;
-                                                const isExpiring = item.expiration_date && (new Date(dateStr + 'T12:00:00').getTime() - new Date().setHours(12,0,0,0)) / (1000 * 60 * 60 * 24) <= 3;
+                                                const dateStr = item.expiration_date && (typeof item.expiration_date === 'string' && item.expiration_date.includes('T') ? item.expiration_date.split('T')[0] : item.expiration_date);
+                                                const isExpiring = !item.isExpired && !item.is_frozen && item.expiration_date && (new Date(dateStr + 'T12:00:00').getTime() - new Date().setHours(12,0,0,0)) / (1000 * 60 * 60 * 24) <= 3;
                                                 return (
                                                 <div
                                                     key={item.id}
-                                                    className={`chip-modern ${selectedIngredients.includes(item.id) ? 'active' : ''}`}
-                                                    onClick={() => toggleSelection(item.id, selectedIngredients, setSelectedIngredients)}
-                                                    title={item.expiration_date ? `Vence: ${new Date(dateStr + 'T12:00:00').toLocaleDateString()}` : 'Sin fecha de vencimiento'}
+                                                    className={`chip-modern ${selectedIngredients.includes(item.id) ? 'active' : ''} ${item.isExpired ? 'btn-locked' : ''}`}
+                                                    onClick={() => !item.isExpired && toggleSelection(item.id, selectedIngredients, setSelectedIngredients)}
+                                                    title={item.isExpired ? 'Ingrediente vencido' : item.is_frozen ? 'Congelado' : item.expiration_date ? `Vence: ${new Date(dateStr + 'T12:00:00').toLocaleDateString()}` : 'Sin fecha de vencimiento'}
                                                 >
                                                     {isExpiring && <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444', marginRight: 6, display: 'inline-block' }} title="Por vencer"></div>}
-                                                    {item.name} <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>({item.quantity} {item.unit})</span>
+                                                    {item.isExpired && <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#9b8d7c', marginRight: 6, display: 'inline-block' }} title="Vencido"></div>}
+                                                    {!!item.is_frozen && <span style={{ color: '#0EA5E9', marginRight: 4 }}>❄️</span>}
+                                                    <span style={{ textDecoration: item.isExpired ? 'line-through' : 'none' }}>{item.name}</span>
+                                                    <span style={{ fontSize: '0.8rem', opacity: 0.7, marginLeft: 4 }}>({item.quantity} {item.unit})</span>
+                                                    {item.isExpired && <span style={{ background: '#FEE2E2', color: '#DC2626', fontSize: '0.65rem', padding: '2px 6px', borderRadius: 10, marginLeft: 6, fontWeight: 800 }}>Vencido</span>}
                                                     {selectedIngredients.includes(item.id) && <Check size={14} weight="bold" style={{marginLeft: 4}} />}
                                                 </div>
                                             )})}
