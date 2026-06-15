@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { User, Lock, EnvelopeSimple, ForkKnife, CircleNotch, Eye, EyeSlash, CheckCircle, XCircle, ArrowLeft, PaperPlaneTilt, ShieldCheck, Sparkle, PlayCircle, Snowflake, CalendarBlank, ShoppingCart, Check } from '@phosphor-icons/react';
+import { User, Lock, EnvelopeSimple, ForkKnife, CircleNotch, Eye, EyeSlash, CheckCircle, XCircle, ArrowLeft, PaperPlaneTilt, ShieldCheck, Sparkle, PlayCircle, Snowflake, CalendarBlank, ShoppingCart, Check, Gear } from '@phosphor-icons/react';
 import { authService } from '../api';
+import PhoneMockup from './PhoneMockup';
 
 // --- Validaciones de contraseña ---
 function getPasswordRules(password) {
@@ -292,9 +293,10 @@ const Auth = ({ onLogin, onShowLanding, forceRegister }) => {
                     <ShoppingCart size={48} weight="fill" />
                 </div>
                 <div className="banner-content">
+                    <div className="banner-info">
                     <div className="logo-display">
                         <div className="logo-icon-bg">
-                            <ForkKnife size={32} color="white" weight="fill" />
+                            <ForkKnife size={32} color="#FF7F50" weight="fill" />
                         </div>
                         <h1>Neve<span>rita.</span></h1>
                     </div>
@@ -308,11 +310,13 @@ const Auth = ({ onLogin, onShowLanding, forceRegister }) => {
                         </button>
                     )}
                     <ul className="banner-feats">
-                        <li><Snowflake size={16} weight="fill" /> Inventario</li>
+                        <li><Gear size={16} weight="fill" /> Inventario</li>
                         <li><Sparkle size={16} weight="fill" /> Recetas IA</li>
                         <li><CalendarBlank size={16} weight="fill" /> Planificador</li>
                         <li><ShoppingCart size={16} weight="fill" /> Lista de compras</li>
                     </ul>
+                    </div>
+                    <div className="banner-phone"><PhoneMockup /></div>
                 </div>
                 <div className="banner-footer">© 2026 Neverita App</div>
             </div>

@@ -25,33 +25,19 @@ router.post('/suggest', async (req, res) => {
         console.log('🔍 Buscando ideas con:', ingredients);
 
         const systemPrompt = `
-            Eres un Chef experto en "Cocina de Aprovechamiento" y también eres un crítico honesto.
+            Eres un Chef experto en "Cocina de Aprovechamiento".
             Tienes EXCLUSIVAMENTE estos ingredientes en la nevera: ${ingredients.join(', ')}.
             (El único básico que siempre está disponible es agua para cocción. Nada más.)
 
-            ANTES DE SUGERIR CUALQUIER RECETA, evalúa si los ingredientes forman una comida real:
+            REGLA PRINCIPAL: NUNCA rechaces ni devuelvas errores por "ingredientes insuficientes"
+            ni por que falte alguna categoría (proteína, vegetal, carbohidrato, etc.).
+            SIEMPRE debes proponer recetas usando lo que haya disponible, aunque sea simple
+            (ej: solo arroz, solo huevos, solo pasta, solo vegetales). Improvisa lo mejor posible.
 
-            ✅ INGREDIENTES SUSTANCIALES (al menos uno es necesario para que la receta tenga sentido):
-            - Proteínas: pollo, carne, pescado, huevos, atún, jamón, queso, tofu, caraotas, lentejas, etc.
-            - Vegetales/frutas: papa, zanahoria, tomate, cebolla, ajo, lechuga, plátano, etc.
-            - Lácteos: leche, yogur, crema, etc.
-            - Carbohidratos con sustancia: arroz, pasta, pan, arepas, yuca, plátano, etc.
+            Usa SOLO los ingredientes listados (más agua y, si hace falta, sal/condimentos básicos).
+            NO inventes ingredientes que el usuario no tiene.
 
-            ❌ SOLO condimentos NO son suficientes:
-            - sal, pimienta, mostaza, mayonesa, aceite, vinagre, azúcar, salsa de tomate solos o combinados
-            - Un ingrediente sustancial + solo condimentos = receta sin sentido (arroz con mostaza NO ES UNA RECETA REAL)
-
-            REGLA DE ORO: Para que una receta sea válida necesita AL MENOS:
-            - Un ingrediente sustancial de proteína, vegetal, lácteo O un carbohidrato combinado con otro ingrediente sustancial (no solo condimentos)
-            - Si el único ingrediente "de comida" es un carbohidrato (arroz, pasta) y el resto son SOLO condimentos → RECHAZA
-
-            Ejemplos VÁLIDOS: arroz + pollo ✅, pan + jamón ✅, huevos solos ✅, pasta + atún ✅, arroz + caraotas ✅
-            Ejemplos INVÁLIDOS: arroz + mostaza ❌, pasta + aceite + sal ❌, arroz + mayonesa ❌
-
-            Si los ingredientes son insuficientes o formarían una receta sin sentido, devuelve:
-            { "error": "Los ingredientes disponibles no son suficientes para preparar una comida real. Agrega una proteína, vegetal u otro ingrediente sustancial." }
-
-            Si SÍ son válidos, sugiere exactamente 3 recetas usando SOLO esos ingredientes:
+            Sugiere exactamente 3 recetas razonables con lo disponible:
             { "suggestions": [{ "title": "Nombre del Plato", "description": "Descripción corta de 10 palabras" }, ...] }
 
             Responde SOLO JSON, sin markdown ni explicaciones.
@@ -218,24 +204,15 @@ router.post('/generate', async (req, res) => {
             siguiendo los límites de la REGLA #1, y asegurando SIEMPRE que la cantidad a usar <= cantidad en inventario.
             =============================================================
 
-            REGLA #3 — NO IMPROVISES, RECHAZA SI NO DA:
-            Si los ingredientes disponibles NO son suficientes para hacer una receta que tenga sentido
-            (por ejemplo: solo hay condimentos, o solo hay un ingrediente que no forma una comida completa),
-            NO INVENTES sustitutos ni hagas una receta absurda.
-            En ese caso, responde con este JSON especial:
-            {
-              "rejected": true,
-              "reason": "Explica brevemente por qué no se puede hacer la receta (en español, max 1 oración)",
-              "missing": ["ingrediente faltante 1", "ingrediente faltante 2"]
-            }
-            Ejemplos de cuando RECHAZAR:
-            - Solo hay arroz y condimentos (falta una proteína o vegetal principal)
-            - Solo hay un ingrediente que no es comida (ej: sal sola)
-            - Los ingredientes no tienen ninguna lógica culinaria juntos
-            Ejemplos de cuando ACEPTAR (aunque sea simple):
-            - Pan + jamón = sándwich válido
-            - Huevos solos = huevos fritos/revueltos válido
-            - Arroz + pollo = arroz con pollo válido
+            REGLA #3 — SIEMPRE GENERA, NUNCA RECHACES:
+            Genera SIEMPRE la receta solicitada usando los ingredientes disponibles
+            (más agua y condimentos básicos si hace falta). NUNCA devuelvas rechazos ni errores
+            por que falte una proteína, un vegetal, un carbohidrato o cualquier otra categoría.
+            Aunque los ingredientes sean simples (solo arroz, solo huevos, solo pasta, etc.),
+            improvisa la mejor receta posible y razonable con lo que hay. No inventes ingredientes
+            que el usuario no tiene.
+            Ejemplos válidos (aunque simples): Huevos solos = huevos revueltos; Arroz solo = arroz blanco salteado;
+            Pasta sola = pasta al ajillo con lo disponible; Pan + jamón = sándwich.
             =============================================================
 
             *** EJEMPLO DE CÓMO HACERLO BIEN ***
@@ -291,16 +268,9 @@ router.post('/generate', async (req, res) => {
         const result = await model.generateContent(systemPrompt);
         const aiData = JSON.parse(result.response.text());
 
-        // --- VERIFICAR SI LA IA RECHAZÓ LA RECETA ---
-        if (aiData.rejected) {
-            connection.release();
-            console.log('🚫 IA rechazó la receta:', aiData.reason);
-            return res.status(422).json({
-                error: aiData.reason || 'No hay ingredientes suficientes para hacer esta receta.',
-                missing: aiData.missing || [],
-                rejected: true
-            });
-        }
+        // Nota: ya NO bloqueamos por "rechazo" de la IA. Siempre intentamos generar
+        // la receta con lo disponible; el aviso de balance nutricional (no bloqueante)
+        // se maneja en el frontend.
 
         // --- NORMALIZAR UNIDADES (seguridad extra) ---
         const validUnits = ['g', 'kg', 'ml', 'l', 'unidad'];
@@ -537,4 +507,4 @@ router.post('/shopping-list', async (req, res) => {
         console.error('❌ Error generando lista de compras:', error);
         res.status(500).json({ error: "Error generando la lista inteligente." });
     }
-});
+});

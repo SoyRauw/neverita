@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { showToast } from './Toast';
 import { HashRouter, Routes, Route } from 'react-router-dom';
-import { Sparkle, CircleNotch, ShoppingCart, Check, X, ChefHat, CalendarBlank, Coffee, UsersThree, Plus, Sun, Warning, BookOpen, MagnifyingGlass, Trash, ArrowsClockwise, Fire, Clock, ListNumbers, SpeakerHigh, Pause, Play } from '@phosphor-icons/react';
+import { Sparkle, CircleNotch, ShoppingCart, Check, X, ChefHat, CalendarBlank, Coffee, UsersThree, Plus, Sun, Warning, BookOpen, MagnifyingGlass, Trash, ArrowsClockwise, Fire, Clock, ListNumbers, SpeakerHigh, Pause, Play, Leaf, Heartbeat } from '@phosphor-icons/react';
 
 // --- IMPORTACIÓN DE COMPONENTES ---
 import Sidebar from './components/Sidebar';
@@ -10,10 +10,11 @@ import CalendarGrid from './components/CalendarGrid';
 import Inventory from './components/Inventory';
 import Recipes from './components/Recipes';
 import Auth from './components/Auth';
-import LandingPage from './components/LandingPage';
+import LandingPage from './components/Landingpage';
 import FamilySelect from './components/FamilySelect';
 import FamilyManager from './components/FamilyManager';
 import ShoppingList from './components/ShoppingList';
+import Stats from './components/Stats';
 import { familiesService, userFamilyService, menuPlansService, dailyMealsService, aiService, inventoryService, ingredientsService, recipesService, familyRecipesService } from './api';
 
 // --- ESTILOS CSS INYECTADOS (MODAL MODERNO) ---
@@ -125,6 +126,71 @@ const modalStyles = `
   }
   .week-slide-left {
     animation: weekSlideInFromLeft 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+  }
+
+  /* =========================================
+     AVISO DE BALANCE NUTRICIONAL (no bloqueante)
+     ========================================= */
+  @keyframes balanceIn {
+    0%   { opacity: 0; transform: translateY(-12px) scale(0.97); }
+    60%  { opacity: 1; transform: translateY(2px) scale(1.005); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes balancePulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(29,158,117,0.35); }
+    50%      { transform: scale(1.06); box-shadow: 0 0 0 7px rgba(29,158,117,0); }
+  }
+  @keyframes balanceChipIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .balance-notice {
+    position: relative;
+    display: flex; align-items: flex-start; gap: 14px;
+    background: linear-gradient(135deg, #F0FBF6 0%, #FFF6EC 100%);
+    border: 1px solid rgba(29,158,117,0.22);
+    border-left: 4px solid #1D9E75;
+    border-radius: 16px;
+    padding: 16px 18px;
+    margin: 4px 0 18px;
+    box-shadow: 0 10px 26px -12px rgba(15,110,86,0.35);
+    animation: balanceIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+    overflow: hidden;
+  }
+  .balance-notice__icon {
+    flex-shrink: 0;
+    width: 40px; height: 40px; border-radius: 12px;
+    display: grid; place-items: center;
+    background: linear-gradient(135deg, #1D9E75, #0F6E56);
+    color: #fff;
+    animation: balancePulse 2.4s ease-in-out infinite;
+  }
+  .balance-notice__title {
+    margin: 0 0 3px; font-size: 1rem; font-weight: 800; color: #0F6E56;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .balance-notice__text { margin: 0; font-size: 0.9rem; line-height: 1.45; color: #3f6b5c; }
+  .balance-notice__chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+  .balance-notice__chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 0.8rem; font-weight: 800; color: #0F6E56;
+    background: rgba(29,158,117,0.12);
+    border: 1px solid rgba(29,158,117,0.25);
+    padding: 5px 11px; border-radius: 999px;
+    animation: balanceChipIn 0.4s ease both;
+  }
+  .balance-notice__chip:nth-child(1) { animation-delay: 0.12s; }
+  .balance-notice__chip:nth-child(2) { animation-delay: 0.20s; }
+  .balance-notice__chip:nth-child(3) { animation-delay: 0.28s; }
+  .balance-notice__close {
+    position: absolute; top: 10px; right: 10px;
+    width: 26px; height: 26px; border-radius: 8px; border: none; cursor: pointer;
+    background: rgba(15,110,86,0.08); color: #0F6E56;
+    display: grid; place-items: center; transition: background 0.18s, transform 0.18s;
+  }
+  .balance-notice__close:hover { background: rgba(15,110,86,0.16); transform: scale(1.08); }
+  @media (prefers-reduced-motion: reduce) {
+    .balance-notice, .balance-notice__icon, .balance-notice__chip { animation: none !important; }
   }
 
   /* =========================================
@@ -392,6 +458,8 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
     const [aiStep, setAiStep] = useState('config');
     const [suggestions, setSuggestions] = useState([]);
     const [aiError, setAiError] = useState(null);
+    // Aviso (no bloqueante) de balance nutricional: grupos importantes ausentes
+    const [balanceWarning, setBalanceWarning] = useState([]);
     // Receta generada por IA esperando confirmación de personas
     const [aiDish, setAiDish] = useState(null);
     const [aiPlanServings, setAiPlanServings] = useState(1);
@@ -420,6 +488,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                     const ing = allIngredients.find(i => i.ingredient_id === item.ingredient_id);
                     const name = ing ? ing.name : `Ingrediente #${item.ingredient_id}`;
                     const unit = ing ? ing.unit : '';
+                    const category = ing && ing.category ? ing.category : 'otro';
                     
                     let isExpired = false;
                     if (item.expiration_date && !item.is_frozen) {
@@ -434,6 +503,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                         name,
                         quantity: Number(item.quantity) || 0,
                         unit,
+                        category,
                         expiration_date: item.expiration_date,
                         is_frozen: item.is_frozen,
                         frozen_at: item.frozen_at,
@@ -462,10 +532,24 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         }
     };
 
+    // Detecta grupos importantes ausentes entre los ingredientes seleccionados (no bloquea)
+    const getMissingBalanceGroups = (items) => {
+        const cats = new Set(items.map(i => (i.category || 'otro')));
+        const missing = [];
+        if (!cats.has('proteína')) missing.push('proteína');
+        if (!cats.has('grano')) missing.push('carbohidratos');
+        if (!(cats.has('vegetal') || cats.has('fruta'))) missing.push('vegetales');
+        return missing;
+    };
+
     // PASO 1: Pedir sugerencias a la IA
     const handleAISuggest = async () => {
         if (selectedIngredients.length === 0) { showToast("Selecciona al menos un ingrediente."); return; }
         if (selectedSlots.length === 0) { showToast("Selecciona al menos un cuadro en el calendario."); return; }
+
+        const selectedItems = myInventory.filter(i => selectedIngredients.includes(i.id));
+        // Aviso de balance (informativo, NO impide continuar)
+        setBalanceWarning(getMissingBalanceGroups(selectedItems));
 
         setAiStep('suggestions');
         setIsGenerating(true);
@@ -475,16 +559,18 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         setAiChosenTurn(null);
 
         try {
-            const ingredientsWithQty = myInventory
-                .filter(i => selectedIngredients.includes(i.id))
+            const ingredientsWithQty = selectedItems
                 .map(i => `${i.name} (${i.quantity} ${i.unit})`);
             const data = await aiService.suggest(ingredientsWithQty);
-            
-            if (data.error) {
+
+            if (data.suggestions && data.suggestions.length > 0) {
+                setSuggestions(data.suggestions);
+            } else if (data.error) {
+                // Solo errores reales (conexión, API), nunca bloqueo por categoría faltante
                 setAiError(data.error);
-                setAiStep('config'); // Volver a la pantalla de selección para que añadan más
+                setAiStep('config');
             } else {
-                setSuggestions(data.suggestions || []);
+                setSuggestions([]);
             }
         } catch (err) {
             console.error('Error en sugerencias IA:', err);
@@ -662,6 +748,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         setAiStep('config');
         setSuggestions([]);
         setAiError(null);
+        setBalanceWarning([]);
         setAiDish(null);
         setAiPlanServings(1);
         setSelectedSlots([]);
@@ -1132,6 +1219,36 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                             {/* ── PASO 2: SUGERENCIAS DE LA IA ── */}
                             {aiStep === 'suggestions' && (
                                 <>
+                                    {!isGenerating && balanceWarning.length > 0 && (
+                                        <div className="balance-notice" role="status">
+                                            <button
+                                                className="balance-notice__close"
+                                                aria-label="Cerrar aviso"
+                                                onClick={() => setBalanceWarning([])}
+                                            >
+                                                <X size={15} weight="bold" />
+                                            </button>
+                                            <div className="balance-notice__icon">
+                                                <Heartbeat size={22} weight="fill" />
+                                            </div>
+                                            <div>
+                                                <h4 className="balance-notice__title">
+                                                    <Leaf size={16} weight="fill" /> Tip de alimentación balanceada
+                                                </h4>
+                                                <p className="balance-notice__text">
+                                                    Puedes crear tu receta sin problema. Para que tu comida sea más
+                                                    completa y sana, te recomendamos incluir también:
+                                                </p>
+                                                <div className="balance-notice__chips">
+                                                    {balanceWarning.map(group => (
+                                                        <span className="balance-notice__chip" key={group}>
+                                                            <Check size={13} weight="bold" /> {group}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                     {isGenerating ? (
                                         <div style={{ textAlign: 'center', padding: '40px 0' }}>
                                             <CircleNotch size={48} className="ph-spin" color="#FF9F43" />
@@ -1855,6 +1972,7 @@ function App() {
                     <Route path="/recipes" element={<Recipes onAddToPlanner={handleAddToPlanner} currentFamily={currentFamily} userProfile={userProfile} userRole={userRole} />} />
                     <Route path="/inventory" element={<Inventory currentFamily={currentFamily} userRole={userRole} />} />
                     <Route path="/shopping-list" element={<ShoppingList currentFamily={currentFamily} />} />
+                    <Route path="/stats" element={<Stats currentFamily={currentFamily} />} />
                 </Routes>
             </div>
         </HashRouter>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { CalendarCheck, CookingPot, Package, ShoppingCart, Gear, SignOut } from '@phosphor-icons/react';
+import { CalendarCheck, CookingPot, Package, ShoppingCart, Gear, SignOut, ChartPieSlice } from '@phosphor-icons/react';
 import { inventoryService } from '../api';
 
 const Sidebar = ({ activeFamily, onOpenManager, onLogout }) => {
@@ -73,6 +73,11 @@ const Sidebar = ({ activeFamily, onOpenManager, onLogout }) => {
         <NavLink to="/shopping-list" className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}>
             <ShoppingCart size={22} weight="bold" /> 
             <span>Compras</span>
+        </NavLink>
+
+        <NavLink to="/stats" className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}>
+            <ChartPieSlice size={22} weight="bold" /> 
+            <span>Resumen</span>
         </NavLink>
       </nav>
 
