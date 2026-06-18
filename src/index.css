@@ -1473,22 +1473,22 @@ header {
 .logo-display {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
+    gap: 1.1rem;
+    margin-bottom: 1.7rem;
 }
 
 .logo-icon-bg {
     background: #ffffff;
-    padding: 12px;
-    border-radius: 18px;
+    padding: 15px;
+    border-radius: 20px;
     border: 1px solid rgba(230, 126, 34, .12);
-    box-shadow: 0 12px 28px rgba(230, 126, 34, .18);
+    box-shadow: 0 14px 32px rgba(230, 126, 34, .22);
     display: flex;
 }
 
 .logo-display h1 {
     font-family: var(--font-display);
-    font-size: clamp(2rem, 3.2vw, 2.7rem);
+    font-size: clamp(2.4rem, 3.7vw, 3.25rem);
     margin: 0;
     font-weight: 600;
     letter-spacing: -1.5px;
@@ -1573,25 +1573,28 @@ header {
 .banner-phone {
     flex: 0 1 auto;
     display: flex;
+    align-items: center;
     justify-content: center;
-    animation: nv-rise .8s var(--ease-out) .3s both;
+    /* zoom grande (cercano a 1) => sin reducción => texto nítido */
+    --pm-s: 1.05;
+    /* entrada por opacidad + flotado por transform en el contenedor (fuera del zoom, no difumina) */
+    animation: nv-phone-in .6s ease .2s both, nv-phone-bob 6.5s ease-in-out .9s infinite;
 }
-.banner-phone .pm-phone {
-    height: clamp(240px, 52vh, 420px);
-    width: auto;
-    aspect-ratio: 204 / 412;
-    padding: 11px;
+.banner-phone .pm-visual {
+    width: 300px;
+    height: 540px;
+    min-height: auto;
+    flex: none;
+    zoom: var(--pm-s);
 }
-.banner-phone .pm-phone-notch { width: 74px; height: 17px; }
-.banner-phone .pm-visual { min-height: auto; }
-/* compactar el contenido interno para anchos pequeños del teléfono */
-.banner-phone .pm-app-top { padding: 24px 14px 8px; font-size: 1rem; }
-.banner-phone .pm-app-tabs { padding: 0 14px 10px; gap: 6px; }
-.banner-phone .pm-app-tab { width: 30px; height: 30px; border-radius: 10px; }
-.banner-phone .pm-app-body { margin: 0 12px 14px; }
-.banner-phone .pm-glow { width: 280px; height: 280px; }
+@keyframes nv-phone-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes nv-phone-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+@media (max-height: 820px) { .banner-phone { --pm-s: 0.98; } }
+@media (max-height: 700px) { .banner-phone { --pm-s: 0.9; } }
+@media (max-height: 600px) { .banner-phone { --pm-s: 0.8; } }
+@media (max-height: 520px) { .banner-phone { --pm-s: 0.66; } }
 /* solo en ventanas extremadamente bajas lo ocultamos para no recortar */
-@media (max-height: 360px) {
+@media (max-height: 430px) {
     .banner-phone { display: none; }
 }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Fire, ChartPieSlice, Recycle, ForkKnife, CalendarBlank, CircleNotch, Leaf } from '@phosphor-icons/react';
+import { Fire, ChartPieSlice, Recycle, ForkKnife, CalendarBlank, CircleNotch, Leaf, FilePdf } from '@phosphor-icons/react';
 import { menuPlansService, dailyMealsService, inventoryService, ingredientsService } from '../api';
 
 /* ============ utilidades de fecha ============ */
@@ -230,15 +230,25 @@ const Stats = ({ currentFamily }) => {
     return (
         <div className="main-content">
             <div className="st-wrap">
+                {/* encabezado solo para el PDF impreso */}
+                <div className="st-print-head">
+                    <h2>Neverita · Resumen {periodLabel}</h2>
+                    <p>{(currentFamily?.name || currentFamily?.family_name || 'Mi familia')} — generado el {new Date().toLocaleDateString('es', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+                </div>
                 {/* encabezado */}
                 <div className="st-head">
                     <div>
                         <h1 className="st-title">Resumen</h1>
                         <p className="st-sub">Lo que has planificado {periodLabel}, en números.</p>
                     </div>
-                    <div className="st-toggle" role="tablist">
-                        <button className={view === 'week' ? 'on' : ''} onClick={() => setView('week')}>Semana</button>
-                        <button className={view === 'month' ? 'on' : ''} onClick={() => setView('month')}>Mes</button>
+                    <div className="st-actions">
+                        <div className="st-toggle" role="tablist">
+                            <button className={view === 'week' ? 'on' : ''} onClick={() => setView('week')}>Semana</button>
+                            <button className={view === 'month' ? 'on' : ''} onClick={() => setView('month')}>Mes</button>
+                        </div>
+                        <button className="st-export" onClick={() => window.print()} title="Exportar a PDF">
+                            <FilePdf size={18} weight="fill" /> Exportar PDF
+                        </button>
                     </div>
                 </div>
 
@@ -344,6 +354,11 @@ const ST_CSS = `
 .st-toggle{display:inline-flex;background:#FFF1E0;border:1px solid rgba(230,126,34,.2);border-radius:999px;padding:4px;gap:4px;}
 .st-toggle button{border:none;background:none;cursor:pointer;font-weight:800;font-size:.9rem;color:#9b8d7c;padding:8px 20px;border-radius:999px;transition:all .2s;}
 .st-toggle button.on{background:linear-gradient(135deg,#FF9F43,#FF7F50);color:#fff;box-shadow:0 6px 14px rgba(255,127,80,.32);}
+.st-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.st-export{display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(230,126,34,.3);background:#fff;color:#e67e22;
+  font-weight:800;font-size:.9rem;padding:9px 16px;border-radius:999px;cursor:pointer;transition:all .2s;box-shadow:0 4px 12px rgba(230,126,34,.1);}
+.st-export:hover{background:linear-gradient(135deg,#FF9F43,#FF7F50);color:#fff;border-color:transparent;transform:translateY(-2px);box-shadow:0 10px 20px rgba(255,127,80,.3);}
+.st-print-head{display:none;}
 
 .st-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;}
 .st-kpi{background:#fff;border:1px solid rgba(230,126,34,.14);border-radius:18px;padding:16px;display:flex;align-items:center;gap:13px;box-shadow:0 8px 20px rgba(150,80,20,.07);}
@@ -399,6 +414,27 @@ const ST_CSS = `
   .st-group-lbl{width:96px;font-size:.82rem;}
 }
 @media (prefers-reduced-motion: reduce){ .st-wrap,.st-bar-fill,.st-group-fill{animation:none!important;transition:none!important;} }
+
+/* ====== IMPRESIÓN / EXPORTAR A PDF ====== */
+@media print {
+  /* ocultar el resto de la app, dejar solo el resumen */
+  .sidebar-modern, .mobile-nav { display: none !important; }
+  .app-container { display: block !important; }
+  .main-content { padding: 0 !important; margin: 0 !important; width: 100% !important; }
+  html, body { background: #fff !important; }
+  /* asegurar que se impriman los colores de las gráficas */
+  .st-wrap, .st-wrap * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  .st-actions, .st-toggle, .st-export { display: none !important; }
+  .st-print-head { display: block !important; margin-bottom: 18px; }
+  .st-print-head h2 { font-family:'Fraunces',serif; color:#2A2118; font-size:1.5rem; margin:0 0 4px; }
+  .st-print-head p { color:#6B5E4F; margin:0; font-size:.9rem; }
+  .st-wrap { max-width: 100% !important; animation: none !important; }
+  .st-head { margin-bottom: 14px; }
+  .st-card, .st-kpi { box-shadow: none !important; border: 1px solid #e8ddcb !important; break-inside: avoid; }
+  .st-grid { gap: 12px !important; }
+  .st-foot { margin-top: 16px; }
+  @page { margin: 1.4cm; }
+}
 `;
 
 export default Stats;
