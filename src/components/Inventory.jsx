@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { showToast } from '../Toast';
-import { Trash, PlusCircle, X, Warning, WarningOctagon, CheckCircle, Snowflake } from '@phosphor-icons/react';
+import { Trash, PlusCircle, X, Warning, WarningOctagon, CheckCircle, Snowflake, ListChecks } from '@phosphor-icons/react';
 import { inventoryService, ingredientsService, aiService } from '../api';
 
 // Devuelve el estado de caducidad de un item
@@ -52,6 +52,22 @@ const Inventory = ({ currentFamily, userRole }) => {
     // Cantidad y fecha
     const [quantity, setQuantity] = useState('');
     const [expirationDate, setExpirationDate] = useState('');
+
+    // Eliminación: confirmación individual y selección múltiple
+    const [pendingDelete, setPendingDelete] = useState(null); // item a confirmar
+    const [selectionMode, setSelectionMode] = useState(false);
+    const [selectedIds, setSelectedIds] = useState([]); // inventory_id seleccionados
+    const [confirmBulk, setConfirmBulk] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+
+    const toggleSelected = (id) => {
+        setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    };
+    const exitSelection = () => { setSelectionMode(false); setSelectedIds([]); };
+    const allSelected = items.length > 0 && selectedIds.length === items.length;
+    const toggleSelectAll = () => {
+        setSelectedIds(allSelected ? [] : items.map(i => i.inventory_id));
+    };
 
     // Sugerencias filtradas del autocomplete
     const suggestions = searchText.trim().length >= 1
@@ -131,7 +147,7 @@ const Inventory = ({ currentFamily, userRole }) => {
         setShowSuggestions(false);
     };
 
-    // ---------- Eliminar ítem ----------
+    // ---------- Eliminar ítem (tras confirmar) ----------
     const handleDelete = async (inventoryId) => {
         try {
             await inventoryService.delete(inventoryId);
@@ -139,6 +155,39 @@ const Inventory = ({ currentFamily, userRole }) => {
         } catch (err) {
             showToast('Error al eliminar el ítem.');
             console.error(err);
+        }
+    };
+
+    const confirmDelete = async () => {
+        if (!pendingDelete) return;
+        setDeleting(true);
+        await handleDelete(pendingDelete.inventory_id);
+        setDeleting(false);
+        setPendingDelete(null);
+    };
+
+    // ---------- Eliminar varios ítems ----------
+    const confirmBulkDelete = async () => {
+        if (selectedIds.length === 0) return;
+        setDeleting(true);
+        const ids = [...selectedIds];
+        const failed = [];
+        for (const id of ids) {
+            try {
+                await inventoryService.delete(id);
+            } catch (err) {
+                console.error(err);
+                failed.push(id);
+            }
+        }
+        setItems(prev => prev.filter(i => failed.includes(i.inventory_id) || !ids.includes(i.inventory_id)));
+        setDeleting(false);
+        setConfirmBulk(false);
+        if (failed.length > 0) {
+            showToast(`No se pudieron eliminar ${failed.length} ítem(s).`);
+            setSelectedIds(failed);
+        } else {
+            exitSelection();
         }
     };
 
@@ -229,12 +278,41 @@ const Inventory = ({ currentFamily, userRole }) => {
                         {currentFamily && <span style={{ color: '#FF9F43', fontWeight: 600 }}> — {currentFamily.name}</span>}
                     </p>
                 </div>
-                <button className="btn-primary" onClick={() => { resetModal(); setShowModal(true); }}>
-                    <PlusCircle size={20} weight="bold" /> Agregar Producto
-                </button>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    {!loading && !error && items.length > 0 && (
+                        selectionMode ? (
+                            <button className="btn-secondary" onClick={exitSelection}>
+                                <X size={18} weight="bold" /> Cancelar
+                            </button>
+                        ) : (
+                            <button className="btn-secondary" onClick={() => setSelectionMode(true)}>
+                                <ListChecks size={18} weight="bold" /> Seleccionar
+                            </button>
+                        )
+                    )}
+                    <button className="btn-primary" onClick={() => { resetModal(); setShowModal(true); }}>
+                        <PlusCircle size={20} weight="bold" /> Agregar Producto
+                    </button>
+                </div>
             </header>
 
             <div className="calendar-wrapper">
+                {selectionMode && !loading && !error && items.length > 0 && (
+                    <div className="inv-select-bar">
+                        <label className="inv-select-all">
+                            <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} />
+                            <span>Seleccionar todo</span>
+                        </label>
+                        <span className="inv-select-count">{selectedIds.length} seleccionado(s)</span>
+                        <button
+                            className="inv-select-del"
+                            disabled={selectedIds.length === 0}
+                            onClick={() => setConfirmBulk(true)}
+                        >
+                            <Trash size={18} weight="bold" /> Eliminar seleccionados ({selectedIds.length})
+                        </button>
+                    </div>
+                )}
                 {loading && <div className="nv-loading"><div className="nv-spinner" /><span>Cargando inventario…</span></div>}
                 {error && <p style={{ color: '#e74c3c', textAlign: 'center', padding: '2rem' }}>{error}</p>}
 
@@ -244,6 +322,11 @@ const Inventory = ({ currentFamily, userRole }) => {
                         <table className="inventory-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
                                 <tr style={{ textAlign: 'left', borderBottom: '2px solid #eee' }}>
+                                    {selectionMode && (
+                                        <th style={{ padding: '1rem', width: 44 }}>
+                                            <input type="checkbox" className="inv-check" checked={allSelected} onChange={toggleSelectAll} />
+                                        </th>
+                                    )}
                                     <th style={{ padding: '1rem' }}>Producto</th>
                                     <th>Cantidad</th>
                                     <th>Vencimiento</th>
@@ -253,7 +336,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                             <tbody>
                                 {items.length === 0 ? (
                                     <tr>
-                                        <td colSpan={4} style={{ padding: 0 }}>
+                                        <td colSpan={selectionMode ? 5 : 4} style={{ padding: 0 }}>
                                             <div className="nv-empty">
                                                 <div className="nv-empty-ic"><Snowflake size={40} weight="fill" /></div>
                                                 <h3>Tu nevera está vacía</h3>
@@ -266,7 +349,12 @@ const Inventory = ({ currentFamily, userRole }) => {
                                         const status = getExpiryStatus(item.expiration_date, item.is_frozen);
                                         const style = EXPIRY_STYLES[status];
                                         return (
-                                        <tr key={item.inventory_id} style={{ borderBottom: '1px solid #eee', background: style.bg, transition: 'background 0.3s' }}>
+                                        <tr key={item.inventory_id} style={{ borderBottom: '1px solid #eee', background: selectedIds.includes(item.inventory_id) ? '#FFF1E0' : style.bg, transition: 'background 0.3s' }}>
+                                            {selectionMode && (
+                                                <td style={{ padding: '1rem', width: 44 }}>
+                                                    <input type="checkbox" className="inv-check" checked={selectedIds.includes(item.inventory_id)} onChange={() => toggleSelected(item.inventory_id)} />
+                                                </td>
+                                            )}
                                             <td style={{ padding: '1rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 8 }}>
                                                 {style.icon && <span style={{ color: style.color }}>{style.icon}</span>}
                                                 <span style={{ color: status === 'expired' ? '#DC2626' : 'inherit', textDecoration: status === 'expired' ? 'line-through' : 'none' }}>
@@ -314,7 +402,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                                                     <Snowflake size={20} weight={item.is_frozen ? "fill" : "regular"} />
                                                 </button>
                                                 <button
-                                                    onClick={() => handleDelete(item.inventory_id)}
+                                                    onClick={() => setPendingDelete(item)}
                                                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#FA7070' }}
                                                     title="Eliminar"
                                                 >
@@ -341,7 +429,10 @@ const Inventory = ({ currentFamily, userRole }) => {
                                     const status = getExpiryStatus(item.expiration_date, item.is_frozen);
                                     const style = EXPIRY_STYLES[status];
                                     return (
-                                    <div key={item.inventory_id} className="inv-card" style={{ background: style.bg, borderLeft: status !== 'ok' && status !== 'none' ? `3px solid ${style.color}` : undefined }}>
+                                    <div key={item.inventory_id} className="inv-card" style={{ background: selectedIds.includes(item.inventory_id) ? '#FFF1E0' : style.bg, borderLeft: status !== 'ok' && status !== 'none' ? `3px solid ${style.color}` : undefined }}>
+                                        {selectionMode && (
+                                            <input type="checkbox" className="inv-check" checked={selectedIds.includes(item.inventory_id)} onChange={() => toggleSelected(item.inventory_id)} style={{ alignSelf: 'center', marginRight: 4 }} />
+                                        )}
                                         <div className="inv-card-icon">{status === 'frozen' ? <Snowflake size={24} weight="fill" color="#0EA5E9" /> : status === 'expired' ? '🗑️' : status === 'critical' ? '⚠️' : status === 'warning' ? '⏳' : '📦'}</div>
                                         <div className="inv-card-info">
                                             <h4 style={{ color: status === 'expired' ? '#DC2626' : 'inherit', textDecoration: status === 'expired' ? 'line-through' : 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -382,7 +473,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                                             </button>
                                             <button
                                                 className="inv-card-delete"
-                                                onClick={() => handleDelete(item.inventory_id)}
+                                                onClick={() => setPendingDelete(item)}
                                                 title="Eliminar"
                                                 style={{ color: '#FA7070' }}
                                             >
@@ -569,6 +660,46 @@ const Inventory = ({ currentFamily, userRole }) => {
                             <button className="btn-secondary" onClick={() => { setShowModal(false); resetModal(); }}>Cancelar</button>
                             <button className="btn-primary" onClick={handleAdd} disabled={saving || !selectedIngredient}>
                                 {saving ? 'Guardando...' : 'Agregar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* -------- CONFIRMACIÓN: ELIMINAR UNO -------- */}
+            {pendingDelete && (
+                <div className="modal-overlay" onClick={() => !deleting && setPendingDelete(null)}>
+                    <div className="nv-confirm-card" onClick={e => e.stopPropagation()}>
+                        <div className="nv-confirm-icon"><Warning size={38} weight="fill" /></div>
+                        <h3 className="nv-confirm-title">¿Eliminar ingrediente?</h3>
+                        <p className="nv-confirm-text">
+                            Vas a quitar <strong>{pendingDelete.name}</strong> de tu inventario.
+                            <br />Esta acción no se puede deshacer.
+                        </p>
+                        <div className="nv-confirm-actions">
+                            <button className="nv-confirm-cancel" disabled={deleting} onClick={() => setPendingDelete(null)}>Cancelar</button>
+                            <button className="nv-confirm-del" disabled={deleting} onClick={confirmDelete}>
+                                <Trash size={18} weight="bold" /> {deleting ? 'Eliminando…' : 'Eliminar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* -------- CONFIRMACIÓN: ELIMINAR VARIOS -------- */}
+            {confirmBulk && (
+                <div className="modal-overlay" onClick={() => !deleting && setConfirmBulk(false)}>
+                    <div className="nv-confirm-card" onClick={e => e.stopPropagation()}>
+                        <div className="nv-confirm-icon"><Warning size={38} weight="fill" /></div>
+                        <h3 className="nv-confirm-title">¿Eliminar seleccionados?</h3>
+                        <p className="nv-confirm-text">
+                            Vas a quitar <strong>{selectedIds.length} ingrediente(s)</strong> de tu inventario.
+                            <br />Esta acción no se puede deshacer.
+                        </p>
+                        <div className="nv-confirm-actions">
+                            <button className="nv-confirm-cancel" disabled={deleting} onClick={() => setConfirmBulk(false)}>Cancelar</button>
+                            <button className="nv-confirm-del" disabled={deleting} onClick={confirmBulkDelete}>
+                                <Trash size={18} weight="bold" /> {deleting ? 'Eliminando…' : `Eliminar (${selectedIds.length})`}
                             </button>
                         </div>
                     </div>

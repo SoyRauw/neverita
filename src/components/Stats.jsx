@@ -47,7 +47,7 @@ const Donut = ({ segments, size = 168, stroke = 24, centerTop, centerBottom }) =
                 offset += len;
                 return el;
             })}
-            {centerTop && <text x="50%" y="46%" textAnchor="middle" style={{ fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 26, fill: '#2A2118' }}>{centerTop}</text>}
+            {centerTop && <text x="50%" y="46%" textAnchor="middle" style={{ fontFamily: 'Nunito, sans-serif', fontWeight: 700, fontSize: 26, fill: '#2A2118' }}>{centerTop}</text>}
             {centerBottom && <text x="50%" y="60%" textAnchor="middle" style={{ fontWeight: 700, fontSize: 11, fill: '#9b8d7c', letterSpacing: '.04em' }}>{centerBottom}</text>}
         </svg>
     );
@@ -64,7 +64,7 @@ const Ring = ({ percent, size = 168, stroke = 22, color = '#16a34a' }) => {
             <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
                 strokeDasharray={`${len} ${c - len}`} strokeLinecap="round" transform={`rotate(-90 ${size / 2} ${size / 2})`}
                 style={{ transition: 'stroke-dasharray .7s ease' }} />
-            <text x="50%" y="46%" textAnchor="middle" style={{ fontFamily: 'Fraunces, serif', fontWeight: 700, fontSize: 30, fill: '#2A2118' }}>{Math.round(p)}%</text>
+            <text x="50%" y="46%" textAnchor="middle" style={{ fontFamily: 'Nunito, sans-serif', fontWeight: 700, fontSize: 30, fill: '#2A2118' }}>{Math.round(p)}%</text>
             <text x="50%" y="60%" textAnchor="middle" style={{ fontWeight: 700, fontSize: 10.5, fill: '#9b8d7c', letterSpacing: '.05em' }}>APROVECHADO</text>
         </svg>
     );
@@ -349,7 +349,7 @@ const ST_CSS = `
 .st-wrap{max-width:1100px;margin:0 auto;animation:st-in .5s ease both;}
 @keyframes st-in{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
 .st-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:22px;}
-.st-title{font-family:'Fraunces',serif;font-weight:700;font-size:2.1rem;color:#2A2118;margin:0;}
+.st-title{font-family:'Nunito',sans-serif;font-weight:700;font-size:2.1rem;color:#2A2118;margin:0;}
 .st-sub{color:#6B5E4F;margin:4px 0 0;font-size:.98rem;}
 .st-toggle{display:inline-flex;background:#FFF1E0;border:1px solid rgba(230,126,34,.2);border-radius:999px;padding:4px;gap:4px;}
 .st-toggle button{border:none;background:none;cursor:pointer;font-weight:800;font-size:.9rem;color:#9b8d7c;padding:8px 20px;border-radius:999px;transition:all .2s;}
@@ -363,7 +363,7 @@ const ST_CSS = `
 .st-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;}
 .st-kpi{background:#fff;border:1px solid rgba(230,126,34,.14);border-radius:18px;padding:16px;display:flex;align-items:center;gap:13px;box-shadow:0 8px 20px rgba(150,80,20,.07);}
 .st-kpi-ic{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;color:#fff;flex:none;}
-.st-kpi-num{font-family:'Fraunces',serif;font-weight:700;font-size:1.5rem;color:#2A2118;line-height:1;}
+.st-kpi-num{font-family:'Nunito',sans-serif;font-weight:700;font-size:1.5rem;color:#2A2118;line-height:1;}
 .st-kpi-lbl{font-size:.78rem;color:#9b8d7c;font-weight:700;margin-top:3px;}
 
 .st-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
@@ -398,7 +398,7 @@ const ST_CSS = `
 .st-foot{margin:22px 0 0;text-align:center;color:#9b8d7c;font-size:.8rem;font-style:italic;}
 .st-loading{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;min-height:50vh;color:#6B5E4F;font-weight:600;}
 .st-empty{background:#fff;border:1px dashed rgba(230,126,34,.3);border-radius:24px;padding:48px 28px;text-align:center;max-width:560px;margin:30px auto;}
-.st-empty h3{font-family:'Fraunces',serif;color:#2A2118;margin:14px 0 8px;font-size:1.4rem;}
+.st-empty h3{font-family:'Nunito',sans-serif;color:#2A2118;margin:14px 0 8px;font-size:1.4rem;}
 .st-empty p{color:#6B5E4F;margin:0;line-height:1.5;}
 
 @media (max-width:900px){ .st-kpis{grid-template-columns:repeat(2,1fr);} }
@@ -426,7 +426,7 @@ const ST_CSS = `
   .st-wrap, .st-wrap * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
   .st-actions, .st-toggle, .st-export { display: none !important; }
   .st-print-head { display: block !important; margin-bottom: 18px; }
-  .st-print-head h2 { font-family:'Fraunces',serif; color:#2A2118; font-size:1.5rem; margin:0 0 4px; }
+  .st-print-head h2 { font-family:'Nunito',sans-serif; color:#2A2118; font-size:1.5rem; margin:0 0 4px; }
   .st-print-head p { color:#6B5E4F; margin:0; font-size:.9rem; }
   .st-wrap { max-width: 100% !important; animation: none !important; }
   .st-head { margin-bottom: 14px; }

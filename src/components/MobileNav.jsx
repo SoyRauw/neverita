@@ -19,7 +19,7 @@ const MobileNav = ({ onOpenManager }) => {
 
       <NavLink to="/inventory" className={({ isActive }) => `mobile-nav-item ${isActive ? "active" : ""}`}>
         <Package size={24} weight="fill" />
-        <span>Stock</span>
+        <span>Inventario</span>
       </NavLink>
 
       <NavLink to="/shopping-list" className={({ isActive }) => `mobile-nav-item ${isActive ? "active" : ""}`}>

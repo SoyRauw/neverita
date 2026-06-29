@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { CalendarCheck, CookingPot, Package, ShoppingCart, Gear, SignOut, ChartPieSlice } from '@phosphor-icons/react';
 import { inventoryService } from '../api';
+import FridgeIcon from './FridgeIcon';
 
 const Sidebar = ({ activeFamily, onOpenManager, onLogout }) => {
   const [expiringCount, setExpiringCount] = useState(0);
@@ -45,7 +46,7 @@ const Sidebar = ({ activeFamily, onOpenManager, onLogout }) => {
       {/* 1. LOGO */}
       <div className="sidebar-logo">
         <div className="icon-badge">
-            <CookingPot size={24} color="white" weight="fill" />
+            <FridgeIcon size={24} color="white" strokeWidth={2.2} />
         </div>
         <h2>Neve<span>rita.</span></h2>
       </div>

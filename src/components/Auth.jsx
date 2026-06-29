@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, Lock, EnvelopeSimple, ForkKnife, CircleNotch, Eye, EyeSlash, CheckCircle, XCircle, ArrowLeft, PaperPlaneTilt, ShieldCheck, Sparkle, PlayCircle, Snowflake, CalendarBlank, ShoppingCart, Check, Gear } from '@phosphor-icons/react';
 import { authService } from '../api';
 import PhoneMockup from './PhoneMockup';
+import FridgeIcon from './FridgeIcon';
 
 // --- Validaciones de contraseña ---
 function getPasswordRules(password) {
@@ -296,7 +297,7 @@ const Auth = ({ onLogin, onShowLanding, forceRegister }) => {
                     <div className="banner-info">
                     <div className="logo-display">
                         <div className="logo-icon-bg">
-                            <ForkKnife size={32} color="#FF7F50" weight="fill" />
+                            <FridgeIcon size={32} color="#FF7F50" strokeWidth={2.2} />
                         </div>
                         <h1>Neve<span>rita.</span></h1>
                     </div>
@@ -324,7 +325,7 @@ const Auth = ({ onLogin, onShowLanding, forceRegister }) => {
             {/* --- LADO DERECHO: FORMULARIO --- */}
             <div className="login-form-container">
                 <div className="auth-mobile-brand" aria-hidden="true">
-                    <div className="amb-badge"><ForkKnife size={26} color="white" weight="fill" /></div>
+                    <div className="amb-badge"><FridgeIcon size={26} color="white" strokeWidth={2.2} /></div>
                     <span className="amb-text">Neve<b>rita.</b></span>
                 </div>
                 {forgotMode ? renderForgotPassword() : (

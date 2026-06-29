@@ -363,7 +363,7 @@ const ShoppingList = ({ currentFamily }) => {
                 </div>
 
                 {/* --- LISTA POR COMPRAR --- */}
-                <h3 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: '1.35rem', fontWeight: 600, color: '#2A2118', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ fontFamily: "'Nunito', sans-serif", fontSize: '1.35rem', fontWeight: 600, color: '#2A2118', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     Por Comprar
                     <span style={{ background: '#FEE2E2', color: '#DC2626', padding: '3px 12px', borderRadius: 999, fontSize: '0.8rem', fontWeight: 800 }}>{toBuy.length}</span>
                 </h3>
@@ -390,7 +390,7 @@ const ShoppingList = ({ currentFamily }) => {
                 {/* --- LISTA COMPRADOS --- */}
                 {bought.length > 0 && (
                     <>
-                        <h3 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: '1.25rem', fontWeight: 600, color: '#9b8d7c', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '2px dashed rgba(255,159,67,0.25)', paddingTop: 24 }}>
+                        <h3 style={{ fontFamily: "'Nunito', sans-serif", fontSize: '1.25rem', fontWeight: 600, color: '#9b8d7c', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '2px dashed rgba(255,159,67,0.25)', paddingTop: 24 }}>
                             Ya en el carrito (Inventario)
                             <span style={{ background: '#DCFCE7', color: '#16A34A', padding: '3px 12px', borderRadius: 999, fontSize: '0.8rem', fontWeight: 800 }}>{bought.length}</span>
                         </h3>
@@ -422,14 +422,14 @@ const ShoppingList = ({ currentFamily }) => {
                 <div className="modal-overlay" onClick={() => setShowModal(false)}>
                     <div className="modal-modern" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
                         <div className="modal-header" style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,159,67,0.16)' }}>
-                            <h3 style={{ margin: 0, fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600, color: '#2A2118' }}>Confirmar Ingreso</h3>
+                            <h3 style={{ margin: 0, fontFamily: "'Nunito', sans-serif", fontWeight: 600, color: '#2A2118' }}>Confirmar Ingreso</h3>
                             <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
                                 <X size={22} color="#9b8d7c" />
                             </button>
                         </div>
                         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                             <div style={{ background: 'linear-gradient(180deg,#FFFBF6,#FFF5EB)', padding: '16px', borderRadius: 14, textAlign: 'center', border: '1px solid rgba(255,159,67,0.18)' }}>
-                                <h2 style={{ margin: 0, fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600, color: '#2A2118' }}>{modalItem.name}</h2>
+                                <h2 style={{ margin: 0, fontFamily: "'Nunito', sans-serif", fontWeight: 600, color: '#2A2118' }}>{modalItem.name}</h2>
                                 <p style={{ margin: '4px 0 0', color: '#6B5E4F', fontSize: '0.9rem' }}>Se guardará en la nevera</p>
                             </div>
 

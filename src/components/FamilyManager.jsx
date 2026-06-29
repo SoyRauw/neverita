@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { showToast } from '../Toast';
-import { X, UserCircle, Users, Plus, CaretRight, FloppyDisk, SignOut, Crown, ChefHat, Broom, Trash, UploadSimple } from '@phosphor-icons/react';
+import { X, UserCircle, Users, Plus, CaretRight, FloppyDisk, SignOut, Crown, ChefHat, Broom, Trash, UploadSimple, Copy } from '@phosphor-icons/react';
 import { userFamilyService } from '../api';
+import Avatar from './Avatar';
 
 const ROLE_CONFIG = {
     creador: { label: 'Creador', emoji: '🏠', color: '#FF9F43', bg: '#FFF7ED' },
@@ -37,7 +38,18 @@ const FamilyManager = ({
             avatar: editAvatar,
             email: editEmail
         });
-        setMode('details'); 
+        setMode('details');
+    };
+
+    const familyCode = activeFamily?.code;
+    const handleCopyCode = async () => {
+        if (!familyCode) return;
+        try {
+            await navigator.clipboard.writeText(String(familyCode));
+            showToast('Código copiado al portapapeles.');
+        } catch {
+            showToast('No se pudo copiar el código.');
+        }
     };
 
     // Subir foto desde un archivo: la redimensiona a 256x256 (recorte centrado)
@@ -127,7 +139,7 @@ const FamilyManager = ({
                 
                 {/* HEADER DEL MODAL */}
                 <div style={{ padding: '20px', borderBottom: '1px solid rgba(255,159,67,0.16)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(180deg,#FFFDFB,#FFF8F1)' }}>
-                    <h3 style={{ margin: 0, fontFamily: "'Fraunces', Georgia, serif", fontSize: '1.3rem', fontWeight: 600, color: '#2A2118' }}>
+                    <h3 style={{ margin: 0, fontFamily: "'Nunito', sans-serif", fontSize: '1.3rem', fontWeight: 600, color: '#2A2118' }}>
                         {mode === 'details' && 'Gestión de Cuenta'}
                         {mode === 'switch' && 'Mis Familias'}
                         {mode === 'profile' && 'Editar Perfil'}
@@ -144,12 +156,15 @@ const FamilyManager = ({
                     {/* --- MODO: DETALLES (Vista Principal) --- */}
                     {mode === 'details' && (
                         <div style={{ textAlign: 'center' }}>
-                            <img 
-                                src={currentUser.avatar} 
-                                alt="Avatar" 
-                                style={{ width: '100px', height: '100px', borderRadius: '50%', objectFit: 'cover', marginBottom: '15px', border: '4px solid #fff', boxShadow: '0 5px 15px rgba(0,0,0,0.1)' }} 
-                            />
-                            <h2 style={{ margin: '0 0 5px 0', fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600, fontSize: '1.6rem', color: '#2A2118' }}>{currentUser.name}</h2>
+                            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
+                                <Avatar
+                                    name={currentUser.name}
+                                    src={currentUser.avatar}
+                                    size={100}
+                                    style={{ border: '4px solid #fff', boxShadow: '0 5px 15px rgba(0,0,0,0.1)' }}
+                                />
+                            </div>
+                            <h2 style={{ margin: '0 0 5px 0', fontFamily: "'Nunito', sans-serif", fontWeight: 600, fontSize: '1.6rem', color: '#2A2118' }}>{currentUser.name}</h2>
                             <p style={{ color: '#9b8d7c', margin: 0 }}>{currentUser.email}</p>
                             
                             {/* Badge de rol */}
@@ -165,9 +180,38 @@ const FamilyManager = ({
                                 </div>
                             )}
                             
+                            {/* Código de la familia para invitar a otros */}
+                            {familyCode && (
+                                <div style={{
+                                    marginTop: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                    gap: 10, padding: '12px 16px', borderRadius: 14,
+                                    background: '#FFF7ED', border: '1px solid rgba(255,159,67,0.30)'
+                                }}>
+                                    <div style={{ textAlign: 'left' }}>
+                                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#9b8d7c', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                            Código del espacio
+                                        </div>
+                                        <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#E67E22', letterSpacing: '0.08em' }}>
+                                            {familyCode}
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={handleCopyCode}
+                                        style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                                            background: 'linear-gradient(135deg, var(--primary), var(--primary-2))',
+                                            color: '#fff', border: 'none', borderRadius: 10,
+                                            padding: '8px 14px', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer'
+                                        }}
+                                    >
+                                        <Copy size={16} weight="bold" /> Copiar
+                                    </button>
+                                </div>
+                            )}
+
                             <div style={{ marginTop: '25px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                <button 
-                                    className="btn-secondary" 
+                                <button
+                                    className="btn-secondary"
                                     style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px' }}
                                     onClick={() => setMode('profile')}
                                 >
@@ -288,11 +332,7 @@ const FamilyManager = ({
                                             }}>
                                                 {/* Fila superior: Avatar + Nombre */}
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: isCreator ? 0 : 8 }}>
-                                                    <img 
-                                                        src={`https://i.pravatar.cc/36?u=${member.user_id}`} 
-                                                        alt={member.name}
-                                                        style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
-                                                    />
+                                                    <Avatar name={member.name} size={36} />
                                                     <div style={{ flex: 1, minWidth: 0 }}>
                                                         <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#2A2118', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                             {member.name}
@@ -358,10 +398,11 @@ const FamilyManager = ({
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                 {/* Vista previa + subir foto */}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                                    <img
+                                    <Avatar
+                                        name={editName}
                                         src={editAvatar}
-                                        alt="Vista previa"
-                                        style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'cover', border: '3px solid #fff', boxShadow: '0 6px 16px rgba(230,126,34,0.25)' }}
+                                        size={72}
+                                        style={{ border: '3px solid #fff', boxShadow: '0 6px 16px rgba(230,126,34,0.25)' }}
                                     />
                                     <div style={{ flex: 1 }}>
                                         <button
@@ -395,7 +436,7 @@ const FamilyManager = ({
                                 </div>
                                 <div className="form-group">
                                     <label>O pega un enlace de imagen</label>
-                                    <input className="form-input" value={editAvatar} onChange={(e) => setEditAvatar(e.target.value)} placeholder="https://..." />
+                                    <input className="form-input" value={editAvatar || ''} onChange={(e) => setEditAvatar(e.target.value)} placeholder="https://..." />
                                 </div>
 
                                 <button 

@@ -70,7 +70,7 @@ const PhoneMockup = () => {
 };
 
 const PM_CSS = `
-.pm-visual{--o:#FF9F43;--o2:#FF7F50;--ink3:#9b8d7c;--disp:'Fraunces',Georgia,serif;
+.pm-visual{--o:#FF9F43;--o2:#FF7F50;--ink3:#9b8d7c;--disp:'Nunito',sans-serif;
   position:relative;display:flex;justify-content:center;align-items:center;}
 .pm-glow{position:absolute;width:340px;height:340px;border-radius:50%;
   background:radial-gradient(circle,rgba(255,159,67,.42),transparent 65%);filter:blur(22px);

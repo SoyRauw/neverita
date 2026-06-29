@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-    ForkKnife, Snowflake, Sparkle, CalendarBlank, ShoppingCart, UsersThree,
+    Snowflake, Sparkle, CalendarBlank, ShoppingCart, UsersThree,
     ArrowRight, X, Check, Clock, Leaf, PiggyBank, BellRinging, CaretDown,
     Plus, Fire, Carrot, Egg, Fish, Cheese, SpeakerHigh, Sun, BookOpen,
 } from '@phosphor-icons/react';
+import FridgeIcon from './FridgeIcon';
 
 /* =====================================================================
    NEVERITA · LANDING / HOME PAGE
@@ -142,7 +143,7 @@ const LandingPage = ({ onClose, onRegister }) => {
             <nav className={`nv-nav ${scrolled ? 'nv-nav-solid' : ''}`}>
                 <div className="nv-nav-inner">
                     <div className="nv-logo" onClick={() => rootRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}>
-                        <span className="nv-logo-badge"><ForkKnife size={20} weight="fill" color="#fff" /></span>
+                        <span className="nv-logo-badge"><FridgeIcon size={20} color="#fff" strokeWidth={2.2} /></span>
                         <span className="nv-logo-text">Neve<b>rita.</b></span>
                     </div>
                     <button className="nv-btn nv-btn-ghost nv-nav-cta" onClick={onClose}>
@@ -362,7 +363,7 @@ const LandingPage = ({ onClose, onRegister }) => {
             {/* CTA FINAL */}
             <section className="nv-cta-band" data-reveal>
                 <div className="nv-cta-inner">
-                    <span className="nv-cta-badge"><ForkKnife size={28} weight="fill" color="#fff" /></span>
+                    <span className="nv-cta-badge"><FridgeIcon size={28} color="#fff" strokeWidth={2.2} /></span>
                     <h2 className="nv-cta-h">Tu próxima comida empieza aquí</h2>
                     <p className="nv-cta-p">Únete a Neverita y transforma la forma en que tu familia organiza, cocina y compra.</p>
                     <div className="nv-cta-actions">
@@ -378,7 +379,7 @@ const LandingPage = ({ onClose, onRegister }) => {
 
             <footer className="nv-footer">
                 <div className="nv-logo nv-logo-sm">
-                    <span className="nv-logo-badge"><ForkKnife size={16} weight="fill" color="#fff" /></span>
+                    <span className="nv-logo-badge"><FridgeIcon size={16} color="#fff" strokeWidth={2.2} /></span>
                     <span className="nv-logo-text">Neve<b>rita.</b></span>
                 </div>
                 <button
@@ -400,16 +401,14 @@ const LandingPage = ({ onClose, onRegister }) => {
 
 /* ===================== ESTILOS (namespaced .nv-land) ===================== */
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap');
-
 .nv-land{
   --o:#FF9F43; --o2:#FF7F50; --o3:#F9A03F;
   --ink:#2A2118; --ink2:#6B5E4F; --ink3:#9b8d7c;
   --cream:#FFF6EC; --card:rgba(255,255,255,.85);
-  --disp:'Fraunces',Georgia,serif;
+  --disp:'Nunito',sans-serif;
   position:fixed; inset:0; z-index:10000; overflow-y:auto; overflow-x:hidden;
   background:linear-gradient(180deg,#FFF7EF 0%,#FFEFDF 38%,#FFF6EC 100%);
-  color:var(--ink); font-family:'Nunito','Inter',sans-serif;
+  color:var(--ink); font-family:'Nunito',sans-serif;
   -webkit-font-smoothing:antialiased; scroll-behavior:smooth;
 }
 .nv-land *{box-sizing:border-box;}

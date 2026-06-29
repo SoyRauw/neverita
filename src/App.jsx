@@ -15,6 +15,7 @@ import FamilySelect from './components/FamilySelect';
 import FamilyManager from './components/FamilyManager';
 import ShoppingList from './components/ShoppingList';
 import Stats from './components/Stats';
+import Avatar from './components/Avatar';
 import { familiesService, userFamilyService, menuPlansService, dailyMealsService, aiService, inventoryService, ingredientsService, recipesService, familyRecipesService } from './api';
 
 // --- ESTILOS CSS INYECTADOS (MODAL MODERNO) ---
@@ -1604,10 +1605,10 @@ function App() {
         try {
             const saved = localStorage.getItem('neverita_user');
             return saved ? JSON.parse(saved) : {
-                name: "Usuario", email: "user@test.com", avatar: "https://i.pravatar.cc/150?u=a042581f4e29026704d", role: "Admin"
+                name: "Usuario", email: "user@test.com", avatar: null, role: "Admin"
             };
         } catch {
-            return { name: "Usuario", email: "user@test.com", avatar: "https://i.pravatar.cc/150?u=a042581f4e29026704d", role: "Admin" };
+            return { name: "Usuario", email: "user@test.com", avatar: null, role: "Admin" };
         }
     });
 
@@ -1677,7 +1678,7 @@ function App() {
 
         const profile = {
             ...user,
-            avatar: savedAvatar || `https://i.pravatar.cc/150?u=${user.user_id || user.username}`,
+            avatar: savedAvatar || null, // sin foto: se usa el avatar de inicial
             role: "Admin"
         };
         setUserProfile(profile);
@@ -1949,6 +1950,16 @@ function App() {
                     onOpenManager={() => setShowFamilyManager(true)}
                     onLogout={handleLogout}
                 />
+
+                {/* Encabezado móvil: muestra la familia activa sin entrar al perfil */}
+                <button className="mobile-family-bar" onClick={() => setShowFamilyManager(true)}>
+                    <div className="mfb-avatar">{currentFamily.name.charAt(0).toUpperCase()}</div>
+                    <div className="mfb-info">
+                        <span className="mfb-label">Tu Espacio</span>
+                        <strong className="mfb-name">{currentFamily.name}</strong>
+                    </div>
+                    <Avatar name={userProfile.name} src={userProfile.avatar} size={34} className="mfb-user" />
+                </button>
 
                 {/* Esta es la línea que acabas de agregar */}
                 <MobileNav onOpenManager={() => setShowFamilyManager(true)} />
