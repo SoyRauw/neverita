@@ -1484,6 +1484,61 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                 <>
                                     <button
                                         className="btn-secondary nv-df-change"
+                                        onClick={async () => {
+                                            const isDone = !!selectedMealDetails.is_completed;
+                                            const newStatus = !isDone;
+                                            try {
+                                                await dailyMealsService.toggleComplete(selectedMealDetails.daily_meal_id, newStatus);
+                                                setPlannerData(prev => ({
+                                                    ...prev,
+                                                    [`${mealSlot.dayIndex}-${mealSlot.type}`]: {
+                                                        ...prev[`${mealSlot.dayIndex}-${mealSlot.type}`],
+                                                        is_completed: newStatus ? 1 : 0
+                                                    }
+                                                }));
+                                                setSelectedMealDetails(prev => ({ ...prev, is_completed: newStatus ? 1 : 0 }));
+                                                
+                                                if (newStatus && window.confirm('¿Quedaron sobras que deseas guardar en el inventario?')) {
+                                                    let ingRes = await ingredientsService.create({
+                                                        name: `Sobras de ${selectedMealDetails.name}`,
+                                                        category: 'otro',
+                                                        unit: 'porción',
+                                                        average_expiry_days: 3
+                                                    }).catch(() => null);
+                                                    
+                                                    if (!ingRes) {
+                                                        // Intentar buscarlo si ya existe un ingrediente genérico con ese nombre
+                                                        const allIngs = await ingredientsService.getAll();
+                                                        ingRes = allIngs.find(i => i.name === `Sobras de ${selectedMealDetails.name}`);
+                                                    }
+                                                    
+                                                    if (ingRes && ingRes.ingredient_id) {
+                                                        const expDate = new Date();
+                                                        expDate.setDate(expDate.getDate() + 3);
+                                                        await inventoryService.create({
+                                                            family_id: currentFamily.family_id || currentFamily.id,
+                                                            ingredient_id: ingRes.ingredient_id,
+                                                            quantity: 1,
+                                                            expiration_date: expDate.toISOString().split('T')[0],
+                                                            is_leftover: 1,
+                                                            source_recipe_id: selectedMealDetails.recipe_id
+                                                        });
+                                                        showToast('Sobras guardadas en el inventario 🥡');
+                                                    }
+                                                }
+                                            } catch (e) { console.error(e); showToast('Error al actualizar.'); }
+                                        }}
+                                        style={{ 
+                                            background: selectedMealDetails.is_completed ? '#EADBC7' : 'linear-gradient(135deg, #16a34a, #15803d)', 
+                                            color: selectedMealDetails.is_completed ? '#6B5E4F' : '#fff', 
+                                            fontWeight: 800, border: 'none', borderRadius: 14, padding: '12px 22px', 
+                                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 
+                                        }}
+                                    >
+                                        <Check size={18} weight="bold" /> {selectedMealDetails.is_completed ? 'Desmarcar' : 'Marcar hecha'}
+                                    </button>
+                                    <button
+                                        className="btn-secondary nv-df-change"
                                         onClick={() => { handleCloseMealDetails(); handlePlanSlot(mealSlot.dayIndex, mealSlot.type); }}
                                         style={{ color: '#e67e22', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}
                                     >

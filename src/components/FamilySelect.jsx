@@ -14,7 +14,7 @@ const FamilySelect = ({ families, onSelectFamily, onCreateFamily, onJoinByCode }
 
     const handleCreate = () => {
         if (newFamilyName.trim()) {
-            onCreateFamily({ name: newFamilyName, code: newFamilyCode.trim() || null, role: "Admin", members: 1 });
+            onCreateFamily({ name: newFamilyName, role: "Admin", members: 1 });
         }
     };
 
@@ -163,16 +163,7 @@ const FamilySelect = ({ families, onSelectFamily, onCreateFamily, onJoinByCode }
                                         onChange={(e) => setNewFamilyName(e.target.value)}
                                     />
                                 </div>
-                                <div className="input-group-huge" style={{ marginTop: '12px' }}>
-                                    <input
-                                        type="text"
-                                        placeholder="Código de invitación (Ej. 0205)"
-                                        value={newFamilyCode}
-                                        maxLength={11}
-                                        onChange={(e) => setNewFamilyCode(e.target.value)}
-                                    />
-                                </div>
-                                <button className="btn-confirm-huge" onClick={handleCreate}>
+                                <button className="btn-confirm-huge" onClick={handleCreate} style={{ marginTop: 12 }}>
                                     Crear Espacio <Check size={24} weight="bold" />
                                 </button>
                             </>

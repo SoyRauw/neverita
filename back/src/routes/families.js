@@ -18,14 +18,32 @@ router.get('/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Función auxiliar para generar un código único de 6 dígitos
+const generateUniqueCode = async () => {
+    let code;
+    let isUnique = false;
+    let attempts = 0;
+    while (!isUnique && attempts < 10) {
+        code = Math.floor(100000 + Math.random() * 900000).toString();
+        const [rows] = await db.query('SELECT family_id FROM families WHERE code = ?', [code]);
+        if (rows.length === 0) {
+            isUnique = true;
+        }
+        attempts++;
+    }
+    return code;
+};
+
 router.post('/', async (req, res, next) => {
   try {
-    const { name, created_by, code } = req.body;
-    const [result] = await db.query('INSERT INTO families (name, created_by, code) VALUES (?, ?, ?)', [name, created_by, code || null]);
+    const { name, created_by } = req.body;
+    const code = await generateUniqueCode();
+    
+    const [result] = await db.query('INSERT INTO families (name, created_by, code) VALUES (?, ?, ?)', [name, created_by, code]);
     const family_id = result.insertId;
     // Vincular automáticamente al creador con la familia
     await db.query('INSERT INTO user_family (user_id, family_id, role) VALUES (?, ?, ?)', [created_by, family_id, 'creador']);
-    res.status(201).json({ family_id, name, created_by, code: code || null });
+    res.status(201).json({ family_id, name, created_by, code });
   } catch (err) { next(err); }
 });
 

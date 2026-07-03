@@ -35,7 +35,7 @@ router.get('/:id', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { family_id, ingredient_id, quantity, expiration_date, is_frozen } = req.body;
+    const { family_id, ingredient_id, quantity, expiration_date, is_frozen, is_leftover, source_recipe_id } = req.body;
 
     // Si no se envió fecha de vencimiento, calcularla automáticamente
     let finalExpDate = expiration_date;
@@ -54,18 +54,20 @@ router.post('/', async (req, res, next) => {
 
     const frozenVal = is_frozen ? 1 : 0;
     const frozenAtVal = is_frozen ? new Date() : null;
+    const leftoverVal = is_leftover ? 1 : 0;
+    const sourceRecipeIdVal = source_recipe_id || null;
 
     const [result] = await db.query(
-      'INSERT INTO inventory (family_id, ingredient_id, quantity, expiration_date, is_frozen, frozen_at) VALUES (?, ?, ?, ?, ?, ?)',
-      [family_id, ingredient_id, quantity, finalExpDate, frozenVal, frozenAtVal]
+      'INSERT INTO inventory (family_id, ingredient_id, quantity, expiration_date, is_frozen, frozen_at, is_leftover, source_recipe_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [family_id, ingredient_id, quantity, finalExpDate, frozenVal, frozenAtVal, leftoverVal, sourceRecipeIdVal]
     );
-    res.status(201).json({ inventory_id: result.insertId, family_id, ingredient_id, quantity, expiration_date: finalExpDate, is_frozen: !!frozenVal });
+    res.status(201).json({ inventory_id: result.insertId, family_id, ingredient_id, quantity, expiration_date: finalExpDate, is_frozen: !!frozenVal, is_leftover: !!leftoverVal, source_recipe_id: sourceRecipeIdVal });
   } catch (err) { next(err); }
 });
 
 router.put('/:id', async (req, res, next) => {
   try {
-    const { family_id, ingredient_id, quantity, expiration_date, is_frozen } = req.body;
+    const { family_id, ingredient_id, quantity, expiration_date, is_frozen, is_leftover, source_recipe_id } = req.body;
     
     // Primero obtener el item actual para comparar el estado
     const [currentRows] = await db.query('SELECT expiration_date, is_frozen, frozen_at FROM inventory WHERE inventory_id = ?', [req.params.id]);

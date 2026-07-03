@@ -183,29 +183,37 @@ const FamilyManager = ({
                             {/* Código de la familia para invitar a otros */}
                             {familyCode && (
                                 <div style={{
-                                    marginTop: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                    gap: 10, padding: '12px 16px', borderRadius: 14,
-                                    background: '#FFF7ED', border: '1px solid rgba(255,159,67,0.30)'
+                                    marginTop: 18, padding: '16px', borderRadius: 14,
+                                    background: '#FFF7ED', border: '1px solid rgba(255,159,67,0.30)',
+                                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12
                                 }}>
-                                    <div style={{ textAlign: 'left' }}>
-                                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#9b8d7c', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                            Código del espacio
-                                        </div>
-                                        <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#E67E22', letterSpacing: '0.08em' }}>
+                                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#9b8d7c', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                        Código de Invitación
+                                    </div>
+                                    
+                                    <div style={{ background: 'white', padding: '10px', borderRadius: '12px', border: '2px solid rgba(255,159,67,0.2)' }}>
+                                        <img 
+                                            src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${familyCode}&color=E67E22&bgcolor=FFFFFF`} 
+                                            alt="QR Code de invitación" 
+                                            style={{ width: 120, height: 120, display: 'block' }} 
+                                        />
+                                    </div>
+                                    
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                        <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#E67E22', letterSpacing: '0.2em' }}>
                                             {familyCode}
                                         </div>
+                                        <button
+                                            onClick={handleCopyCode}
+                                            style={{
+                                                display: 'inline-flex', alignItems: 'center', gap: 6,
+                                                background: 'white', color: '#E67E22', border: '2px solid #E67E22', borderRadius: 10,
+                                                padding: '6px 12px', fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer'
+                                            }}
+                                        >
+                                            <Copy size={18} weight="bold" />
+                                        </button>
                                     </div>
-                                    <button
-                                        onClick={handleCopyCode}
-                                        style={{
-                                            display: 'inline-flex', alignItems: 'center', gap: 6,
-                                            background: 'linear-gradient(135deg, var(--primary), var(--primary-2))',
-                                            color: '#fff', border: 'none', borderRadius: 10,
-                                            padding: '8px 14px', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer'
-                                        }}
-                                    >
-                                        <Copy size={16} weight="bold" /> Copiar
-                                    </button>
                                 </div>
                             )}
 
