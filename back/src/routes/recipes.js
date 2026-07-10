@@ -70,10 +70,12 @@ router.get('/:id', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { title, description, instructions, difficulty, preparation_time, servings, image_url, calories_per_serving, created_by, family_id } = req.body;
+    const { title, description, instructions, difficulty, preparation_time, servings, image_url, calories_per_serving, created_by, family_id, recommended_meal } = req.body;
+    const validMeals = ['desayuno', 'almuerzo', 'cena', 'cualquiera'];
+    const mealType = validMeals.includes(recommended_meal) ? recommended_meal : 'cualquiera';
     const [result] = await db.query(
-      'INSERT INTO recipes (title, description, instructions, difficulty, preparation_time, servings, image_url, calories_per_serving, created_by, family_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [title, description || '', instructions || '', difficulty || 'regular', preparation_time || 0, servings || 1, image_url || '', calories_per_serving || null, created_by || null, family_id || null]
+      'INSERT INTO recipes (title, description, instructions, difficulty, preparation_time, servings, image_url, calories_per_serving, created_by, family_id, recommended_meal) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [title, description || '', instructions || '', difficulty || 'regular', preparation_time || 0, servings || 1, image_url || '', calories_per_serving || null, created_by || null, family_id || null, mealType]
     );
     const recipe_id = result.insertId;
     
@@ -85,7 +87,7 @@ router.post('/', async (req, res, next) => {
        );
     }
     
-    res.status(201).json({ recipe_id: recipe_id, title, description, instructions, difficulty, preparation_time, servings: servings || 1, image_url, calories_per_serving, created_by: created_by || null, family_id: family_id || null, ingredients: [] });
+    res.status(201).json({ recipe_id, title, description, instructions, difficulty, preparation_time, servings: servings || 1, image_url, calories_per_serving, created_by: created_by || null, family_id: family_id || null, recommended_meal: mealType, ingredients: [] });
   } catch (err) { next(err); }
 });
 // POST /recipes/validate-expiration — valida que los ingredientes de una receta no estén vencidos para la fecha planificada
@@ -97,13 +99,16 @@ router.post('/validate-expiration', async (req, res, next) => {
     }
 
     // 1. Obtener los ingredientes requeridos por la receta
-    const [recipeIngs] = await db.query(
+    const [recipeIngsRaw] = await db.query(
       `SELECT ri.ingredient_id, i.name 
        FROM recipe_ingredients ri 
        JOIN ingredients i ON ri.ingredient_id = i.ingredient_id 
        WHERE ri.recipe_id = ?`,
       [recipe_id]
     );
+
+    // Ignorar 'agua' ya que se asume que siempre está disponible
+    const recipeIngs = recipeIngsRaw.filter(i => i.name.toLowerCase() !== 'agua');
 
     if (!recipeIngs.length) return res.json({ valid: true });
 
@@ -164,13 +169,16 @@ router.post('/validate-ingredients', async (req, res, next) => {
     }
 
     // 1. Obtener ingredientes requeridos por la receta
-    const [recipeIngs] = await db.query(
+    const [recipeIngsRaw] = await db.query(
       `SELECT ri.ingredient_id, i.name 
        FROM recipe_ingredients ri 
        JOIN ingredients i ON ri.ingredient_id = i.ingredient_id 
        WHERE ri.recipe_id = ?`,
       [recipe_id]
     );
+
+    // Ignorar 'agua' ya que se asume que siempre está disponible
+    const recipeIngs = recipeIngsRaw.filter(i => i.name.toLowerCase() !== 'agua');
 
     if (!recipeIngs.length) return res.json({ valid: true }); // sin ingredientes registrados, permitir
 
@@ -201,13 +209,15 @@ router.post('/validate-ingredients', async (req, res, next) => {
 
 router.put('/:id', async (req, res, next) => {
   try {
-    const { title, description, instructions, difficulty, preparation_time, servings, image_url, calories_per_serving, created_by, family_id } = req.body;
+    const { title, description, instructions, difficulty, preparation_time, servings, image_url, calories_per_serving, created_by, family_id, recommended_meal } = req.body;
+    const validMeals = ['desayuno', 'almuerzo', 'cena', 'cualquiera'];
+    const mealType = validMeals.includes(recommended_meal) ? recommended_meal : 'cualquiera';
     const [result] = await db.query(
-      'UPDATE recipes SET title = ?, description = ?, instructions = ?, difficulty = ?, preparation_time = ?, servings = ?, image_url = ?, calories_per_serving = ?, created_by = ?, family_id = ? WHERE recipe_id = ?',
-      [title, description || '', instructions || '', difficulty || 'regular', preparation_time || 0, servings || 1, image_url || '', calories_per_serving || null, created_by || null, family_id || null, req.params.id]
+      'UPDATE recipes SET title = ?, description = ?, instructions = ?, difficulty = ?, preparation_time = ?, servings = ?, image_url = ?, calories_per_serving = ?, created_by = ?, family_id = ?, recommended_meal = ? WHERE recipe_id = ?',
+      [title, description || '', instructions || '', difficulty || 'regular', preparation_time || 0, servings || 1, image_url || '', calories_per_serving || null, created_by || null, family_id || null, mealType, req.params.id]
     );
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found' });
-    res.json({ recipe_id: Number(req.params.id), title, description, instructions, difficulty, preparation_time, servings: servings || 1, image_url, calories_per_serving, created_by: created_by || null, family_id: family_id || null });
+    res.json({ recipe_id: Number(req.params.id), title, description, instructions, difficulty, preparation_time, servings: servings || 1, image_url, calories_per_serving, created_by: created_by || null, family_id: family_id || null, recommended_meal: mealType });
   } catch (err) { next(err); }
 });
 

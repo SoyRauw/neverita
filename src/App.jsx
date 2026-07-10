@@ -1912,7 +1912,8 @@ function App() {
                         steps: meal.instructions ? meal.instructions.split('\n').filter(Boolean) : [],
                         description: meal.description || '',
                         servings: meal.servings ?? meal.servings_count ?? null,
-                        category: ['Almuerzo'],
+                        recommended_meal: meal.recommended_meal || 'almuerzo',
+                        category: [{ desayuno: 'Desayuno', almuerzo: 'Almuerzo', cena: 'Cena', cualquiera: 'Cualquiera' }[meal.recommended_meal] || 'Almuerzo'],
                     };
                 }
                 setPlannerData(rebuilt);
@@ -1950,7 +1951,7 @@ function App() {
 
             if (!validation.valid) {
                 showToast(`⚠️ No puedes planificar esta receta para ese día.\n\nLos siguientes ingredientes estarán vencidos:\n- ${validation.expiredIngredients.join('\n- ')}`);
-                return; // Bloquear flujo
+                return false; // Bloquear flujo
             }
         } catch (err) {
             console.error('Error validando caducidad', err);
@@ -1974,10 +1975,13 @@ function App() {
                     ...prev,
                     [key]: { ...prev[key], daily_meal_id: saved.daily_meal_id },
                 }));
+                return true;
             } catch (err) {
                 console.error('Error guardando en el menú:', err);
+                return false;
             }
         }
+        return false;
     };
 
     if (!isAuthenticated) return (

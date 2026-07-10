@@ -83,3 +83,51 @@ router.delete('/clear/:family_id', async (req, res, next) => {
         res.json({ success: true });
     } catch (err) { next(err); }
 });
+
+// GET: Sugerencias inteligentes basadas en los ingredientes que usa la familia en sus recetas
+// Excluye: ingredientes ya en la lista, ingredientes ya en el inventario con stock > 0
+// Ordena por frecuencia de uso en las recetas de la familia
+router.get('/suggestions', async (req, res, next) => {
+    try {
+        const { family_id } = req.query;
+        if (!family_id) return res.status(400).json({ error: 'Falta family_id' });
+
+        // 1. IDs de ingredientes ya en la lista de compras (sin marcar como comprados)
+        const [listRows] = await db.query(
+            `SELECT LOWER(name) as name_lower FROM shopping_list WHERE family_id = ? AND checked = 0`,
+            [family_id]
+        );
+        const inListNames = new Set(listRows.map(r => r.name_lower));
+
+        // 2. IDs de ingredientes que ya tienen stock en inventario (cantidad > 0)
+        const [invRows] = await db.query(
+            `SELECT DISTINCT ingredient_id FROM inventory WHERE family_id = ? AND quantity > 0`,
+            [family_id]
+        );
+        const inStockIds = new Set(invRows.map(r => r.ingredient_id));
+
+        // 3. Ingredientes más usados en las recetas de la familia, ordenados por frecuencia
+        const [recipeIngRows] = await db.query(
+            `SELECT i.ingredient_id, i.name, i.unit, i.category, i.average_expiry_days,
+                    COUNT(ri.recipe_id) AS usage_count
+             FROM recipe_ingredients ri
+             JOIN ingredients i ON ri.ingredient_id = i.ingredient_id
+             JOIN family_recipes fr ON ri.recipe_id = fr.recipe_id
+             WHERE fr.family_id = ?
+             GROUP BY i.ingredient_id, i.name, i.unit, i.category, i.average_expiry_days
+             ORDER BY usage_count DESC
+             LIMIT 50`,
+            [family_id]
+        );
+
+        // 4. Filtrar: excluir los que ya están en lista o en stock
+        const suggestions = recipeIngRows.filter(ing => {
+            if (inStockIds.has(ing.ingredient_id)) return false;
+            if (inListNames.has(ing.name.toLowerCase())) return false;
+            return true;
+        }).slice(0, 20); // Máximo 20 sugerencias
+
+        res.json(suggestions);
+    } catch (err) { next(err); }
+});
+

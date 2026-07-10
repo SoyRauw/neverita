@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { showToast } from '../Toast';
-import { ShoppingCart, CheckCircle, Circle, Trash, MagicWand, X, Check, Snowflake } from '@phosphor-icons/react';
+import { CheckCircle, Circle, Trash, MagicWand, X } from '@phosphor-icons/react';
 import { shoppingListService, aiService, ingredientsService, inventoryService, menuPlansService, dailyMealsService } from '../api';
 
 const ShoppingList = ({ currentFamily }) => {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [aiGenerating, setAiGenerating] = useState(false);
-    
+
     // Autocomplete state
     const [ingredients, setIngredients] = useState([]);
     const [searchText, setSearchText] = useState('');
@@ -135,10 +135,23 @@ const ShoppingList = ({ currentFamily }) => {
         setAiGenerating(true);
         try {
             const familyId = currentFamily.family_id || currentFamily.id;
-            const [inv, plans] = await Promise.all([
-                inventoryService.getAll(familyId),
+
+            // Obtener inventario Y lista de ingredientes en paralelo
+            const [rawInv, plans] = await Promise.all([
+                inventoryService.getByFamily(familyId),
                 menuPlansService.getByFamily(familyId)
             ]);
+
+            // Enriquecer el inventario con nombres reales usando la lista de ingredientes ya cargada
+            const enrichedInventory = rawInv.map(invItem => {
+                const ing = ingredients.find(i => i.ingredient_id === invItem.ingredient_id);
+                return {
+                    name: ing ? ing.name : null,
+                    quantity: invItem.quantity,
+                    unit: ing ? ing.unit : invItem.unit,
+                    expiration_date: invItem.expiration_date,
+                };
+            }).filter(i => i.name !== null); // descartar los que no tienen nombre en DB
 
             const now = new Date();
             now.setHours(12, 0, 0, 0);
@@ -153,8 +166,6 @@ const ShoppingList = ({ currentFamily }) => {
             if (activePlan) {
                 try {
                     const meals = await dailyMealsService.getByPlan(activePlan.menu_plan_id);
-                    // 'meals' es un array de { ...datos de comida, recipe_id, recipe_name, ingredients_list }
-                    // ingredients_list suele venir como string JSON desde la BD en algunas rutas, o ya parseado.
                     meals.forEach(m => {
                         let ings = m.ingredients_list;
                         if (typeof ings === 'string') {
@@ -168,25 +179,32 @@ const ShoppingList = ({ currentFamily }) => {
                     console.error("Error fetching daily meals for active plan", err);
                 }
             }
-            
+
+            // Lista de compras actual (sin marcar como comprados) para evitar duplicados
+            const currentShoppingList = items
+                .filter(i => !i.checked)
+                .map(i => ({ name: i.name, quantity: i.quantity, unit: i.unit }));
+
             const payload = {
                 family_id: familyId,
                 member_count: currentFamily.members || 1,
-                current_inventory: inv.map(i => ({ name: i.name, quantity: i.quantity, unit: i.unit, expiration_date: i.expiration_date })),
-                weekly_plan_ingredients: weekly_plan_ingredients.map(i => ({ name: i.name, quantity: i.quantity, unit: i.unit }))
+                current_inventory: enrichedInventory,
+                weekly_plan_ingredients: weekly_plan_ingredients.map(i => ({ name: i.name, quantity: i.quantity, unit: i.unit })),
+                current_shopping_list: currentShoppingList,
             };
 
             const response = await aiService.generateShoppingList(payload);
-            
+
             if (response.items && response.items.length > 0) {
-                // Add all to DB
                 const newItems = [];
                 for (const item of response.items) {
+                    // Si el ingrediente existe en DB, usar su nombre y unidad exactos
+                    const dbIng = ingredients.find(i => i.name.toLowerCase() === item.name.toLowerCase());
                     const created = await shoppingListService.create({
                         family_id: familyId,
-                        name: item.name,
+                        name: dbIng ? dbIng.name : item.name,
                         quantity: item.quantity,
-                        unit: item.unit,
+                        unit: dbIng ? dbIng.unit : item.unit,
                         source: 'ai'
                     });
                     newItems.push(created);
@@ -207,16 +225,11 @@ const ShoppingList = ({ currentFamily }) => {
     // --- Add to Inventory Modal Flow ---
     const openInventoryModal = (item) => {
         if (item.checked) {
-            // Si ya estaba checked, lo destachamos sin abrir modal
             toggleCheckStatus(item.item_id, false);
             return;
         }
-
-        // Abrir modal para confirmar ingreso a inventario
         setModalItem(item);
         setModalQty(item.quantity);
-        
-        // Find matching ingredient to get expiry days
         const ing = ingredients.find(i => i.name.toLowerCase() === item.name.toLowerCase());
         if (ing && ing.average_expiry_days) {
             const d = new Date();
@@ -239,12 +252,8 @@ const ShoppingList = ({ currentFamily }) => {
         if (!modalItem) return;
         setModalSaving(true);
         try {
-            // 1. Buscar si el ingrediente existe
-            let ingredientId = null;
             let ing = ingredients.find(i => i.name.toLowerCase() === modalItem.name.toLowerCase());
-            
             if (!ing) {
-                // Si la IA recomendó algo que no existe en DB, crearlo
                 ing = await ingredientsService.create({
                     name: modalItem.name,
                     unit: modalItem.unit,
@@ -253,20 +262,14 @@ const ShoppingList = ({ currentFamily }) => {
                 });
                 setIngredients([...ingredients, ing]);
             }
-            ingredientId = ing.ingredient_id;
-
-            // 2. Agregar al inventario real
             await inventoryService.create({
                 family_id: currentFamily.family_id || currentFamily.id,
-                ingredient_id: ingredientId,
+                ingredient_id: ing.ingredient_id,
                 quantity: Number(modalQty),
                 expiration_date: modalExpDate || null
             });
-
-            // 3. Marcar como checkeado en la lista de compras
             await shoppingListService.update(modalItem.item_id, { checked: true, quantity: Number(modalQty) });
             setItems(items.map(i => i.item_id === modalItem.item_id ? { ...i, checked: 1, quantity: Number(modalQty) } : i));
-            
             setShowModal(false);
         } catch (error) {
             showToast("Error agregando al inventario.");
@@ -288,9 +291,9 @@ const ShoppingList = ({ currentFamily }) => {
                         {currentFamily && <span style={{ color: '#FF9F43', fontWeight: 600 }}> — {currentFamily.name}</span>}
                     </p>
                 </div>
-                <button 
-                    className="btn-primary" 
-                    onClick={handleAiGenerate} 
+                <button
+                    className="btn-primary"
+                    onClick={handleAiGenerate}
                     disabled={aiGenerating}
                     style={{ display: 'flex', gap: 8, alignItems: 'center', background: 'linear-gradient(135deg, #FF9F43 0%, #FF6B6B 100%)', boxShadow: '0 4px 15px rgba(255, 107, 107, 0.3)' }}
                 >
@@ -300,14 +303,14 @@ const ShoppingList = ({ currentFamily }) => {
             </header>
 
             <div className="shopping-card-container" style={{ background: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(12px)', padding: '26px', borderRadius: '22px', boxShadow: '0 24px 60px rgba(180,100,30,0.12)', border: '1px solid rgba(255,159,67,0.16)', maxWidth: '800px', marginBottom: 40 }}>
-                
+
                 {/* --- AÑADIR MANUAL --- */}
                 <div className="shopping-form-row" style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '30px', flexWrap: 'wrap', borderBottom: '2px solid rgba(255,159,67,0.16)', paddingBottom: '24px' }}>
-                    
+
                     <div style={{ flex: 2, minWidth: '200px', position: 'relative' }}>
-                        <input 
-                            type="text" 
-                            placeholder="Buscar ingrediente..." 
+                        <input
+                            type="text"
+                            placeholder="Buscar ingrediente..."
                             value={searchText}
                             onChange={(e) => { setSearchText(e.target.value); setSelectedIngredient(null); setShowSuggestions(true); }}
                             onFocus={() => setShowSuggestions(true)}
@@ -347,12 +350,12 @@ const ShoppingList = ({ currentFamily }) => {
                             </div>
                         )}
                     </div>
-                    
-                    <input 
+
+                    <input
                         type="number" min="0.1" step="any" placeholder="Cant." value={quantity} onChange={e => setQuantity(e.target.value)}
                         style={{ width: '80px', border: '2px solid rgba(230,126,34,0.18)', borderRadius: '12px', padding: '11px', fontSize: '1rem', outline: 'none', background: 'rgba(255,250,244,0.85)', fontWeight: 600 }}
                     />
-                    
+
                     {!selectedIngredient && (
                         <input type="text" placeholder="Unidad" value={unit} onChange={e => setUnit(e.target.value)} style={{ width: '80px', border: '2px solid rgba(230,126,34,0.18)', borderRadius: '12px', padding: '11px', fontSize: '1rem', outline: 'none', background: 'rgba(255,250,244,0.85)', fontWeight: 600 }} />
                     )}

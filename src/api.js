@@ -269,4 +269,6 @@ export const shoppingListService = {
     clearChecked: (familyId) => fetchAPI(`/shopping-list/clear/${familyId}`, {
         method: 'DELETE',
     }),
+    getSuggestions: (familyId) => fetchAPI(`/shopping-list/suggestions?family_id=${familyId}`),
 };
+

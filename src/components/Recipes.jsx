@@ -34,11 +34,19 @@ const canDo = (role, action) => {
 };
 
 // --- COLORES SEGÚN COMIDA ---
+const MEAL_LABEL = {
+    'desayuno': 'Desayuno',
+    'almuerzo': 'Almuerzo',
+    'cena': 'Cena',
+    'cualquiera': 'Cualquiera',
+};
+
 const getMealColor = (type) => {
-    switch (type) {
-        case 'Desayuno': return '#f6b93b';
-        case 'Almuerzo': return '#e55039';
-        case 'Cena': return '#4a69bd';
+    const normalized = (type || '').toLowerCase();
+    switch (normalized) {
+        case 'desayuno': return '#f6b93b';
+        case 'almuerzo': return '#e55039';
+        case 'cena': return '#4a69bd';
         default: return '#95a5a6';
     }
 };
@@ -50,7 +58,8 @@ const mapRecipe = (r) => ({
     name: r.title,
     cal: r.calories_per_serving,
     time: r.preparation_time ? `${r.preparation_time} min` : 'N/A',
-    category: ['Almuerzo'],
+    category: [MEAL_LABEL[r.recommended_meal] || 'Almuerzo'],
+    recommended_meal: r.recommended_meal || 'almuerzo',
     img: r.image_url || 'https://images.unsplash.com/photo-1546554137-f86b9593a222?w=400',
     ingredients: Array.isArray(r.ingredients) ? r.ingredients : [],
     steps: r.instructions ? r.instructions.split('\n').filter(Boolean) : [],
@@ -264,12 +273,10 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
 
     // ---------- Crear ----------
     const toggleNewRecipeCategory = (type) => {
-        const currentCats = newRecipe.category;
+        // Ahora es una sola categoría, así que reemplazamos el array
         setNewRecipe({
             ...newRecipe,
-            category: currentCats.includes(type)
-                ? currentCats.filter(c => c !== type)
-                : [...currentCats, type]
+            category: newRecipe.category.includes(type) ? [] : [type]
         });
     };
 
@@ -296,15 +303,10 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                 calories_per_serving: parseInt(newRecipe.cal) || null,
                 created_by: userProfile?.user_id || null,
                 family_id: currentFamily?.family_id || currentFamily?.id || null,
+                recommended_meal: newRecipe.category.length > 0 ? newRecipe.category[0].toLowerCase() : 'cualquiera',
             };
             const created = await recipesService.create(payload);
-            // Usar las categorías del formulario solo en el estado local del frontend
-            const localRecipe = {
-                ...mapRecipe(created),
-                category: newRecipe.category.length > 0 ? newRecipe.category : ['Otro'],
-                steps: newRecipe.steps ? newRecipe.steps.split('\n').filter(Boolean) : [],
-                ingredients: newRecipe.ingredients ? newRecipe.ingredients.split('\n').filter(Boolean) : [],
-            };
+            const localRecipe = mapRecipe(created);
             setRecipes(prev => [...prev, localRecipe]);
             setIsAdding(false);
             setNewRecipe({ name: "", cal: "", time: "", category: [], img: "", imgType: "url", ingredients: "", steps: "", description: "" });
@@ -353,15 +355,22 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
     const handleConfirmPlan = async () => {
         if (selectedSlots.length === 0) return showToast("Selecciona al menos un espacio.");
         const multiplier = planBaseServings > 0 ? planServings / planBaseServings : 1;
-        selectedSlots.forEach(slot => {
+        
+        let successCount = 0;
+        for (const slot of selectedSlots) {
             const [dayIndexStr, meal] = slot.split('-');
-            onAddToPlanner(planRecipe, parseInt(dayIndexStr, 10), meal, multiplier);
-        });
+            const success = await onAddToPlanner(planRecipe, parseInt(dayIndexStr, 10), meal, multiplier);
+            if (success) {
+                successCount++;
+            }
+        }
+
         // Descontar inventario escalado por personas
         const fid = currentFamily?.family_id || currentFamily?.id;
-        if (planRecipe?.recipe_id && fid && multiplier !== 1) {
+        if (planRecipe?.recipe_id && fid && successCount > 0) {
             try {
-                await inventoryService.deduct(planRecipe.recipe_id, fid, multiplier);
+                const totalMultiplier = multiplier * successCount;
+                await inventoryService.deduct(planRecipe.recipe_id, fid, totalMultiplier);
             } catch (err) {
                 console.error('Error al descontar inventario escalado:', err);
             }
@@ -580,7 +589,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                             </div>
 
                             <div style={{ marginBottom: 20 }}>
-                                <label className="ia-label">Categoría (visual, no se guarda en BD aún)</label>
+                                <label className="ia-label">Categoría Recomendada (Comida)</label>
                                 <div className="chips-wrap">
                                     {mealTypes.map(type => (
                                         <div key={type} className={`chip ${newRecipe.category.includes(type) ? 'active' : ''}`} onClick={() => toggleNewRecipeCategory(type)}>
