@@ -1,5 +1,5 @@
-const API_BASE_URL = 'https://neverita.onrender.com';
-//const API_BASE_URL = 'http://localhost:3000';
+//const API_BASE_URL = 'https://neverita.onrender.com';
+const API_BASE_URL = 'http://localhost:3000';
 
 /**
  * Función genérica para hacer peticiones al backend.
@@ -251,6 +251,11 @@ export const dailyMealsService = {
     }),
     /** Elimina una comida del plan */
     delete: (dailyMealId) => fetchAPI(`/daily-meals/${dailyMealId}`, { method: 'DELETE' }),
+    /** Marca una comida como completada (true) o pendiente (false) */
+    toggleComplete: (dailyMealId, isCompleted) => fetchAPI(`/daily-meals/${dailyMealId}/complete`, {
+        method: 'PUT',
+        body: JSON.stringify({ is_completed: isCompleted }),
+    }),
 };
 
 export const shoppingListService = {

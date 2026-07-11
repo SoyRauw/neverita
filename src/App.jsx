@@ -395,6 +395,10 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
     // Confirmación de borrado (capa con aviso)
     const [pendingDelete, setPendingDelete] = useState(null); // { dayIndex, type, name }
 
+    // Modal de sobras
+    const [pendingLeftovers, setPendingLeftovers] = useState(null); // { name, recipe_id }
+    const [leftoversQty, setLeftoversQty] = useState(1);
+
     const toggleSlot = (dayIndex, meal) => {
         const slotKey = `${dayIndex}-${meal}`;
         // Si ya está seleccionado, permitir deseleccionarlo sin importar si está bloqueado
@@ -1498,33 +1502,11 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                                 }));
                                                 setSelectedMealDetails(prev => ({ ...prev, is_completed: newStatus ? 1 : 0 }));
                                                 
-                                                if (newStatus && window.confirm('¿Quedaron sobras que deseas guardar en el inventario?')) {
-                                                    let ingRes = await ingredientsService.create({
-                                                        name: `Sobras de ${selectedMealDetails.name}`,
-                                                        category: 'otro',
-                                                        unit: 'porción',
-                                                        average_expiry_days: 3
-                                                    }).catch(() => null);
-                                                    
-                                                    if (!ingRes) {
-                                                        // Intentar buscarlo si ya existe un ingrediente genérico con ese nombre
-                                                        const allIngs = await ingredientsService.getAll();
-                                                        ingRes = allIngs.find(i => i.name === `Sobras de ${selectedMealDetails.name}`);
-                                                    }
-                                                    
-                                                    if (ingRes && ingRes.ingredient_id) {
-                                                        const expDate = new Date();
-                                                        expDate.setDate(expDate.getDate() + 3);
-                                                        await inventoryService.create({
-                                                            family_id: currentFamily.family_id || currentFamily.id,
-                                                            ingredient_id: ingRes.ingredient_id,
-                                                            quantity: 1,
-                                                            expiration_date: expDate.toISOString().split('T')[0],
-                                                            is_leftover: 1,
-                                                            source_recipe_id: selectedMealDetails.recipe_id
-                                                        });
-                                                        showToast('Sobras guardadas en el inventario 🥡');
-                                                    }
+                                                if (newStatus) {
+                                                    setPendingLeftovers({
+                                                        name: selectedMealDetails.name,
+                                                        recipe_id: selectedMealDetails.recipe_id,
+                                                    });
                                                 }
                                             } catch (e) { console.error(e); showToast('Error al actualizar.'); }
                                         }}
@@ -1573,6 +1555,85 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                         <div className="nv-confirm-actions">
                             <button className="nv-confirm-cancel" onClick={() => setPendingDelete(null)}>Cancelar</button>
                             <button className="nv-confirm-del" onClick={confirmDeleteMeal}><Trash size={18} weight="bold" /> Eliminar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* === MODAL SOBRAS === */}
+            {pendingLeftovers && (
+                <div className="modal-overlay" onClick={() => setPendingLeftovers(null)}>
+                    <div className="nv-confirm-card" onClick={e => e.stopPropagation()} style={{ textAlign: 'center', maxWidth: 400 }}>
+                        <div className="nv-confirm-icon" style={{ background: 'linear-gradient(135deg, #FFF3E0, #FFE0B2)', color: '#FF9F43', fontSize: 36 }}>
+                            🥡
+                        </div>
+                        <h3 className="nv-confirm-title">¿Quedaron sobras?</h3>
+                        <p className="nv-confirm-text">
+                            ¿Cómo quedó <strong>{pendingLeftovers.name}</strong>?
+                            <br /><span style={{ fontSize: '0.85rem', color: '#9b8d7c' }}>Las sobras se guardarán en tu inventario por 3 días.</span>
+                        </p>
+
+                        {/* Selector de porciones */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, margin: '16px 0', background: '#FFF9F2', borderRadius: 14, padding: '14px', border: '1px solid #EADBC7' }}>
+                            <button
+                                onClick={() => setLeftoversQty(q => Math.max(0.5, q - 0.5))}
+                                style={{ width: 38, height: 38, borderRadius: '50%', border: '2px solid #EADBC7', background: 'white', cursor: 'pointer', fontSize: '1.3rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            >−</button>
+                            <div style={{ textAlign: 'center' }}>
+                                <span style={{ display: 'block', fontSize: '2rem', fontWeight: 900, color: '#2A2118', lineHeight: 1 }}>{leftoversQty}</span>
+                                <span style={{ fontSize: '0.8rem', color: '#9b8d7c' }}>{leftoversQty === 1 ? 'porción' : 'porciones'}</span>
+                            </div>
+                            <button
+                                onClick={() => setLeftoversQty(q => q + 0.5)}
+                                style={{ width: 38, height: 38, borderRadius: '50%', border: '2px solid #EADBC7', background: 'white', cursor: 'pointer', fontSize: '1.3rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            >+</button>
+                        </div>
+
+                        <div className="nv-confirm-actions">
+                            <button
+                                className="nv-confirm-cancel"
+                                onClick={() => setPendingLeftovers(null)}
+                            >
+                                No, gracias
+                            </button>
+                            <button
+                                className="nv-confirm-del"
+                                style={{ background: 'linear-gradient(135deg, #FF9F43, #FF7F50)', border: 'none' }}
+                                onClick={async () => {
+                                    try {
+                                        const leftoverName = `Sobras de ${pendingLeftovers.name}`;
+                                        // El backend ya maneja duplicados: devuelve el existente si ya hay uno
+                                        const ingRes = await ingredientsService.create({
+                                            name: leftoverName,
+                                            category: 'otro',
+                                            unit: 'porcion',
+                                            average_expiry_days: 3,
+                                        });
+
+                                        if (ingRes && ingRes.ingredient_id) {
+                                            const expDate = new Date();
+                                            expDate.setDate(expDate.getDate() + 3);
+                                            await inventoryService.create({
+                                                family_id: currentFamily.family_id || currentFamily.id,
+                                                ingredient_id: ingRes.ingredient_id,
+                                                quantity: leftoversQty,
+                                                expiration_date: expDate.toISOString().split('T')[0],
+                                            });
+                                            showToast(`🥡 ${leftoversQty} ${leftoversQty === 1 ? 'porción guardada' : 'porciones guardadas'} en el inventario`);
+                                        } else {
+                                            showToast('Error al guardar las sobras.');
+                                        }
+                                    } catch (e) {
+                                        console.error(e);
+                                        showToast('Error al guardar las sobras.');
+                                    } finally {
+                                        setPendingLeftovers(null);
+                                        setLeftoversQty(1);
+                                    }
+                                }}
+                            >
+                                🥡 Guardar {leftoversQty} {leftoversQty === 1 ? 'porción' : 'porciones'}
+                            </button>
                         </div>
                     </div>
                 </div>
