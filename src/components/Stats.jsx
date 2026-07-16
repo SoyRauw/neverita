@@ -157,7 +157,8 @@ const Stats = ({ currentFamily }) => {
             if (relevant.length === 0) relevant = raw.plansMeals.slice(-4);
         }
 
-        const allMeals = relevant.flatMap(pm => pm.meals);
+        // Solo cuenta comidas completadas
+        const allMeals = relevant.flatMap(pm => pm.meals).filter(m => m.is_completed === 1);
         const totalCal = allMeals.reduce((a, m) => a + (Number(m.calories_per_serving) || 0), 0);
         const mealsCount = allMeals.length;
 

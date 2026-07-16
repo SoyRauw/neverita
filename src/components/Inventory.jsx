@@ -365,6 +365,11 @@ const Inventory = ({ currentFamily, userRole }) => {
                                                         {style.label}
                                                     </span>
                                                 )}
+                                                {item.is_leftover === 1 && (
+                                                    <span style={{ background: '#F3E8FF', color: '#9333EA', fontSize: '0.72rem', fontWeight: 700, padding: '2px 7px', borderRadius: 20 }}>
+                                                        Sobras 🥡
+                                                    </span>
+                                                )}
                                             </td>
                                             <td style={{ color: status === 'expired' ? '#9b8d7c' : 'inherit' }}>{item.quantity} {item.unit}</td>
                                             <td>
@@ -440,6 +445,11 @@ const Inventory = ({ currentFamily, userRole }) => {
                                                 {style.label && (
                                                     <span style={{ background: style.badgeBg, color: style.badgeColor, fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: 20 }}>
                                                         {style.label}
+                                                    </span>
+                                                )}
+                                                {item.is_leftover === 1 && (
+                                                    <span style={{ background: '#F3E8FF', color: '#9333EA', fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: 20 }}>
+                                                        Sobras 🥡
                                                     </span>
                                                 )}
                                             </h4>

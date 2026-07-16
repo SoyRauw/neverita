@@ -11,7 +11,7 @@ router.get('/', async (req, res, next) => {
       return res.status(400).json({ error: 'menu_plan_id es obligatorio.' });
     }
     const [rows] = await db.query(
-      `SELECT dm.daily_meal_id, dm.menu_plan_id, dm.meal_type, dm.day_of_week, dm.recipe_id,
+      `SELECT dm.daily_meal_id, dm.menu_plan_id, dm.meal_type, dm.day_of_week, dm.recipe_id, dm.is_completed, dm.completed_at,
               r.title, r.image_url, r.calories_per_serving, r.preparation_time, r.instructions, r.description
        FROM daily_meals dm
        JOIN recipes r ON dm.recipe_id = r.recipe_id
@@ -102,3 +102,28 @@ router.delete('/:daily_meal_id', async (req, res, next) => {
     res.status(204).send();
   } catch (err) { next(err); }
 });
+
+// POST /daily-meals/:daily_meal_id/complete — marca una comida como completada o pendiente
+router.put('/:daily_meal_id/complete', async (req, res, next) => {
+  try {
+    const { is_completed } = req.body;
+    const isCompletedVal = is_completed ? 1 : 0;
+    
+    let query = 'UPDATE daily_meals SET is_completed = ?';
+    let params = [isCompletedVal];
+    
+    if (isCompletedVal === 1) {
+      query += ', completed_at = NOW()';
+    } else {
+      query += ', completed_at = NULL';
+    }
+    query += ' WHERE daily_meal_id = ?';
+    params.push(req.params.daily_meal_id);
+    
+    const [result] = await db.query(query, params);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found' });
+    
+    res.json({ success: true, is_completed: isCompletedVal });
+  } catch (err) { next(err); }
+});
+

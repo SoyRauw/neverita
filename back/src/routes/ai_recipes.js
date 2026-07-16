@@ -233,7 +233,8 @@ router.post('/generate', async (req, res) => {
                     "difficulty": "easy", 
                     "preparation_time": 30, 
                     "servings": 1, 
-                    "calories_per_serving": 400 
+                    "calories_per_serving": 400,
+                    "recommended_meal": "almuerzo"
                 },
                 "ingredients": [
                     { 
@@ -251,6 +252,7 @@ router.post('/generate', async (req, res) => {
             IMPORTANTE: "unit" único en: "g", "kg", "ml", "l", "unidad".
             IMPORTANTE: "category" único en: "vegetal", "fruta", "proteína", "lácteo", "grano", "condimento", "grasa", "bebida", "otro".
             IMPORTANTE: "average_expiry_days" entero positivo (pollo=5, arroz=365, leche=7, sal=730).
+            IMPORTANTE: "recommended_meal" único en: "desayuno", "almuerzo", "cena", "cualquiera". Determina en qué momento del día se recomienda consumir esta receta.
             IMPORTANTE SOBRE UNIDADES CULINARIAS (measure_qty y measure_unit): 
             El usuario quiere que a la hora de cocinar se le indique la cantidad en medidas prácticas (cucharadas, tazas, pizca, etc.), pero que el descuento del inventario sea en gramos/ml.
             Si el ingrediente se mide mejor en cucharadas o tazas al cocinar (ej. sal, aceite, azúcar, arroz), incluye "measure_qty" (número) y "measure_unit" (texto como "cucharada pequeña", "taza", "pizca").
@@ -347,14 +349,19 @@ router.post('/generate', async (req, res) => {
             console.log('⚠️ Falta SERPAPI_KEY. Usando imagen genérica.');
         }
 
+        // Sanitizar recommended_meal
+        const validMeals = ['desayuno', 'almuerzo', 'cena', 'cualquiera'];
+        const rawMeal = (aiData.recipe.recommended_meal || 'cualquiera').toLowerCase();
+        const recommendedMeal = validMeals.includes(rawMeal) ? rawMeal : 'cualquiera';
+
         // --- C. GUARDAR EN BD (transacción) ---
         await connection.beginTransaction();
 
         // 1. Guardar Receta
         const validFamilyId = family_id || 1;
         const [resReceta] = await connection.query(
-            `INSERT INTO recipes (title, description, instructions, difficulty, preparation_time, servings, calories_per_serving, created_by, family_id, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-            [aiData.recipe.title, aiData.recipe.description, aiData.recipe.instructions, difficulty, aiData.recipe.preparation_time, aiData.recipe.servings, aiData.recipe.calories_per_serving, validFamilyId, imageUrl]
+            `INSERT INTO recipes (title, description, instructions, difficulty, preparation_time, servings, calories_per_serving, recommended_meal, created_by, family_id, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+            [aiData.recipe.title, aiData.recipe.description, aiData.recipe.instructions, difficulty, aiData.recipe.preparation_time, aiData.recipe.servings, aiData.recipe.calories_per_serving, recommendedMeal, validFamilyId, imageUrl]
         );
         const recipeId = resReceta.insertId;
         
@@ -408,7 +415,7 @@ router.post('/generate', async (req, res) => {
 
         res.json({
             source: "ai_generated",
-            recipe: { ...aiData.recipe, recipe_id: recipeId, image_url: imageUrl },
+            recipe: { ...aiData.recipe, recipe_id: recipeId, image_url: imageUrl, recommended_meal: recommendedMeal },
             ingredients: aiData.ingredients
         });
 
@@ -433,71 +440,87 @@ router.post('/shopping-list', async (req, res) => {
         if (!apiKey) return res.status(500).json({ error: 'Falta GEMINI_API_KEY en el servidor.' });
         console.log("🛒 Generando lista de compras inteligente para familia", family_id);
 
+        const n = member_count || 1;
+
         const systemPrompt = `
             Eres un asistente de compras inteligente enfocado en economía familiar y anti-desperdicio.
-            Tu misión es generar una lista de compras COMPLETA y DETALLADA para una familia de ${member_count || 1} personas para la semana.
+            Tu misión es generar una lista de compras RAZONABLE para una familia de ${n} ${n === 1 ? 'persona' : 'personas'} para UNA semana (7 días).
 
             ════════════════════════════════════════════════
-            REGLA #1 — SIEMPRE USA NOMBRES ESPECÍFICOS DE PRODUCTO Y SOLO ALIMENTOS:
-            ❌ PROHIBIDO escribir nombres vagos como:
-               "Productos básicos", "Verduras variadas", "Condimentos"
-            ❌ PROHIBIDO sugerir productos que NO sean comida:
-               Nada de jabón, detergente, papel higiénico, pasta dental, productos de limpieza o higiene personal. ESTA APP ES SOLO DE COMIDA.
-            ✅ OBLIGATORIO escribir el nombre real y concreto del alimento:
-               "Tomate", "Cebolla", "Pollo", "Aceite de girasol", "Leche entera", etc.
-            Cada ítem DEBE ser un alimento individual y reconocible.
+            ⚠️ REGLA #0 — CANTIDADES MÁXIMAS ABSOLUTAS POR PERSONA POR SEMANA:
+            NUNCA superes estos límites, independientemente del número de personas:
+            • Arroz, pasta, harina, avena, cereales: MÁXIMO 500 g por persona
+            • Carnes (pollo, res, cerdo): MÁXIMO 1000 g por persona
+            • Huevos: MÁXIMO 12 unidades por persona
+            • Leche: MÁXIMO 1000 ml por persona
+            • Aceite, mantequilla: MÁXIMO 200 ml (o 200 g) total para toda la familia
+            • Sal, azúcar, especias, condimentos: MÁXIMO 100 g total para toda la familia
+            • Verduras y frutas (cada una): MÁXIMO 500 g por persona
+            • Lácteos (queso, yogur): MÁXIMO 300 g por persona
+
+            Para ${n} ${n === 1 ? 'persona' : 'personas'}, los valores de referencia son:
+            • Arroz blanco: ${n * 400} g   • Pasta: ${n * 300} g   • Harina: ${n * 400} g
+            • Avena: ${n * 200} g           • Pollo: ${n * 800} g   • Huevos: ${n * 6} unidades
+            • Leche: ${n * 700} ml          • Aceite: ${Math.min(n * 100, 500)} ml
+
+            Si el número de personas es grande (ej. 5), las cantidades siguen siendo razonables
+            para una SEMANA, no para un mes. Un paquete de pasta es 400-500 g, no 5000 g.
             ════════════════════════════════════════════════
 
-            REGLA #2 — INVENTARIO ACTUAL (verifica las cantidades):
-            ${current_inventory.length > 0 ? JSON.stringify(current_inventory) : "Inventario vacío — recomienda todos los básicos necesarios."}
-            IMPORTANTE: Evalúa si la cantidad que ya tienen es suficiente para ${member_count || 1} personas por 7 días. Si tienen suficiente, NO LO AGREGUES. Si tienen poco, agrega solo la diferencia necesaria.
+            REGLA #1 — NOMBRES ESPECÍFICOS Y SOLO ALIMENTOS:
+            ❌ PROHIBIDO: nombres vagos ("Verduras variadas", "Condimentos") y productos de higiene/limpieza.
+            ✅ OBLIGATORIO: nombres concretos ("Tomate", "Cebolla", "Pollo pechuga").
+            ════════════════════════════════════════════════
 
-            REGLA #3 — INGREDIENTES DEL MENÚ SEMANAL (incluye los que falten o que no alcancen):
-            ${weekly_plan_ingredients.length > 0 ? JSON.stringify(weekly_plan_ingredients) : "Sin plan semanal — recomienda una despensa completa para la semana."}
+            REGLA #2 — INVENTARIO ACTUAL DE LA FAMILIA:
+            ${current_inventory.length > 0 ? JSON.stringify(current_inventory) : "Inventario vacío — recomienda los básicos necesarios."}
+            Si ya tienen suficiente de algo para la semana (según los límites de la REGLA #0), NO lo agregues.
+            ════════════════════════════════════════════════
 
-            REGLA #4 — CESTA BÁSICA COMPLETA:
-            Verifica si faltan estos productos esenciales (uno por uno, con nombre exacto) y agrégalos si no están en el inventario:
-            GRANOS/ALMIDONES: Arroz blanco, Pasta (espagueti o macarrón), Harina de trigo, Harina Pan (si aplica), Avena
-            PROTEÍNAS: Pollo (pechuga o entero), Carne molida de res, Atún en lata, Huevos, Caraotas negras o rojas, Lentejas
-            LÁCTEOS: Leche entera, Queso blanco, Mantequilla, Yogur natural
-            VERDURAS: Tomate, Cebolla, Ajo, Zanahoria, Papa, Pimentón verde, Apio España, Celery, Cilantro
-            FRUTAS: Plátano, Naranja, Limón
-            ACEITES Y GRASAS: Aceite vegetal o de girasol
-            CONDIMENTOS Y ESPECIAS (cada uno por separado): Sal, Azúcar, Pimienta negra, Orégano, Comino, Salsa de tomate, Mayonesa, Mostaza
-            PANADERÍA: Pan de molde o pan blanco
+            REGLA #3 — INGREDIENTES DEL MENÚ SEMANAL:
+            ${weekly_plan_ingredients.length > 0 ? JSON.stringify(weekly_plan_ingredients) : "Sin plan semanal — recomienda una despensa completa básica."}
+            ════════════════════════════════════════════════
 
-            Para ${member_count || 1} personas, cantidades semanales aproximadas:
-            - Arroz blanco: ${(member_count || 1) * 500} g
-            - Harina (trigo o Pan): ${(member_count || 1) * 1000} g
-            - Huevos: ${Math.ceil((member_count || 1) * 0.5) * 12} unidad
-            - Pollo: ${(member_count || 1) * 1500} g
-            - Leche: ${(member_count || 1) * 1000} ml
+            REGLA #4 — SIN DUPLICADOS CON LA LISTA ACTUAL:
+            La familia YA tiene anotado esto en su lista de compras:
+            ${current_shopping_list.length > 0 ? JSON.stringify(current_shopping_list) : "Lista vacía."}
+            ⚠️ NO repitas ningún producto que ya esté en esa lista.
+            ════════════════════════════════════════════════
 
-            REGLA #5 — SIN DUPLICADOS (REGLA DE ORO):
-            A continuación se muestra lo que el usuario YA TIENE ANOTADO en su lista de compras actual:
-            ${current_shopping_list.length > 0 ? JSON.stringify(current_shopping_list) : "Lista de compras actualmente vacía."}
-            
-            ⚠️ CRÍTICO: NO PUEDES SUGERIR NINGÚN PRODUCTO QUE YA ESTÉ EN ESA LISTA. Si el usuario ya anotó "Pollo", "Huevos" o "Arroz", ignóralos por completo y asume que ya los va a comprar. Tu tarea es encontrar cosas que falten y que AÚN NO estén anotadas.
-            Tampoco repitas productos dentro de tu propia respuesta.
+            REGLA #5 — UNIDADES ESTRICTÍSIMAS (MUY IMPORTANTE):
+            ❌ ABSOLUTAMENTE PROHIBIDO usar: "kg", "l", "litro", "kilo", "cartón", "paquete", "bolsa", "docena".
+            ✅ ÚNICAMENTE puedes usar estas unidades:
+               • "g"       → para todo lo que se pesa (carnes, granos, verduras, etc.)
+               • "ml"      → para líquidos (leche, aceite, jugos)
+               • "unidad"  → para piezas contables (huevos, naranjas, limones, etc.)
 
-            REGLA #6 — CONVERSIÓN A UNIDADES ESTÁNDAR (SÓLO GRAMOS Y MILILITROS):
-            PROHIBIDO usar unidades como "kg", "l", "cartón", "paquete", "docena", "bolsa" o "lata". 
-            DEBES convertir TODO a "g" para peso, "ml" para líquidos y "unidad" para piezas.
-            Por ejemplo:
-            - Medio kilo de arroz = 500 g (NUNCA 0.5 kg)
-            - Un kilo de pollo = 1000 g
-            - 1 litro de leche = 1000 ml (NUNCA 1 l)
-            - 1 cartón completo de huevos = 30 unidad
+            Conversiones OBLIGATORIAS antes de responder:
+            • 1 kg = 1000 g  (escribe 1000, NO 1 kg)
+            • 1 litro = 1000 ml (escribe 1000, NO 1 l)
+            • 1 docena de huevos = 12 unidades
 
-            Responde SOLO con JSON válido, sin texto adicional, con este formato exacto:
+            EJEMPLOS CORRECTOS:
+            ✅ { "name": "Arroz blanco", "quantity": ${n * 400}, "unit": "g" }
+            ✅ { "name": "Pollo pechuga", "quantity": ${n * 800}, "unit": "g" }
+            ✅ { "name": "Leche entera", "quantity": ${n * 700}, "unit": "ml" }
+            ✅ { "name": "Huevos", "quantity": ${n * 6}, "unit": "unidad" }
+            ✅ { "name": "Aceite vegetal", "quantity": ${Math.min(n * 100, 500)}, "unit": "ml" }
+            ✅ { "name": "Sal", "quantity": 80, "unit": "g" }
+
+            EJEMPLOS INCORRECTOS (NUNCA hagas esto):
+            ❌ { "quantity": 5, "unit": "kg" }
+            ❌ { "quantity": 2, "unit": "l" }
+            ❌ { "quantity": 2000, "unit": "g" }  ← para 1 persona es demasiado
+            ════════════════════════════════════════════════
+
+            Responde SOLO con JSON válido, sin texto adicional:
             {
                 "items": [
-                    { "name": "Tomate", "quantity": 1000, "unit": "g", "reason": "Verdura básica semanal" },
-                    { "name": "Pollo pechuga", "quantity": 1500, "unit": "g", "reason": "Requerido para receta: Pollo guisado" },
-                    { "name": "Huevos", "quantity": 30, "unit": "unidad", "reason": "Básico semanal" }
+                    { "name": "Tomate", "quantity": ${n * 400}, "unit": "g", "reason": "Verdura básica semanal" },
+                    { "name": "Pollo pechuga", "quantity": ${n * 800}, "unit": "g", "reason": "Proteína principal" },
+                    { "name": "Huevos", "quantity": ${n * 6}, "unit": "unidad", "reason": "Básico semanal" }
                 ]
             }
-            Unidades válidas ESTRICTAS (solo usa una de estas): "g", "ml", "cup", "cucharada grande", "cucharada pequeña", "unidad".
         `;
 
         const genAI = new GoogleGenerativeAI(apiKey);

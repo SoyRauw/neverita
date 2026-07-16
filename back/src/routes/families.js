@@ -18,19 +18,36 @@ router.get('/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Función auxiliar para generar un código único de 6 dígitos
+const generateUniqueCode = async () => {
+    let code;
+    let isUnique = false;
+    let attempts = 0;
+    while (!isUnique && attempts < 10) {
+        code = Math.floor(100000 + Math.random() * 900000).toString();
+        const [rows] = await db.query('SELECT family_id FROM families WHERE code = ?', [code]);
+        if (rows.length === 0) {
+            isUnique = true;
+        }
+        attempts++;
+    }
+    return code;
+};
+
 router.post('/', async (req, res, next) => {
-  const { name, created_by, code } = req.body;
+  const { name, created_by } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'El nombre de la familia es obligatorio.' });
   if (!created_by) return res.status(400).json({ error: 'created_by es obligatorio.' });
 
-  // Crear familia y vincular al creador de forma atómica (evita familias huérfanas).
+  // Crear familia (con código autogenerado único) y vincular al creador de forma atómica.
   let connection;
   try {
     connection = await db.getConnection();
     await connection.beginTransaction();
+    const code = await generateUniqueCode();
     const [result] = await connection.query(
       'INSERT INTO families (name, created_by, code) VALUES (?, ?, ?)',
-      [name.trim(), created_by, code || null]
+      [name.trim(), created_by, code]
     );
     const family_id = result.insertId;
     await connection.query(
@@ -38,7 +55,7 @@ router.post('/', async (req, res, next) => {
       [created_by, family_id, 'creador']
     );
     await connection.commit();
-    res.status(201).json({ family_id, name: name.trim(), created_by, code: code || null });
+    res.status(201).json({ family_id, name: name.trim(), created_by, code });
   } catch (err) {
     if (connection) await connection.rollback();
     next(err);
