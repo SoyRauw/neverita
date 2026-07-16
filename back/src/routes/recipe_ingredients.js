@@ -20,6 +20,9 @@ router.get('/:recipe_id', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const { recipe_id, ingredient_id, quantity } = req.body;
+    if (!recipe_id || !ingredient_id) {
+      return res.status(400).json({ error: 'recipe_id e ingredient_id son obligatorios.' });
+    }
     const [result] = await db.query(
       'INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity) VALUES (?, ?, ?)',
       [recipe_id, ingredient_id, quantity]

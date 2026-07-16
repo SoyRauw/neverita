@@ -17,7 +17,7 @@ export const router = express.Router();
 router.post('/suggest', async (req, res) => {
     try {
         const { ingredients } = req.body;
-        const apiKey = process.env.GEMINI_API_KEY || "AIzaSyAU4T5KvvhpHNwmkrfWCK3pVTU2lxgfUAY";
+        const apiKey = process.env.GEMINI_API_KEY;
 
         if (!ingredients || ingredients.length === 0) return res.status(400).json({ error: "Faltan ingredientes" });
         if (!apiKey) return res.status(500).json({ error: "Falta API KEY" });
@@ -68,7 +68,7 @@ router.post('/ingredient-info', async (req, res) => {
         const { name } = req.body;
         if (!name || !name.trim()) return res.status(400).json({ error: 'Falta el nombre del ingrediente.' });
 
-        const apiKey = process.env.GEMINI_API_KEY || "AIzaSyAU4T5KvvhpHNwmkrfWCK3pVTU2lxgfUAY";
+        const apiKey = process.env.GEMINI_API_KEY;
 
         const prompt = `
             Eres un experto en conservación de alimentos.
@@ -113,12 +113,14 @@ router.post('/ingredient-info', async (req, res) => {
 // PASO 2: COCINAR / GENERAR (La Receta)
 // ==========================================
 router.post('/generate', async (req, res) => {
-    const connection = await db.getConnection();
-    try {
-        const { selected_title, available_ingredients, family_id } = req.body;
-        // La receta SIEMPRE se genera para 1 persona. El escalado ocurre en el frontend al planificar.
+    const { selected_title, family_id } = req.body;
+    // La receta SIEMPRE se genera para 1 persona. El escalado ocurre en el frontend al planificar.
+    if (!selected_title) return res.status(400).json({ error: "Falta título" });
+    const available_ingredients = Array.isArray(req.body.available_ingredients) ? req.body.available_ingredients : [];
 
-        if (!selected_title) return res.status(400).json({ error: "Falta título" });
+    let connection;
+    try {
+        connection = await db.getConnection();
 
         console.log("🍳 Usuario eligió:", selected_title);
 
@@ -156,7 +158,8 @@ router.post('/generate', async (req, res) => {
 
         // --- B. NO EXISTE -> GENERAR CON IA ---
         console.log("🤖 Receta nueva. Generando con IA...");
-        const apiKey = process.env.GEMINI_API_KEY || "AIzaSyAU4T5KvvhpHNwmkrfWCK3pVTU2lxgfUAY";
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) return res.status(500).json({ error: 'Falta GEMINI_API_KEY en el servidor.' });
 
         const systemPrompt = `
             Genera la receta completa para: "${selected_title}".
@@ -310,15 +313,14 @@ router.post('/generate', async (req, res) => {
             }
         }
 
-        // --- C. GUARDAR EN BD ---
-        await connection.beginTransaction();
-
         // Sanitizar difficulty: solo aceptar valores válidos del ENUM
         const validDifficulties = ['easy', 'regular', 'hard'];
         const rawDiff = (aiData.recipe.difficulty || 'regular').toLowerCase();
         const difficulty = validDifficulties.includes(rawDiff) ? rawDiff : 'regular';
 
         // --- B.5 OBTENER IMAGEN CON SERPAPI (Google Images) ---
+        // Se hace ANTES de abrir la transacción para no retener una conexión del
+        // pool durante una llamada HTTP externa (lenta).
         let imageUrl = 'https://images.unsplash.com/photo-1546554137-f86b9593a222?w=400'; // Fallback por defecto
 
         const serpApiKey = process.env.SERPAPI_KEY;
@@ -328,7 +330,7 @@ router.post('/generate', async (req, res) => {
                 console.log(`📸 Buscando imagen en Google Images para: ${aiData.recipe.title}`);
                 const query = encodeURIComponent(`${aiData.recipe.title} receta -tiktok -instagram -facebook`);
                 const serpUrl = `https://serpapi.com/search.json?engine=google_images&q=${query}&num=1&api_key=${serpApiKey}`;
-                
+
                 const serpResponse = await fetch(serpUrl);
                 const serpData = await serpResponse.json();
 
@@ -344,6 +346,9 @@ router.post('/generate', async (req, res) => {
         } else {
             console.log('⚠️ Falta SERPAPI_KEY. Usando imagen genérica.');
         }
+
+        // --- C. GUARDAR EN BD (transacción) ---
+        await connection.beginTransaction();
 
         // 1. Guardar Receta
         const validFamilyId = family_id || 1;
@@ -389,10 +394,11 @@ router.post('/generate', async (req, res) => {
                     ingId = newIng.insertId;
                 }
 
-                // Relacionar receta con ingrediente
+                // Relacionar receta con ingrediente (cantidad saneada a número)
+                const safeQty = Math.max(0, Math.round(Number(ing.quantity) || 0));
                 await connection.query(
                     'INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity, measure_qty, measure_unit) VALUES (?, ?, ?, ?, ?)',
-                    [recipeId, ingId, ing.quantity, ing.measure_qty || null, ing.measure_unit || null]
+                    [recipeId, ingId, safeQty, ing.measure_qty || null, ing.measure_unit || null]
                 );
             }
         }
@@ -423,7 +429,8 @@ router.post('/shopping-list', async (req, res) => {
         const { family_id, member_count, current_inventory = [], weekly_plan_ingredients = [], current_shopping_list = [] } = req.body;
         if (!family_id) return res.status(400).json({ error: "Falta family_id" });
 
-        const apiKey = process.env.GEMINI_API_KEY || "AIzaSyAU4T5KvvhpHNwmkrfWCK3pVTU2lxgfUAY";
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) return res.status(500).json({ error: 'Falta GEMINI_API_KEY en el servidor.' });
         console.log("🛒 Generando lista de compras inteligente para familia", family_id);
 
         const systemPrompt = `

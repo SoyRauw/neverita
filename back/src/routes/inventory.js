@@ -29,13 +29,19 @@ router.get('/:id', async (req, res, next) => {
   try {
     const [rows] = await db.query('SELECT * FROM inventory WHERE inventory_id = ?', [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
-    res.json(rows[0]);
+    res.json(normalizeItem(rows[0]));
   } catch (err) { next(err); }
 });
 
 router.post('/', async (req, res, next) => {
   try {
     const { family_id, ingredient_id, quantity, expiration_date, is_frozen } = req.body;
+    if (!family_id || !ingredient_id) {
+      return res.status(400).json({ error: 'family_id e ingredient_id son obligatorios.' });
+    }
+    if (quantity === undefined || quantity === null || Number(quantity) <= 0) {
+      return res.status(400).json({ error: 'La cantidad debe ser un número mayor que 0.' });
+    }
 
     // Si no se envió fecha de vencimiento, calcularla automáticamente
     let finalExpDate = expiration_date;
@@ -131,14 +137,16 @@ router.delete('/:id', async (req, res, next) => {
 // DESCONTAR INGREDIENTES AL PLANIFICAR RECETA
 // ==========================================
 router.post('/deduct', async (req, res, next) => {
-  const connection = await db.getConnection();
+  const { recipe_id, family_id, multiplier } = req.body;
+  if (!recipe_id || !family_id) {
+    return res.status(400).json({ error: 'Faltan recipe_id o family_id' });
+  }
+  // multiplier = personas / servings_base (default 1 = sin escalar)
+  const scale = Math.max(0.01, Number(multiplier) || 1);
+
+  let connection;
   try {
-    const { recipe_id, family_id, multiplier } = req.body;
-    if (!recipe_id || !family_id) {
-      return res.status(400).json({ error: 'Faltan recipe_id o family_id' });
-    }
-    // multiplier = personas / servings_base (default 1 = sin escalar)
-    const scale = Math.max(0.01, Number(multiplier) || 1);
+    connection = await db.getConnection();
 
     // 1. Obtener los ingredientes que necesita la receta
     const [recipeIngs] = await connection.query(
@@ -147,7 +155,7 @@ router.post('/deduct', async (req, res, next) => {
     );
 
     if (recipeIngs.length === 0) {
-      connection.release();
+      // La conexión se libera en el bloque finally (evita doble release).
       return res.json({ message: 'La receta no tiene ingredientes registrados', deducted: [] });
     }
 

@@ -8,8 +8,7 @@ router.get('/', async (req, res, next) => {
   try {
     const { menu_plan_id } = req.query;
     if (!menu_plan_id) {
-      const [rows] = await db.query('SELECT * FROM daily_meals');
-      return res.json(rows);
+      return res.status(400).json({ error: 'menu_plan_id es obligatorio.' });
     }
     const [rows] = await db.query(
       `SELECT dm.daily_meal_id, dm.menu_plan_id, dm.meal_type, dm.day_of_week, dm.recipe_id,
@@ -55,19 +54,33 @@ router.get('/:daily_meal_id', async (req, res, next) => {
 
 // POST /daily-meals — guarda una receta en un slot del menú
 router.post('/', async (req, res, next) => {
+  const { menu_plan_id, recipe_id, meal_type, day_of_week } = req.body;
+  if (!menu_plan_id || !recipe_id || !meal_type || !day_of_week) {
+    return res.status(400).json({ error: 'menu_plan_id, recipe_id, meal_type y day_of_week son obligatorios.' });
+  }
+
+  // Upsert atómico: DELETE + INSERT dentro de una transacción para no perder
+  // el slot previo si el INSERT falla.
+  let connection;
   try {
-    const { menu_plan_id, recipe_id, meal_type, day_of_week } = req.body;
-    // Reemplazar si ya existe ese slot (upsert manual)
-    await db.query(
+    connection = await db.getConnection();
+    await connection.beginTransaction();
+    await connection.query(
       'DELETE FROM daily_meals WHERE menu_plan_id = ? AND meal_type = ? AND day_of_week = ?',
       [menu_plan_id, meal_type, day_of_week]
     );
-    const [result] = await db.query(
+    const [result] = await connection.query(
       'INSERT INTO daily_meals (menu_plan_id, recipe_id, meal_type, day_of_week) VALUES (?, ?, ?, ?)',
       [menu_plan_id, recipe_id, meal_type, day_of_week]
     );
+    await connection.commit();
     res.status(201).json({ daily_meal_id: result.insertId, menu_plan_id, recipe_id, meal_type, day_of_week });
-  } catch (err) { next(err); }
+  } catch (err) {
+    if (connection) await connection.rollback();
+    next(err);
+  } finally {
+    if (connection) connection.release();
+  }
 });
 
 router.put('/:daily_meal_id', async (req, res, next) => {

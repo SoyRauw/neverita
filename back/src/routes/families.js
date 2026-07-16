@@ -19,14 +19,32 @@ router.get('/:id', async (req, res, next) => {
 });
 
 router.post('/', async (req, res, next) => {
+  const { name, created_by, code } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'El nombre de la familia es obligatorio.' });
+  if (!created_by) return res.status(400).json({ error: 'created_by es obligatorio.' });
+
+  // Crear familia y vincular al creador de forma atómica (evita familias huérfanas).
+  let connection;
   try {
-    const { name, created_by, code } = req.body;
-    const [result] = await db.query('INSERT INTO families (name, created_by, code) VALUES (?, ?, ?)', [name, created_by, code || null]);
+    connection = await db.getConnection();
+    await connection.beginTransaction();
+    const [result] = await connection.query(
+      'INSERT INTO families (name, created_by, code) VALUES (?, ?, ?)',
+      [name.trim(), created_by, code || null]
+    );
     const family_id = result.insertId;
-    // Vincular automáticamente al creador con la familia
-    await db.query('INSERT INTO user_family (user_id, family_id, role) VALUES (?, ?, ?)', [created_by, family_id, 'creador']);
-    res.status(201).json({ family_id, name, created_by, code: code || null });
-  } catch (err) { next(err); }
+    await connection.query(
+      'INSERT INTO user_family (user_id, family_id, role) VALUES (?, ?, ?)',
+      [created_by, family_id, 'creador']
+    );
+    await connection.commit();
+    res.status(201).json({ family_id, name: name.trim(), created_by, code: code || null });
+  } catch (err) {
+    if (connection) await connection.rollback();
+    next(err);
+  } finally {
+    if (connection) connection.release();
+  }
 });
 
 router.put('/:id', async (req, res, next) => {

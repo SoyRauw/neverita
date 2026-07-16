@@ -42,6 +42,9 @@ router.get('/:id', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const { plan_name, start_date, created_by, family_id } = req.body;
+    if (!plan_name || !start_date || !created_by || !family_id) {
+      return res.status(400).json({ error: 'plan_name, start_date, created_by y family_id son obligatorios.' });
+    }
     const [result] = await db.query(
       'INSERT INTO menu_plans (plan_name, start_date, created_by, family_id) VALUES (?, ?, ?, ?)',
       [plan_name, start_date, created_by, family_id]

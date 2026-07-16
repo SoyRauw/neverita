@@ -7,13 +7,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
-console.log('📦 DB Config:', {
-  host: process.env.TIDB_HOST,
-  port: process.env.TIDB_PORT,
-  user: process.env.TIDB_USER,
-  database: process.env.TIDB_DATABASE,
-  hasPassword: !!process.env.TIDB_PASSWORD,
-});
+// Aviso mínimo de arranque (sin exponer host/usuario/credenciales en logs)
+console.log('📦 DB pool inicializado', process.env.TIDB_DATABASE ? '(config presente)' : '(⚠️ faltan variables TIDB_*)');
 
 // Creamos el pool usando los nombres exactos que pusiste en Render
 const pool = mysql.createPool({
@@ -30,7 +25,14 @@ const pool = mysql.createPool({
     minVersion: 'TLSv1.2',
     rejectUnauthorized: false
   },
-  dateStrings: true // Prevent timezone shifting on DATE columns
+  dateStrings: true, // Prevent timezone shifting on DATE columns
+  enableKeepAlive: true, // Evita que conexiones idle se queden obsoletas
+  keepAliveInitialDelay: 10000,
+});
+
+// Evita que un error de conexión inactiva tumbe el proceso.
+pool.on('error', (err) => {
+  console.error('⚠️ Error del pool de MySQL:', err.code || err.message);
 });
 
 export const db = pool;

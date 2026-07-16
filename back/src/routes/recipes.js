@@ -71,6 +71,7 @@ router.get('/:id', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const { title, description, instructions, difficulty, preparation_time, servings, image_url, calories_per_serving, created_by, family_id } = req.body;
+    if (!title || !title.trim()) return res.status(400).json({ error: 'El título de la receta es obligatorio.' });
     const [result] = await db.query(
       'INSERT INTO recipes (title, description, instructions, difficulty, preparation_time, servings, image_url, calories_per_serving, created_by, family_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [title, description || '', instructions || '', difficulty || 'regular', preparation_time || 0, servings || 1, image_url || '', calories_per_serving || null, created_by || null, family_id || null]

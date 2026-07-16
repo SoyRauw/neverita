@@ -52,9 +52,12 @@ router.get('/members/:family_id', async (req, res, next) => {
 router.post('/join', async (req, res, next) => {
   try {
     const { user_id, code } = req.body;
+    if (!user_id || !code || !String(code).trim()) {
+      return res.status(400).json({ error: 'Se requieren user_id y un código de invitación.' });
+    }
 
     // 1. Buscar la familia por código
-    const [families] = await db.query('SELECT * FROM families WHERE code = ?', [code]);
+    const [families] = await db.query('SELECT * FROM families WHERE code = ?', [String(code).trim()]);
     if (!families.length) {
       return res.status(404).json({ error: 'Código no válido. No se encontró ninguna familia.' });
     }
@@ -91,6 +94,10 @@ router.post('/', async (req, res, next) => {
 router.put('/role', async (req, res, next) => {
   try {
     const { requester_id, target_user_id, family_id, new_role } = req.body;
+    // Solo se permiten estos roles vía este endpoint (no se puede asignar 'creador')
+    if (!['chef', 'ayudante'].includes(new_role)) {
+      return res.status(400).json({ error: 'Rol inválido. Solo se permite "chef" o "ayudante".' });
+    }
     // Verificar que el que pide es el creador
     const [requester] = await db.query(
       'SELECT role FROM user_family WHERE user_id = ? AND family_id = ?',

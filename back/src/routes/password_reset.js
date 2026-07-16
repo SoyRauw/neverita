@@ -1,6 +1,8 @@
 import express from 'express';
 import { db } from '../db.js';
 import nodemailer from 'nodemailer';
+import { randomInt } from 'crypto';
+import { hashPassword, passwordIssues } from '../utils/password.js';
 
 export const router = express.Router();
 
@@ -13,9 +15,9 @@ const transporter = nodemailer.createTransport({
     },
 });
 
-// Generar código de 6 dígitos
+// Generar código de 6 dígitos (aleatoriedad criptográfica)
 function generateCode() {
-    return String(Math.floor(100000 + Math.random() * 900000));
+    return String(randomInt(100000, 1000000));
 }
 
 // POST /password-reset/request — Enviar código al email
@@ -82,17 +84,22 @@ router.post('/verify', async (req, res, next) => {
         if (!email || !code || !new_password) {
             return res.status(400).json({ error: 'Email, código y nueva contraseña requeridos.' });
         }
+        const pwIssues = passwordIssues(new_password);
+        if (pwIssues.length) {
+            return res.status(400).json({ error: `La contraseña debe tener: ${pwIssues.join(', ')}.` });
+        }
 
-        // Buscar usuario
+        // Buscar usuario. No revelamos si el email existe (evita enumeración):
+        // ante email inexistente devolvemos el mismo error genérico que un código inválido.
         const [users] = await db.query('SELECT user_id FROM users WHERE email = ?', [email.trim().toLowerCase()]);
-        if (!users.length) return res.status(404).json({ error: 'Usuario no encontrado.' });
+        if (!users.length) return res.status(400).json({ error: 'Código inválido o expirado.' });
 
         const userId = users[0].user_id;
 
-        // Buscar código válido
+        // Buscar código válido (normalizado)
         const [resets] = await db.query(
             'SELECT * FROM password_resets WHERE user_id = ? AND code = ? AND used = FALSE AND expires_at > UTC_TIMESTAMP() ORDER BY created_at DESC LIMIT 1',
-            [userId, code]
+            [userId, String(code).trim()]
         );
 
         if (!resets.length) {
@@ -102,8 +109,9 @@ router.post('/verify', async (req, res, next) => {
         // Marcar código como usado
         await db.query('UPDATE password_resets SET used = TRUE WHERE id = ?', [resets[0].id]);
 
-        // Actualizar contraseña
-        await db.query('UPDATE users SET password = ? WHERE user_id = ?', [new_password, userId]);
+        // Actualizar contraseña (hasheada)
+        const hashed = await hashPassword(new_password);
+        await db.query('UPDATE users SET password = ? WHERE user_id = ?', [hashed, userId]);
 
         console.log(`✅ Contraseña cambiada para user_id=${userId}`);
         res.json({ success: true, message: 'Contraseña actualizada correctamente.' });
