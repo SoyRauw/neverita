@@ -762,12 +762,12 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         setRecipeSearch('');
     };
 
-    // Abrir el planificador para un cuadro (día+turno) concreto → muestra el selector
-    // de modo (IA / receta existente). El backend hace upsert por slot.
+    // Abrir el planificador para un cuadro (día+turno) concreto → va DIRECTO al modo IA.
+    // La opción "receta existente" queda como enlace secundario dentro de la pantalla IA.
     const handlePlanSlot = (dayIndex, type) => {
         if (userRole === 'ayudante') { showToast('No tienes permiso para planificar.'); return; }
         setSelectedSlots([`${dayIndex}-${type}`]);
-        setAiStep('choose');
+        setAiStep('config');
         setShowModal(true);
     };
 
@@ -967,7 +967,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                         <div className="btn-locked-wrapper" data-tooltip={userRole === 'ayudante' ? '🔒 Sin permiso' : undefined}>
                             <button
                                 className={`btn-primary${userRole === 'ayudante' ? ' btn-locked' : ''}`}
-                                onClick={userRole !== 'ayudante' ? () => { setSelectedSlots([]); setAiStep('choose'); setShowModal(true); } : undefined}
+                                onClick={userRole !== 'ayudante' ? () => { setSelectedSlots([]); setAiStep('config'); setShowModal(true); } : undefined}
                                 disabled={isGenerating}
                             >
                                 {isGenerating ? <CircleNotch size={20} className="ph-spin" /> : <Sparkle size={20} weight="fill" />}
@@ -982,16 +982,15 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
             {weekLabel && (
                 <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    gap: 10, padding: '10px 16px', margin: '0 0 16px',
+                    gap: 12, padding: '12px 18px', margin: '0 0 18px',
                     background: weekOffset < 0 ? 'linear-gradient(135deg, #F0F4FF, #E8EFFE)' : weekOffset > 0 ? 'linear-gradient(135deg, #F0FFF4, #E8FEEF)' : 'linear-gradient(135deg, #FFF7ED, #FEF3C7)',
-                    borderRadius: 14,
+                    borderRadius: 18,
                     border: weekOffset < 0 ? '1px solid #C7D7FE' : weekOffset > 0 ? '1px solid #BBF7D0' : '1px solid #FFE4B5',
+                    boxShadow: '0 6px 18px rgba(150, 80, 20, 0.08)',
                 }}>
                     <button
-                    onClick={() => handleNavigate(-1)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 8, fontSize: '1.3rem', color: weekOffset < 0 ? '#4F46E5' : '#92400E', transition: 'background 0.2s' }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.07)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                        className="wk-arrow"
+                        onClick={() => handleNavigate(-1)}
                         title="Semana anterior"
                     >
                         ‹
@@ -999,8 +998,8 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
 
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <CalendarBlank size={18} weight="fill" color={weekOffset < 0 ? '#4F46E5' : weekOffset > 0 ? '#16A34A' : '#FF9F43'} />
-                            <span style={{ fontWeight: 700, fontSize: '1rem', color: weekOffset < 0 ? '#3730A3' : weekOffset > 0 ? '#15803D' : '#92400E' }}>{weekLabel}</span>
+                            <CalendarBlank size={20} weight="fill" color={weekOffset < 0 ? '#4F46E5' : weekOffset > 0 ? '#16A34A' : '#FF9F43'} />
+                            <span style={{ fontWeight: 800, fontSize: '1.18rem', letterSpacing: '-0.01em', color: weekOffset < 0 ? '#3730A3' : weekOffset > 0 ? '#15803D' : '#92400E' }}>{weekLabel}</span>
                         </div>
                         <span style={{ fontSize: '0.75rem', fontWeight: 600, color: weekOffset < 0 ? '#6366F1' : weekOffset > 0 ? '#22C55E' : '#D97706' }}>
                             {weekOffset === 0 ? '✅ Esta semana' : weekOffset === -1 ? '📜 Semana pasada' : weekOffset < 0 ? `📜 Hace ${Math.abs(weekOffset)} semanas` : weekOffset === 1 ? '🔮 Próxima semana' : `🔮 En ${weekOffset} semanas`}
@@ -1008,10 +1007,8 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                     </div>
 
                     <button
-                    onClick={() => handleNavigate(1)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 8, fontSize: '1.3rem', color: weekOffset > 0 ? '#15803D' : '#92400E', transition: 'background 0.2s' }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.07)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                        className="wk-arrow"
+                        onClick={() => handleNavigate(1)}
                         title="Semana siguiente"
                     >
                         ›
@@ -1186,6 +1183,15 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                             {/* ── PASO 1: CONFIGURACIÓN ── */}
                             {aiStep === 'config' && (
                                 <>
+                                    {/* Enlace secundario: usar una receta que ya se tiene */}
+                                    <button
+                                        type="button"
+                                        className="ia-existing-link"
+                                        onClick={() => { setAiStep('existing'); loadExistingRecipes(); }}
+                                    >
+                                        <BookOpen size={16} weight="fill" /> ¿Prefieres una receta que ya tienes? Elígela aquí
+                                    </button>
+
                                     {/* 1. Ingredientes del inventario real */}
                                     <div className="section-title"><ChefHat weight="fill" color="#FF9F43" /> Ingredientes en tu inventario</div>
                                     {loadingInventory ? (
@@ -1380,11 +1386,8 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
 
                         {/* Footer */}
                         <div className="modal-footer-modern">
-                            {aiStep === 'config' && (
-                                <button className="btn-cancel" onClick={() => setAiStep('choose')}>← Volver</button>
-                            )}
                             {aiStep === 'existing' && (
-                                <button className="btn-cancel" onClick={() => setAiStep('choose')}>← Volver</button>
+                                <button className="btn-cancel" onClick={() => setAiStep('config')}>← Volver a IA</button>
                             )}
                             {aiStep === 'suggestions' && !isGenerating && (
                                 <button className="btn-cancel" onClick={() => { setAiStep('config'); setSuggestions([]); }}>← Volver</button>
@@ -1682,7 +1685,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
             >
                 <div className="calendar-wrapper">
                     <div className="calendar-header desktop-only">
-                        <div style={{ width: 100 }}></div>
+                        <div></div>
                         {weekDays.map(d => <div key={d} className="day-label">{d}</div>)}
                     </div>
                     {/* AQUÍ SE PASA LA FUNCIÓN AL CALENDARIO */}
@@ -1705,6 +1708,18 @@ function App() {
     // --- PERSISTENCIA DE SESIÓN: leer desde localStorage al iniciar ---
     const [isAuthenticated, setIsAuthenticated] = useState(() => {
         return localStorage.getItem('neverita_auth') === 'true';
+    });
+    // Código de invitación llegado por el QR/enlace (?join=XXXX). Se limpia de la URL
+    // para no reintentar al refrescar; se usa para pre-rellenar "unirse a familia".
+    const [pendingJoinCode, setPendingJoinCode] = useState(() => {
+        try {
+            const code = new URLSearchParams(window.location.search).get('join');
+            if (code) {
+                window.history.replaceState({}, '', window.location.pathname + window.location.hash);
+                return code.trim();
+            }
+        } catch { /* ignore */ }
+        return null;
     });
     // --- Landing / Home informativa (visible sin estar logueado) ---
     const [showLanding, setShowLanding] = useState(false);
@@ -2060,7 +2075,7 @@ function App() {
             )}
         </>
     );
-    if (!currentFamily) return <FamilySelect families={userFamilies} onSelectFamily={(fam) => { setCurrentFamily(fam); setUserRole(fam.role || 'ayudante'); localStorage.setItem('neverita_family', JSON.stringify(fam)); }} onCreateFamily={handleCreateFamily} onJoinByCode={handleJoinByCode} />;
+    if (!currentFamily) return <FamilySelect families={userFamilies} initialJoinCode={pendingJoinCode} onJoinCodeConsumed={() => setPendingJoinCode(null)} onSelectFamily={(fam) => { setCurrentFamily(fam); setUserRole(fam.role || 'ayudante'); localStorage.setItem('neverita_family', JSON.stringify(fam)); }} onCreateFamily={handleCreateFamily} onJoinByCode={handleJoinByCode} />;
 
     return (
         <HashRouter>

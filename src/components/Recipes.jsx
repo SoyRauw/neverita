@@ -3,7 +3,7 @@ import { showToast } from '../Toast';
 import {
     Plus, Fire, Clock, X, MagnifyingGlass,
     ChefHat, ListNumbers, Check, ArrowRight, Trash, LockSimple, UsersThree,
-    SpeakerHigh, Pause, Play
+    SpeakerHigh, Pause, Play, PencilSimple, Info, UploadSimple
 } from '@phosphor-icons/react';
 import { recipesService, familyRecipesService, inventoryService, ingredientsService } from '../api';
 
@@ -185,6 +185,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
     }, []);
 
     const [viewRecipe, setViewRecipe] = useState(null);
+    const [detailServings, setDetailServings] = useState(2); // personas en el detalle (escala ingredientes)
     const [isAdding, setIsAdding] = useState(false);
     const [isAddingExisting, setIsAddingExisting] = useState(false);
     const [availableRecipes, setAvailableRecipes] = useState([]);
@@ -202,9 +203,41 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
     const [newRecipe, setNewRecipe] = useState({
         name: "", cal: "", time: "", category: [],
         img: "", imgType: "url", ingredients: "", steps: "",
-        description: ""
+        description: "", servings: 2
     });
+    const [editingId, setEditingId] = useState(null); // id de receta en edición (null = crear)
     const [saving, setSaving] = useState(false);
+    const imgFileRef = useRef(null); // input de archivo oculto para la imagen
+
+    // Abrir el modal en modo edición, precargando la receta
+    const openEdit = (recipe, e) => {
+        if (e) e.stopPropagation();
+        setEditingId(recipe.id);
+        setNewRecipe({
+            name: recipe.name || "",
+            cal: recipe.cal || "",
+            time: recipe.time ? String(recipe.time).replace(/\D/g, '') : "",
+            category: recipe.category && recipe.category.length ? [recipe.category[0]] : [],
+            img: recipe.img || "",
+            imgType: "url",
+            ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients.join('\n') : "",
+            steps: Array.isArray(recipe.steps) ? recipe.steps.join('\n') : "",
+            description: recipe.description || "",
+            servings: recipe.servings || 2,
+        });
+        setIsAdding(true);
+    };
+
+    const closeCreateModal = () => {
+        setIsAdding(false);
+        setEditingId(null);
+        setNewRecipe({ name: "", cal: "", time: "", category: [], img: "", imgType: "url", ingredients: "", steps: "", description: "", servings: 2 });
+    };
+
+    // Al abrir el detalle de una receta, arrancar con sus personas base
+    useEffect(() => {
+        if (viewRecipe) setDetailServings(viewRecipe.servings || 2);
+    }, [viewRecipe]);
 
     // ---------- Cargar recetas ----------
     useEffect(() => {
@@ -280,9 +313,29 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
         });
     };
 
+    // Convierte el archivo a una imagen redimensionada (data URL) para que persista
+    // en la BD (columna image_url) en vez de un blob temporal.
     const handleFileUpload = (e) => {
-        const file = e.target.files[0];
-        if (file) setNewRecipe({ ...newRecipe, img: URL.createObjectURL(file) });
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) { showToast('Selecciona un archivo de imagen.'); return; }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const img = new Image();
+            img.onload = () => {
+                const maxW = 900;
+                const scale = Math.min(1, maxW / img.width);
+                const w = Math.round(img.width * scale);
+                const h = Math.round(img.height * scale);
+                const canvas = document.createElement('canvas');
+                canvas.width = w; canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                setNewRecipe(prev => ({ ...prev, img: canvas.toDataURL('image/jpeg', 0.82) }));
+            };
+            img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
     };
 
     const handleCreateRecipe = async () => {
@@ -298,18 +351,33 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                 instructions: newRecipe.steps || '',
                 difficulty: 'regular',
                 preparation_time: parseInt(newRecipe.time) || 0,
-                servings: 2,
+                servings: Math.max(1, parseInt(newRecipe.servings) || 2),
                 image_url: newRecipe.img || '',
                 calories_per_serving: parseInt(newRecipe.cal) || null,
                 created_by: userProfile?.user_id || null,
                 family_id: currentFamily?.family_id || currentFamily?.id || null,
                 recommended_meal: newRecipe.category.length > 0 ? newRecipe.category[0].toLowerCase() : 'cualquiera',
             };
-            const created = await recipesService.create(payload);
-            const localRecipe = mapRecipe(created);
-            setRecipes(prev => [...prev, localRecipe]);
-            setIsAdding(false);
-            setNewRecipe({ name: "", cal: "", time: "", category: [], img: "", imgType: "url", ingredients: "", steps: "", description: "" });
+            if (editingId) {
+                await recipesService.update(editingId, payload);
+                setRecipes(prev => prev.map(r => r.id === editingId ? {
+                    ...r,
+                    name: payload.title,
+                    cal: payload.calories_per_serving,
+                    time: payload.preparation_time ? `${payload.preparation_time} min` : 'N/A',
+                    category: [MEAL_LABEL[payload.recommended_meal] || 'Cualquiera'],
+                    recommended_meal: payload.recommended_meal,
+                    img: payload.image_url || r.img,
+                    servings: payload.servings,
+                    description: payload.description,
+                    steps: payload.instructions ? payload.instructions.split('\n').filter(Boolean) : r.steps,
+                } : r));
+                if (viewRecipe?.id === editingId) setViewRecipe(prev => prev ? { ...prev, name: payload.title, description: payload.description, servings: payload.servings } : prev);
+            } else {
+                const created = await recipesService.create(payload);
+                setRecipes(prev => [...prev, mapRecipe(created)]);
+            }
+            closeCreateModal();
         } catch (err) {
             showToast('Error al guardar la receta.');
             console.error(err);
@@ -517,35 +585,49 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                     ) : (
                         filtered.map(recipe => (
                             <div key={recipe.id} className="recipe-card" onClick={() => setViewRecipe(recipe)} style={{ position: 'relative' }}>
-                                <img src={recipe.img} alt={recipe.name} className="recipe-img" />
-
-                                <div className="btn-locked-wrapper" style={{ position: 'absolute', top: 10, right: 10, zIndex: 3 }} data-tooltip={!canDo(userRole) ? '🔒 Sin permiso' : undefined}>
-                                    <button
-                                        onClick={canDo(userRole) ? (e) => handleDelete(recipe.id, e) : undefined}
-                                        className={!canDo(userRole) ? 'btn-locked' : ''}
-                                        style={{
-                                            background: 'rgba(255,255,255,0.9)', border: 'none',
-                                            borderRadius: '50%', width: 32, height: 32,
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            cursor: canDo(userRole) ? 'pointer' : 'not-allowed', color: '#e74c3c',
-                                            boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
-                                        }}
-                                        title={canDo(userRole) ? 'Eliminar receta' : '🔒 Sin permiso'}
-                                    >
-                                        {canDo(userRole) ? <Trash size={16} /> : <LockSimple size={16} />}
-                                    </button>
-                                </div>
-
-                                <div className="recipe-content">
+                                <div className="recipe-img-wrap">
+                                    <img src={recipe.img} alt={recipe.name} className="recipe-img" />
                                     <div className="recipe-badges">
                                         {recipe.category.map(cat => (
                                             <span key={cat} className="mini-badge" style={{ background: getMealColor(cat) }}>{cat}</span>
                                         ))}
                                     </div>
+                                    <span className="recipe-view-hint">Ver receta →</span>
+                                </div>
+
+                                <div className="recipe-content">
                                     <h3 className="recipe-title">{recipe.name}</h3>
                                     <div className="recipe-stats">
                                         <div className="stat-item"><Fire weight="fill" color="#F7B27B" /> {recipe.cal || '—'} kcal</div>
                                         <div className="stat-item"><Clock weight="fill" color="#F7B27B" /> {recipe.time}</div>
+                                    </div>
+                                    {/* Acciones abajo: info, editar, eliminar */}
+                                    <div className="recipe-actions">
+                                        <button
+                                            className="recipe-act info"
+                                            onClick={(e) => { e.stopPropagation(); setViewRecipe(recipe); }}
+                                            title="Ver descripción"
+                                        >
+                                            <Info size={17} weight="bold" />
+                                        </button>
+                                        {canDo(userRole) && (
+                                            <button
+                                                className="recipe-act edit"
+                                                onClick={(e) => openEdit(recipe, e)}
+                                                title="Editar receta"
+                                            >
+                                                <PencilSimple size={17} weight="bold" />
+                                            </button>
+                                        )}
+                                        <div className="btn-locked-wrapper" style={{ flex: 1 }} data-tooltip={!canDo(userRole) ? '🔒 Sin permiso' : undefined}>
+                                            <button
+                                                onClick={canDo(userRole) ? (e) => handleDelete(recipe.id, e) : undefined}
+                                                className={`recipe-del-btn${!canDo(userRole) ? ' btn-locked' : ''}`}
+                                                title={canDo(userRole) ? 'Eliminar receta' : '🔒 Sin permiso'}
+                                            >
+                                                {canDo(userRole) ? <><Trash size={16} weight="bold" /> <span className="recipe-del-text">Eliminar</span></> : <><LockSimple size={16} /> <span className="recipe-del-text">Sin permiso</span></>}
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -558,28 +640,36 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
 
             {/* MODAL 2: CREAR */}
             {isAdding && (
-                <div className="modal-overlay" onClick={() => setIsAdding(false)}>
+                <div className="modal-overlay" onClick={closeCreateModal}>
                     <div className="modal-modern" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <div>
-                                <h3 style={{ margin: 0, fontWeight: 800 }}>Nueva Receta</h3>
-                                <p style={{ margin: 0, color: '#9b8d7c', fontSize: '0.9rem' }}>Comparte tu talento culinario</p>
+                                <h3 style={{ margin: 0, fontWeight: 800 }}>{editingId ? 'Editar Receta' : 'Nueva Receta'}</h3>
+                                <p style={{ margin: 0, color: '#9b8d7c', fontSize: '0.9rem' }}>{editingId ? 'Ajusta los datos de tu receta' : 'Comparte tu talento culinario'}</p>
                             </div>
-                            <button onClick={() => setIsAdding(false)} className="btn-secondary" style={{ padding: 8, border: 'none' }}><X size={24} /></button>
+                            <button onClick={closeCreateModal} className="btn-secondary" style={{ padding: 8, border: 'none' }}><X size={24} /></button>
                         </div>
                         <div className="modal-body">
-                            <div className="create-recipe-top-grid" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: 15, marginBottom: 20 }}>
+                            <div className="create-recipe-top-grid" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 1fr 1fr', gap: 15, marginBottom: 20 }}>
                                 <div>
                                     <label className="ia-label">Nombre del plato</label>
                                     <input className="form-input" placeholder="Ej. Lasaña" value={newRecipe.name} onChange={e => setNewRecipe({ ...newRecipe, name: e.target.value })} />
                                 </div>
                                 <div>
                                     <label className="ia-label">Calorías</label>
-                                    <input type="number" className="form-input" placeholder="400" value={newRecipe.cal} onChange={e => setNewRecipe({ ...newRecipe, cal: e.target.value })} />
+                                    {editingId ? (
+                                        <input type="number" className="form-input" value={newRecipe.cal} readOnly disabled tabIndex={-1} />
+                                    ) : (
+                                        <input type="number" className="form-input" placeholder="400" value={newRecipe.cal} onChange={e => setNewRecipe({ ...newRecipe, cal: e.target.value })} />
+                                    )}
                                 </div>
                                 <div>
                                     <label className="ia-label">Tiempo (min)</label>
                                     <input className="form-input" placeholder="30" value={newRecipe.time} onChange={e => setNewRecipe({ ...newRecipe, time: e.target.value })} />
+                                </div>
+                                <div>
+                                    <label className="ia-label">Personas</label>
+                                    <input type="number" min="1" className="form-input" placeholder="2" value={newRecipe.servings} onChange={e => setNewRecipe({ ...newRecipe, servings: e.target.value })} />
                                 </div>
                             </div>
 
@@ -601,15 +691,18 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
 
                             <div style={{ marginBottom: 20 }}>
                                 <label className="ia-label">Imagen</label>
-                                <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-                                    <button className={`btn-secondary ${newRecipe.imgType === 'url' ? 'active' : ''}`} style={{ flex: 1, borderColor: newRecipe.imgType === 'url' ? '#F7B27B' : '#EADBC7' }} onClick={() => setNewRecipe({ ...newRecipe, imgType: 'url' })}>Enlace URL</button>
-                                    <button className={`btn-secondary ${newRecipe.imgType === 'upload' ? 'active' : ''}`} style={{ flex: 1, borderColor: newRecipe.imgType === 'upload' ? '#F7B27B' : '#EADBC7' }} onClick={() => setNewRecipe({ ...newRecipe, imgType: 'upload' })}>Subir Archivo</button>
+                                <input ref={imgFileRef} type="file" accept="image/*" onChange={handleFileUpload} style={{ display: 'none' }} />
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                                    <button type="button" className="nv-upload-btn" onClick={() => imgFileRef.current && imgFileRef.current.click()}>
+                                        <UploadSimple size={20} weight="bold" /> {newRecipe.img ? 'Cambiar imagen' : 'Subir imagen'}
+                                    </button>
+                                    {newRecipe.img && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                            <img src={newRecipe.img} alt="preview" style={{ width: 52, height: 52, borderRadius: 12, objectFit: 'cover', boxShadow: '0 4px 12px rgba(150,80,20,0.18)' }} />
+                                            <span style={{ fontSize: '0.85rem', color: '#16A34A', fontWeight: 700 }}>✓ Imagen lista</span>
+                                        </div>
+                                    )}
                                 </div>
-                                {newRecipe.imgType === 'url' ? (
-                                    <input className="form-input" placeholder="https://..." value={newRecipe.img} onChange={e => setNewRecipe({ ...newRecipe, img: e.target.value })} />
-                                ) : (
-                                    <input type="file" className="form-input" accept="image/*" onChange={handleFileUpload} />
-                                )}
                             </div>
 
                             <div className="create-recipe-bottom-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
@@ -624,9 +717,9 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                             </div>
                         </div>
                         <div className="modal-footer">
-                            <button className="btn-secondary" onClick={() => setIsAdding(false)}>Cancelar</button>
+                            <button className="btn-secondary" onClick={closeCreateModal}>Cancelar</button>
                             <button className="btn-primary" onClick={handleCreateRecipe} disabled={saving}>
-                                {saving ? 'Guardando...' : 'Guardar Receta'}
+                                {saving ? 'Guardando...' : (editingId ? <>Guardar Cambios <Check weight="bold" /></> : 'Guardar Receta')}
                             </button>
                         </div>
                     </div>
@@ -770,21 +863,19 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                             {availableRecipes.length === 0 ? (
                                 <p style={{ color: '#9b8d7c', textAlign: 'center', padding: '2rem' }}>No hay recetas adicionales disponibles en el sistema.</p>
                             ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                <div className="import-list nv-stagger">
                                     {availableRecipes.map(recipe => (
-                                        <div key={recipe.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 10, border: '1px solid #eee', borderRadius: 10 }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                                <img src={recipe.img} alt={recipe.name} style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover' }} />
-                                                <div>
-                                                    <span style={{ fontWeight: 600, display: 'block' }}>{recipe.name}</span>
-                                                    <span style={{ fontSize: '0.8rem', color: '#9b8d7c' }}><Fire size={12} style={{verticalAlign: 'middle'}}/> {recipe.cal || '—'} kcal | <Clock size={12} style={{verticalAlign: 'middle'}}/> {recipe.time}</span>
-                                                </div>
+                                        <div key={recipe.id} className="import-row">
+                                            <img src={recipe.img} alt={recipe.name} className="import-row-img" />
+                                            <div className="import-row-info">
+                                                <span className="import-row-name">{recipe.name}</span>
+                                                <span className="import-row-meta"><Fire size={13} weight="fill" color="#FF8A4C" /> {recipe.cal || '—'} kcal · <Clock size={13} weight="fill" color="#FF8A4C" /> {recipe.time}</span>
                                             </div>
-                                            <div style={{ display: 'flex', gap: 10 }}>
-                                                <button className="btn-secondary" style={{ padding: '5px 15px', fontSize: '0.85rem' }} onClick={() => setViewRecipe(recipe)}>
+                                            <div className="import-row-actions">
+                                                <button className="btn-secondary" style={{ padding: '8px 16px', fontSize: '0.85rem' }} onClick={() => setViewRecipe(recipe)}>
                                                     Ver
                                                 </button>
-                                                <button className="btn-primary" style={{ padding: '5px 15px', fontSize: '0.85rem' }} onClick={() => handleAddExistingRecipe(recipe.id)}>
+                                                <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '0.85rem' }} onClick={() => handleAddExistingRecipe(recipe.id)}>
                                                     Añadir
                                                 </button>
                                             </div>
@@ -800,7 +891,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
             {/* MODAL 1: DETALLE (MOVIDO AL FINAL PARA QUE APAREZCA POR ENCIMA CUANDO ESTÁ IMPORTANDO) */}
             {viewRecipe && (
                 <div className="modal-overlay" style={{ zIndex: 6000 }} onClick={handleCloseViewRecipe}>
-                    <div className="modal-modern" onClick={e => e.stopPropagation()}>
+                    <div className="modal-modern" onClick={e => e.stopPropagation()} style={{ maxWidth: 900 }}>
                         <div className="modal-header">
                             <h3 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 800, color: '#2A2118' }}>{viewRecipe.name}</h3>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -824,48 +915,56 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                             </div>
                         </div>
                         <div className="modal-body">
-                            <div className="recipe-hero-wrapper">
-                                <img src={viewRecipe.img} className="recipe-hero-img" alt={viewRecipe.name} />
-                                <div className="hero-badges-overlay">
-                                    {viewRecipe.category.map(cat => (
-                                        <span key={cat} className="mini-badge" style={{ background: 'rgba(255,255,255,0.95)', color: getMealColor(cat), boxShadow: '0 4px 10px rgba(0,0,0,0.2)' }}>{cat}</span>
-                                    ))}
+                            <div className="recipe-book">
+                                {/* Columna izquierda: foto + datos rápidos */}
+                                <div className="recipe-book-left">
+                                    <div className="recipe-hero-wrapper">
+                                        <img src={viewRecipe.img} className="recipe-hero-img" alt={viewRecipe.name} />
+                                    </div>
+                                    <div className="recipe-book-stats">
+                                        <div className="rb-stat"><Fire weight="fill" color="#FF8A4C" size={18} /> <span>{viewRecipe.cal || '—'} kcal</span></div>
+                                        <div className="rb-stat"><Clock weight="fill" color="#FF8A4C" size={18} /> <span>{viewRecipe.time}</span></div>
+                                        <div className="rb-stat rb-stat-serv">
+                                            <UsersThree weight="fill" color="#FF8A4C" size={18} />
+                                            <button className="rb-serv-btn" onClick={() => setDetailServings(s => Math.max(1, s - 1))} title="Menos personas">−</button>
+                                            <span>{detailServings} pers.</span>
+                                            <button className="rb-serv-btn" onClick={() => setDetailServings(s => Math.min(20, s + 1))} title="Más personas">+</button>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="recipe-detail-stats" style={{ display: 'flex', justifyContent: 'center', gap: 30, marginBottom: 30, padding: '10px 0', borderBottom: '1px dashed #EADBC7' }}>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', color: '#6B5E4F', fontWeight: 700 }}>
-                                    <Fire weight="fill" color="#F7B27B" size={22} /> {viewRecipe.cal || '—'} kcal
-                                </span>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', color: '#6B5E4F', fontWeight: 700 }}>
-                                    <Clock weight="fill" color="#F7B27B" size={22} /> {viewRecipe.time}
-                                </span>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', color: '#6B5E4F', fontWeight: 700 }}>
-                                    <UsersThree weight="fill" color="#F7B27B" size={22} /> {viewRecipe.servings || 2} personas
-                                </span>
-                            </div>
-                            {viewRecipe.description && (
-                                <p style={{ color: '#6B5E4F', marginBottom: 20, fontStyle: 'italic' }}>{viewRecipe.description}</p>
-                            )}
-                            <div className="detail-grid-responsive" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                                <div className="detail-card-section">
-                                    <h4><ChefHat size={24} weight="duotone" /> Ingredientes</h4>
-                                    <ul className="detail-list">
-                                        {viewRecipe.ingredients && viewRecipe.ingredients.length > 0
-                                            ? viewRecipe.ingredients.map((ing, i) => <li key={i}>{pluralizeUnits(ing)}</li>)
-                                            : <li style={{ color: '#c9b9a6' }}>Sin ingredientes registrados</li>}
-                                    </ul>
-                                </div>
-                                <div className="detail-card-section">
-                                    <h4><ListNumbers size={24} weight="duotone" /> Pasos</h4>
-                                    <ol className="detail-list" style={{ listStyle: 'none', padding: 0 }}>
-                                        {viewRecipe.steps && viewRecipe.steps.length > 0
-                                            ? viewRecipe.steps.map((step, i) => (
-                                                <li key={i} style={{ marginBottom: 15 }}>
-                                                    <span style={{ fontWeight: '800', color: '#F7B27B', marginRight: 5 }}>{i + 1}.</span> {step.replace(/^\d+[\.\-]?\s*/, '')}
-                                                </li>
-                                            ))
-                                            : <li style={{ color: '#c9b9a6' }}>Sin instrucciones registradas</li>}
-                                    </ol>
+
+                                {/* Columna derecha: categoría + descripción + ingredientes + pasos */}
+                                <div className="recipe-book-right">
+                                    {viewRecipe.category && viewRecipe.category.length > 0 && (
+                                        <div className="rb-meal-chips">
+                                            {viewRecipe.category.map(cat => (
+                                                <span key={cat} className="rb-meal-chip" style={{ background: getMealColor(cat) }}>{cat}</span>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {viewRecipe.description && (
+                                        <p className="rb-desc">{viewRecipe.description}</p>
+                                    )}
+                                    <div className="detail-card-section">
+                                        <h4><ChefHat size={24} weight="duotone" /> Ingredientes <span className="rb-serv-note">para {detailServings} {detailServings === 1 ? 'persona' : 'personas'}</span></h4>
+                                        <ul className="detail-list">
+                                            {viewRecipe.ingredients && viewRecipe.ingredients.length > 0
+                                                ? getScaledIngredients(viewRecipe, detailServings).map((ing, i) => <li key={i}>{ing}</li>)
+                                                : <li style={{ color: '#c9b9a6' }}>Sin ingredientes registrados</li>}
+                                        </ul>
+                                    </div>
+                                    <div className="detail-card-section">
+                                        <h4><ListNumbers size={24} weight="duotone" /> Pasos</h4>
+                                        <ol className="detail-list" style={{ listStyle: 'none', padding: 0 }}>
+                                            {viewRecipe.steps && viewRecipe.steps.length > 0
+                                                ? viewRecipe.steps.map((step, i) => (
+                                                    <li key={i} style={{ marginBottom: 15 }}>
+                                                        <span style={{ fontWeight: '800', color: '#F7B27B', marginRight: 5 }}>{i + 1}.</span> {step.replace(/^\d+[\.\-]?\s*/, '')}
+                                                    </li>
+                                                ))
+                                                : <li style={{ color: '#c9b9a6' }}>Sin instrucciones registradas</li>}
+                                        </ol>
+                                    </div>
                                 </div>
                             </div>
                         </div>

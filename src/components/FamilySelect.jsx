@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, House, ArrowLeft, Check, Key, SignIn, CircleNotch, CaretDown, CaretUp, ForkKnife, CookingPot, Carrot } from '@phosphor-icons/react';
 
-const FamilySelect = ({ families, onSelectFamily, onCreateFamily, onJoinByCode }) => {
+const FamilySelect = ({ families, onSelectFamily, onCreateFamily, onJoinByCode, initialJoinCode, onJoinCodeConsumed }) => {
     const [viewMode, setViewMode] = useState('list'); // 'list', 'create', 'join'
     const [newFamilyName, setNewFamilyName] = useState("");
     const [newFamilyCode, setNewFamilyCode] = useState("");
@@ -11,6 +11,18 @@ const FamilySelect = ({ families, onSelectFamily, onCreateFamily, onJoinByCode }
 
     // Estado exclusivo para el funcionamiento del acordeón en móvil
     const [isMenuOpen, setIsMenuOpen] = useState(true);
+
+    // Si llegamos por un QR/enlace de invitación (?join=XXXX), abrir directo
+    // la vista "unirse" con el código ya cargado.
+    useEffect(() => {
+        if (initialJoinCode) {
+            setViewMode('join');
+            setJoinCode(initialJoinCode);
+            setJoinError("");
+            if (onJoinCodeConsumed) onJoinCodeConsumed();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [initialJoinCode]);
 
     const handleCreate = () => {
         if (newFamilyName.trim()) {

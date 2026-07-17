@@ -42,6 +42,11 @@ const FamilyManager = ({
     };
 
     const familyCode = activeFamily?.code;
+    // URL de invitación: abre la app con el código para unirse (el QR NO debe ser
+    // solo el número, si no el navegador lo busca en Google).
+    const joinUrl = familyCode
+        ? `${window.location.origin}${window.location.pathname}?join=${encodeURIComponent(familyCode)}`
+        : '';
     const handleCopyCode = async () => {
         if (!familyCode) return;
         try {
@@ -135,7 +140,7 @@ const FamilyManager = ({
 
     return (
         <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content family-manager-modal" onClick={e => e.stopPropagation()} style={{ padding: 0, overflow: 'hidden', width: '95%', maxWidth: '450px' }}>
+            <div className="modal-content family-manager-modal" onClick={e => e.stopPropagation()} style={{ padding: 0, overflow: 'hidden', width: '95%', maxWidth: '480px' }}>
                 
                 {/* HEADER DEL MODAL */}
                 <div style={{ padding: '20px', borderBottom: '1px solid rgba(255,159,67,0.16)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(180deg,#FFFDFB,#FFF8F1)' }}>
@@ -151,7 +156,7 @@ const FamilyManager = ({
                 </div>
 
                 {/* CONTENIDO DINÁMICO */}
-                <div style={{ padding: '20px', maxHeight: '400px', overflowY: 'auto', overflowX: 'hidden' }}>
+                <div style={{ padding: '22px', maxHeight: '72vh', overflowY: 'auto', overflowX: 'hidden' }}>
                     
                     {/* --- MODO: DETALLES (Vista Principal) --- */}
                     {mode === 'details' && (
@@ -192,10 +197,10 @@ const FamilyManager = ({
                                     </div>
                                     
                                     <div style={{ background: 'white', padding: '10px', borderRadius: '12px', border: '2px solid rgba(255,159,67,0.2)' }}>
-                                        <img 
-                                            src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${familyCode}&color=E67E22&bgcolor=FFFFFF`} 
-                                            alt="QR Code de invitación" 
-                                            style={{ width: 120, height: 120, display: 'block' }} 
+                                        <img
+                                            src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(joinUrl)}&color=E67E22&bgcolor=FFFFFF`}
+                                            alt="QR Code de invitación"
+                                            style={{ width: 120, height: 120, display: 'block' }}
                                         />
                                     </div>
                                     

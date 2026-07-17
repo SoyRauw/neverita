@@ -199,7 +199,19 @@ input[type="date"]::-webkit-date-and-time-value {
 }
 input[type="date"]::-webkit-calendar-picker-indicator {
     margin-left: 4px;
-    opacity: 0.5;
+    cursor: pointer;
+    opacity: 0.75;
+    /* tinte naranja para el ícono del calendario (más acorde a la app) */
+    filter: invert(60%) sepia(72%) saturate(720%) hue-rotate(338deg) brightness(101%);
+    transition: opacity 0.2s, transform 0.2s var(--ease-spring);
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+    transform: scale(1.18);
+}
+input[type="date"]:focus {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 4px rgba(255, 159, 67, 0.14);
 }
 
 /* === DESTACADO: PLAN DE HOY === */
@@ -271,20 +283,28 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     align-items: center;
     text-align: center;
     gap: 7px;
-    transition: transform 0.28s var(--ease-out), background 0.28s;
+    transition: transform 0.3s var(--ease-spring), background 0.28s, box-shadow 0.3s, border-color 0.3s;
     animation: nv-rise-sm 0.5s var(--ease-out) both;
 }
 .today-meal:hover {
-    transform: translateY(-5px);
-    background: rgba(255, 255, 255, 0.26);
+    transform: translateY(-8px) scale(1.02);
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.6);
+    box-shadow: 0 18px 34px rgba(150, 50, 10, 0.28);
 }
 .today-meal-img {
     position: relative;
     width: 100%;
-    height: 195px;               /* proporción tipo foto, no aplastada */
-    border-radius: 14px;
+    height: 175px;               /* proporción tipo foto, no aplastada */
+    border-radius: 15px;
     overflow: hidden;
+    transition: transform 0.5s var(--ease-out);
 }
+.today-meal.empty-slot:hover .today-meal-img.empty { border-color: #fff; background: rgba(255, 255, 255, 0.22); }
+.today-meal-img.filled img { transition: transform 0.5s var(--ease-out); }
+.today-meal:hover .today-meal-img.filled img { transform: scale(1.06); }
+.today-meal-img.empty > svg { transition: transform 0.35s var(--ease-spring); }
+.today-meal:hover .today-meal-img.empty > svg { transform: scale(1.25) rotate(90deg); }
 .today-meal-img > img,
 .today-meal-img > svg {
     position: absolute;
@@ -299,11 +319,14 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     color: rgba(255, 255, 255, 0.85);
 }
 .today-meal-type {
-    font-size: 0.7rem;
-    font-weight: 800;
+    font-size: 0.9rem;
+    font-weight: 900;
     text-transform: uppercase;
-    letter-spacing: 0.6px;
-    opacity: 0.9;
+    letter-spacing: 0.8px;
+    padding: 5px 14px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.3);
 }
 .today-meal-name {
     font-weight: 700;
@@ -327,9 +350,10 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 @media (max-width: 480px) {
     .today-highlight { padding: 18px; }
     .today-meals { gap: 10px; }
-    .today-meal { padding: 10px; }
-    .today-meal-img { height: 92px; }
+    .today-meal { padding: 10px; gap: 6px; }
+    .today-meal-img { height: 100px; }
     .today-meal-name { font-size: 0.78rem; }
+    .today-meal-type { font-size: 0.72rem; padding: 4px 10px; letter-spacing: 0.4px; }
 }
 
 /* === ESTADOS DE CARGA Y VACÍO === */
@@ -512,7 +536,9 @@ header {
 .header-actions {
     display: flex;
     align-items: center;
-    gap: 2rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 1.1rem;
 }
 
 .avatars {
@@ -739,68 +765,65 @@ header {
 
 .calendar-header {
     display: grid;
-    /* Columna de etiquetas un poco más estrecha para dar espacio a fotos */
-    grid-template-columns: 80px repeat(7, 1fr);
-    gap: 15px;
-    margin-bottom: 1rem;
+    /* Columna de etiquetas alineada con el cuerpo */
+    grid-template-columns: 92px repeat(7, 1fr);
+    gap: 16px;
+    margin-bottom: 0.6rem;
     text-align: center;
+    padding: 0 4px;
 }
 
 .day-label {
-    font-weight: 800;
+    font-weight: 900;
     color: var(--ink-soft);
-    font-size: 0.85rem;
+    font-size: 0.92rem;
     text-transform: uppercase;
-    letter-spacing: 0.6px;
+    letter-spacing: 0.8px;
+    padding-bottom: 6px;
 }
 
 .calendar-body {
     display: grid;
-    grid-template-columns: 80px repeat(7, 1fr);
-    gap: 15px;
-    /* Espacio horizontal */
-    row-gap: 15px;
-    /* Espacio vertical compacto */
+    grid-template-columns: 92px repeat(7, 1fr);
+    gap: 16px;
+    row-gap: 16px;
 }
 
 .meal-label {
     display: flex;
     align-items: center;
+    justify-content: flex-start;
     font-family: var(--font-display);
-    font-weight: 600;
+    font-weight: 800;
     color: var(--ink);
-    font-size: 1.05rem;
-    height: 120px;
-    /* Misma altura que las tarjetas */
+    font-size: 1.18rem;
+    height: 128px;
+    letter-spacing: -0.01em;
+    padding-left: 2px;
 }
 
 .meal-card {
-    height: 120px;
-    /* Altura equilibrada (más cuadrada) */
-
-    border-radius: var(--radius-md);
-    border: 2px dashed rgba(255, 159, 67, 0.3);
+    height: 128px;
+    border-radius: 20px;
+    border: 2px dashed rgba(255, 159, 67, 0.38);
     display: flex;
     justify-content: center;
     align-items: center;
     cursor: pointer;
-    transition: transform 0.3s var(--ease-out), box-shadow 0.3s, border-color 0.3s, background-color 0.3s;
-    background-color: rgba(255, 255, 255, 0.45);
+    transition: transform 0.32s var(--ease-spring), box-shadow 0.32s var(--ease-out), border-color 0.3s, background 0.3s;
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.7), rgba(255, 246, 236, 0.55));
     overflow: hidden;
     position: relative;
-
-    /* Clave para que la imagen llene todo */
     padding: 0;
-    /* Sin padding para que la foto toque los bordes */
-    box-shadow: var(--sh-sm);
+    box-shadow: 0 6px 16px rgba(150, 80, 20, 0.08);
 }
 
 .meal-card:hover {
     border-color: var(--primary);
-    background-color: white;
-    transform: translateY(-5px) scale(1.02);
-    /* Efecto Pop moderno */
-    box-shadow: 0 18px 34px rgba(230, 126, 34, 0.24);
+    border-style: solid;
+    background: #fff;
+    transform: translateY(-8px) scale(1.03);
+    box-shadow: 0 22px 40px rgba(230, 126, 34, 0.28);
     z-index: 10;
 }
 
@@ -809,11 +832,11 @@ header {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    /* La foto cubre todo el cuadro perfectamente */
-    border-radius: var(--radius-md);
-    /* Mismos bordes que la tarjeta */
+    border-radius: 18px;
     display: block;
+    transition: transform 0.5s var(--ease-out);
 }
+.meal-card:hover img { transform: scale(1.07); }
 
 /* OCULTAR TEXTO EN EL CALENDARIO */
 .meal-card .meal-name,
@@ -821,21 +844,53 @@ header {
     display: none !important;
 }
 
-/* Estado vacío (+) */
+/* Estado vacío (+) con círculo degradado */
 .empty-state {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #d9b48f;
     width: 100%;
     height: 100%;
-    transition: color 0.3s, transform 0.3s var(--ease-spring);
+    transition: transform 0.32s var(--ease-spring);
+}
+.empty-state svg {
+    padding: 10px;
+    border-radius: 50%;
+    background: rgba(255, 159, 67, 0.12);
+    color: var(--primary);
+    transition: background 0.3s, box-shadow 0.3s, transform 0.32s var(--ease-spring);
+}
+.meal-card:hover .empty-state svg {
+    background: linear-gradient(135deg, var(--primary), var(--primary-2));
+    color: #fff;
+    box-shadow: 0 10px 22px rgba(255, 127, 80, 0.42);
+    transform: scale(1.12) rotate(90deg);
 }
 
-.meal-card:hover .empty-state {
-    color: var(--primary);
-    transform: scale(1.18);
+/* === FLECHAS DE NAVEGACIÓN DE SEMANA === */
+.wk-arrow {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid rgba(255, 159, 67, 0.28);
+    color: var(--primary-deep);
+    font-size: 1.8rem;
+    line-height: 1;
+    cursor: pointer;
+    flex: none;
+    box-shadow: 0 4px 12px rgba(150, 80, 20, 0.1);
+    transition: transform 0.24s var(--ease-spring), background 0.28s, color 0.28s, box-shadow 0.28s;
 }
+.wk-arrow:hover {
+    background: linear-gradient(135deg, var(--primary), var(--primary-2));
+    color: #fff;
+    transform: translateY(-2px) scale(1.1);
+    box-shadow: 0 14px 26px rgba(255, 127, 80, 0.45);
+}
+.wk-arrow:active { transform: scale(0.95); }
 
 
 /* =========================================
@@ -866,33 +921,53 @@ header {
     border-color: rgba(255, 159, 67, 0.5);
 }
 
+.recipe-img-wrap {
+    position: relative;
+    overflow: hidden;
+}
+
 .recipe-img {
     width: 100%;
-    height: 160px;
+    height: 200px;
     object-fit: cover;
+    display: block;
     transition: transform 0.55s var(--ease-out);
 }
 
-.recipe-card:hover .recipe-img { transform: scale(1.07); }
+.recipe-card:hover .recipe-img { transform: scale(1.08); }
 
-/* Velo degradado sobre la foto para dar profundidad y legibilidad a las etiquetas */
-.recipe-content::before {
+/* Velo degradado sobre la foto para legibilidad de las etiquetas */
+.recipe-img-wrap::after {
     content: "";
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 160px;
-    background: linear-gradient(to bottom, rgba(20, 12, 4, 0.32) 0%, transparent 34%, transparent 100%);
+    inset: 0;
+    background: linear-gradient(to bottom, rgba(20, 12, 4, 0.38) 0%, transparent 42%, transparent 72%, rgba(20, 12, 4, 0.28) 100%);
     pointer-events: none;
     z-index: 1;
 }
 
+/* Pista "Ver receta →" que aparece al hover sobre la foto */
+.recipe-view-hint {
+    position: absolute;
+    bottom: 10px;
+    right: 12px;
+    z-index: 2;
+    color: #fff;
+    font-weight: 800;
+    font-size: 0.8rem;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.3s var(--ease-out), transform 0.3s var(--ease-out);
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.recipe-card:hover .recipe-view-hint { opacity: 1; transform: none; }
+
 .recipe-content {
-    padding: 15px 16px 16px;
+    padding: 12px 14px 13px;
     flex: 1;
     display: flex;
     flex-direction: column;
+    gap: 2px;
 }
 
 .recipe-title {
@@ -914,7 +989,7 @@ header {
     position: absolute;
     top: 12px;
     left: 12px;
-    right: 50px;
+    right: 12px;
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
@@ -937,8 +1012,8 @@ header {
     display: flex;
     gap: 7px;
     align-items: center;
-    margin-top: auto;
-    padding-top: 12px;
+    flex-wrap: wrap;
+    padding-top: 4px;
 }
 
 .stat-item {
@@ -952,6 +1027,277 @@ header {
     font-size: 0.78rem;
     font-weight: 800;
 }
+
+/* Fila de acciones al pie de la tarjeta (info / editar / eliminar) */
+.recipe-actions {
+    margin-top: auto;
+    padding-top: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.recipe-act {
+    flex: none;
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 11px;
+    border: 1.5px solid rgba(230, 126, 34, 0.28);
+    background: linear-gradient(135deg, #FFF8F0, #FFEFDF);
+    cursor: pointer;
+    transition: transform 0.2s var(--ease-spring), background 0.25s, color 0.25s, box-shadow 0.25s, border-color 0.25s;
+}
+.recipe-act.info { color: #2563EB; border-color: rgba(37, 99, 235, 0.28); background: linear-gradient(135deg, #F5F8FF, #E8F0FE); }
+.recipe-act.info:hover { background: linear-gradient(135deg, #3B82F6, #2563EB); color: #fff; transform: translateY(-2px); box-shadow: 0 8px 18px rgba(37, 99, 235, 0.32); }
+.recipe-act.edit { color: var(--primary-deep); }
+.recipe-act.edit:hover { background: linear-gradient(135deg, var(--primary), var(--primary-2)); color: #fff; transform: translateY(-2px); box-shadow: 0 8px 18px rgba(255, 127, 80, 0.35); border-color: transparent; }
+.recipe-act:active { transform: translateY(0) scale(0.95); }
+
+/* === DETALLE DE RECETA (tipo libro de cocina) === */
+.recipe-book {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 26px;
+    align-items: start;
+}
+.recipe-book-left { position: sticky; top: 0; }
+.recipe-book .recipe-hero-wrapper {
+    position: relative;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 16px 34px rgba(150, 80, 20, 0.2);
+}
+.recipe-book .recipe-hero-img {
+    width: 100%;
+    height: 230px;
+    object-fit: cover;
+    display: block;
+}
+.recipe-book-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.rb-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: linear-gradient(135deg, #FFF3E6, #FFE8D0);
+    border: 1px solid rgba(255, 159, 67, 0.2);
+    padding: 9px 13px;
+    border-radius: 12px;
+    font-weight: 800;
+    color: var(--ink-soft);
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+.recipe-book-right { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.rb-meal-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.rb-meal-chip {
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 5px 13px;
+    border-radius: 999px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+/* Stepper de personas en el detalle (reescala ingredientes) */
+.rb-stat-serv { gap: 5px; padding-left: 10px; padding-right: 10px; }
+.rb-serv-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 138, 76, 0.18);
+    color: var(--primary-deep);
+    font-size: 1.15rem;
+    font-weight: 900;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.18s, transform 0.18s var(--ease-spring), color 0.18s;
+}
+.rb-serv-btn:hover { background: linear-gradient(135deg, var(--primary), var(--primary-2)); color: #fff; transform: scale(1.12); }
+.rb-serv-btn:active { transform: scale(0.94); }
+.rb-serv-note { font-size: 0.72rem; font-weight: 700; color: var(--ink-faint); text-transform: none; letter-spacing: 0; margin-left: 6px; }
+.rb-desc {
+    color: var(--ink-soft);
+    font-style: italic;
+    font-size: 1.02rem;
+    line-height: 1.55;
+    margin: 0;
+    padding: 14px 16px;
+    background: #FFF9F2;
+    border-left: 4px solid var(--primary);
+    border-radius: 0 12px 12px 0;
+}
+@media (max-width: 720px) {
+    .recipe-book { grid-template-columns: 1fr; gap: 20px; }
+    .recipe-book-left { position: static; }
+    .recipe-book .recipe-hero-img { height: 200px; }
+}
+
+/* === LISTA DE IMPORTAR RECETAS === */
+.import-list { display: flex; flex-direction: column; gap: 10px; }
+.import-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 159, 67, 0.16);
+    transition: transform 0.24s var(--ease-out), background 0.24s, box-shadow 0.24s, border-color 0.24s;
+}
+.import-row:hover {
+    transform: translateX(5px);
+    background: #fff;
+    border-color: rgba(255, 159, 67, 0.5);
+    box-shadow: 0 12px 26px rgba(150, 80, 20, 0.14);
+}
+.import-row-img { width: 54px; height: 54px; border-radius: 13px; object-fit: cover; flex: none; box-shadow: 0 6px 14px rgba(150, 80, 20, 0.16); }
+.import-row-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.import-row-name { font-weight: 800; color: var(--ink); font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.import-row-meta { font-size: 0.8rem; color: var(--ink-soft); font-weight: 700; display: inline-flex; align-items: center; gap: 5px; }
+.import-row-actions { display: flex; gap: 8px; flex: none; }
+
+/* === BOTÓN DE SUBIR ARCHIVO (flotante, con animación) === */
+.nv-upload-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-2));
+    color: #fff;
+    border: none;
+    padding: 12px 22px;
+    border-radius: 14px;
+    font-family: var(--font-body);
+    font-weight: 800;
+    font-size: 0.95rem;
+    cursor: pointer;
+    box-shadow: 0 10px 24px rgba(255, 127, 80, 0.35);
+    transition: transform 0.22s var(--ease-spring), box-shadow 0.22s, filter 0.2s;
+}
+.nv-upload-btn:hover { transform: translateY(-3px); box-shadow: 0 16px 34px rgba(255, 127, 80, 0.48); filter: brightness(1.04); }
+.nv-upload-btn:active { transform: translateY(-1px) scale(0.98); }
+.nv-upload-btn svg { animation: nv-float 3.2s ease-in-out infinite; }
+
+/* === ICONO FLOTANTE PARA TÍTULOS (reemplaza emojis) === */
+.nv-title-ic {
+    width: 46px;
+    height: 46px;
+    border-radius: 15px;
+    display: inline-grid;
+    place-items: center;
+    background: linear-gradient(135deg, var(--primary), var(--primary-2));
+    color: #fff;
+    box-shadow: 0 10px 22px rgba(255, 127, 80, 0.35);
+    flex: none;
+    animation: nv-float 4.5s ease-in-out infinite;
+}
+.recipe-del-btn {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 9px 12px;
+    border-radius: 12px;
+    border: 1.5px solid rgba(231, 76, 60, 0.22);
+    background: rgba(231, 76, 60, 0.06);
+    color: #e04b3a;
+    font-family: var(--font-body);
+    font-weight: 800;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: transform 0.2s var(--ease-out), background 0.25s, color 0.25s, box-shadow 0.25s, border-color 0.25s;
+}
+.recipe-del-btn:hover {
+    background: linear-gradient(135deg, #FF7043, #E53935);
+    color: #fff;
+    border-color: transparent;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 22px rgba(229, 57, 53, 0.32);
+}
+
+/* Enlace secundario "usar receta existente" dentro de la pantalla IA */
+.ia-existing-link {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding: 11px 16px;
+    border-radius: 14px;
+    border: 1.5px dashed rgba(255, 159, 67, 0.5);
+    background: linear-gradient(135deg, #FFF7ED, #FFF1E0);
+    color: var(--primary-deep);
+    font-family: var(--font-body);
+    font-weight: 800;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: transform 0.2s var(--ease-out), background 0.25s, border-color 0.25s, box-shadow 0.25s;
+}
+.ia-existing-link:hover {
+    background: #fff;
+    border-color: var(--primary);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(255, 127, 80, 0.18);
+}
+
+/* === LISTA DE COMPRAS (ítems) === */
+.shop-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 13px 14px;
+    margin-bottom: 9px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(255, 159, 67, 0.16);
+    transition: transform 0.24s var(--ease-out), background 0.24s, box-shadow 0.24s, border-color 0.24s;
+}
+.shop-item:hover {
+    transform: translateX(5px);
+    background: #fff;
+    border-color: rgba(255, 159, 67, 0.5);
+    box-shadow: 0 10px 24px rgba(150, 80, 20, 0.12);
+}
+.shop-item-main { display: flex; align-items: center; gap: 14px; cursor: pointer; flex: 1; min-width: 0; }
+.shop-check { flex: none; color: #FFC48A; transition: transform 0.24s var(--ease-spring), color 0.24s; }
+.shop-item:hover .shop-check { color: var(--primary); transform: scale(1.15); }
+.shop-name {
+    font-size: 1.05rem;
+    color: var(--ink);
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.shop-qty { font-size: 0.85rem; color: var(--ink-soft); font-weight: 600; }
+.shop-ai-tag { background: #FFF1F2; color: #E11D48; font-size: 0.7rem; padding: 2px 7px; border-radius: 12px; font-weight: 800; flex: none; }
+.shop-del {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #EF4444;
+    opacity: 0.45;
+    padding: 8px;
+    border-radius: 10px;
+    flex: none;
+    transition: opacity 0.2s, background 0.2s, transform 0.2s var(--ease-spring);
+}
+.shop-item:hover .shop-del { opacity: 1; }
+.shop-del:hover { background: #FEF2F2; transform: scale(1.15); }
+.shop-item.bought { opacity: 0.78; background: rgba(220, 252, 231, 0.35); border-color: rgba(16, 185, 129, 0.22); }
+.shop-item.bought .shop-name { color: #9b8d7c; text-decoration: line-through; }
+.shop-item.bought .shop-qty { color: #C7CDBE; }
 
 
 /* =========================================
@@ -972,20 +1318,30 @@ header {
     animation: nv-fade .25s ease both;
     padding: 16px;
 }
+/* En escritorio, centrar los modales en el área de contenido (a la derecha del
+   sidebar de 280px) para que no queden tapados/cortados por el menú lateral. */
+@media (min-width: 769px) {
+    .modal-overlay { padding-left: 296px; }
+}
 
 .modal-content,
 .modal-modern {
     background-color: #fff;
     width: 95%;
-    max-width: 650px;
-    max-height: 90vh;
-    border-radius: 26px;
-    border: 1px solid rgba(255, 159, 67, 0.18);
-    box-shadow: 0 30px 70px rgba(60, 30, 0, 0.3);
-    animation: nv-pop 0.4s var(--ease-spring);
+    max-width: 700px;
+    max-height: 92vh;
+    border-radius: 28px;
+    border: 1px solid rgba(255, 159, 67, 0.2);
+    box-shadow: 0 34px 80px rgba(60, 30, 0, 0.34);
+    animation: nv-modal-in 0.42s var(--ease-spring);
     display: flex;
     flex-direction: column;
     overflow: hidden;
+}
+
+@keyframes nv-modal-in {
+    from { opacity: 0; transform: translateY(26px) scale(0.955); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes slideUp {
@@ -1198,23 +1554,135 @@ header {
 .btn-primary:disabled { opacity: .55; cursor: not-allowed; transform: none; }
 
 .btn-secondary {
-    background: rgba(255, 255, 255, 0.6);
-    border: 1.5px solid rgba(230, 126, 34, 0.25);
-    color: var(--ink-soft);
-    padding: 11px 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #FFFDFB, #FFF2E4);
+    border: 1.5px solid rgba(230, 126, 34, 0.3);
+    color: var(--primary-deep);
+    padding: 12px 24px;
     border-radius: var(--radius-md);
     cursor: pointer;
     font-family: var(--font-body);
     font-weight: 800;
-    transition: transform var(--t-fast) var(--ease-out), background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+    box-shadow: 0 5px 14px rgba(150, 80, 20, 0.08);
+    transition: transform var(--t-fast) var(--ease-out), background var(--t-fast), border-color var(--t-fast), color var(--t-fast), box-shadow var(--t-fast);
 }
 
 .btn-secondary:hover {
-    background-color: #FFF6EC;
+    background: #fff;
     border-color: var(--primary);
     color: var(--primary-deep);
-    transform: translateY(-2px);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 26px rgba(255, 127, 80, 0.22);
 }
+.btn-secondary:active { transform: translateY(-1px) scale(0.99); }
+
+/* === CAMPO MODERNO REUTILIZABLE (inputs/selects animados) === */
+.nv-field {
+    border: 1.5px solid rgba(230, 126, 34, 0.22);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 1rem;
+    font-weight: 600;
+    font-family: var(--font-body);
+    outline: none;
+    background: rgba(255, 250, 244, 0.9);
+    color: var(--ink);
+    box-sizing: border-box;
+    transition: border-color 0.22s var(--ease-out), box-shadow 0.22s, background 0.22s, transform 0.22s;
+}
+.nv-field::placeholder { color: var(--ink-faint); font-weight: 500; }
+.nv-field:hover:not(:focus) { border-color: rgba(230, 126, 34, 0.42); }
+.nv-field:focus {
+    border-color: var(--primary);
+    background: #fff;
+    box-shadow: 0 0 0 4px rgba(255, 159, 67, 0.16);
+    transform: translateY(-1px);
+}
+.shop-field-label {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 6px;
+    padding-left: 2px;
+}
+
+/* === LISTA DESPLEGABLE MODERNA (NvSelect) === */
+.nv-select { position: relative; }
+.nv-select-trigger {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border: 1.5px solid rgba(230, 126, 34, 0.22);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 1rem;
+    font-weight: 700;
+    font-family: var(--font-body);
+    color: var(--ink);
+    background: rgba(255, 250, 244, 0.9);
+    cursor: pointer;
+    transition: border-color 0.2s var(--ease-out), box-shadow 0.2s, background 0.2s;
+}
+.nv-select-trigger:hover { border-color: rgba(230, 126, 34, 0.42); }
+.nv-select-trigger.open {
+    border-color: var(--primary);
+    background: #fff;
+    box-shadow: 0 0 0 4px rgba(255, 159, 67, 0.16);
+}
+.nv-select-ph { color: var(--ink-faint); font-weight: 500; }
+.nv-select-caret { color: var(--primary-deep); transition: transform 0.25s var(--ease-spring); flex: none; }
+.nv-select-trigger.open .nv-select-caret { transform: rotate(180deg); }
+.nv-select-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: #fff;
+    border: 1px solid rgba(255, 159, 67, 0.28);
+    border-radius: 14px;
+    padding: 6px;
+    box-shadow: 0 18px 40px rgba(120, 60, 10, 0.22);
+    max-height: 240px;
+    overflow-y: auto;
+    transform-origin: top center;
+    animation: nv-select-in 0.18s var(--ease-out);
+}
+@keyframes nv-select-in {
+    from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.nv-select-opt {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    background: none;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    font-family: var(--font-body);
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, transform 0.15s;
+}
+.nv-select-opt:hover { background: #FFF3E6; color: var(--primary-deep); transform: translateX(3px); }
+.nv-select-opt.active { background: linear-gradient(135deg, var(--primary), var(--primary-2)); color: #fff; }
+.nv-select-opt.active:hover { transform: none; }
+select.nv-field { cursor: pointer; appearance: none; -webkit-appearance: none; padding-right: 30px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 256 256'%3E%3Cpath fill='%23e67e22' d='M213.66 101.66l-80 80a8 8 0 0 1-11.32 0l-80-80a8 8 0 0 1 11.32-11.32L128 164.69l74.34-74.35a8 8 0 0 1 11.32 11.32Z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center; }
 
 /* === BOTONES BLOQUEADOS (sin permiso) + TOOLTIP === */
 .btn-locked {
@@ -1347,6 +1815,16 @@ header {
     border-color: var(--primary);
     background: white;
     box-shadow: 0 0 0 4px rgba(255, 159, 67, 0.14);
+}
+
+/* Campo bloqueado (p. ej. calorías al editar): deshabilitado de forma limpia */
+.form-input:disabled,
+.form-input[readonly] {
+    background: #F5EEE4;
+    color: #9b8d7c;
+    border-color: rgba(230, 126, 34, 0.12);
+    cursor: not-allowed;
+    box-shadow: none;
 }
 
 /* Chips */
@@ -1977,13 +2455,13 @@ header {
 .fam-blob.b3 { width: 360px; height: 360px; top: 40%; left: 55%; background: radial-gradient(circle, #FFD27D, transparent 70%); animation: nv-blob-drift2 26s var(--ease-out) infinite; }
 
 @keyframes nv-blob-drift {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    33% { transform: translate(60px, 40px) scale(1.1); }
-    66% { transform: translate(-40px, 70px) scale(0.95); }
+    0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.5; }
+    33% { transform: translate(60px, 40px) scale(1.1); opacity: 0.62; }
+    66% { transform: translate(-40px, 70px) scale(0.95); opacity: 0.46; }
 }
 @keyframes nv-blob-drift2 {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    50% { transform: translate(-70px, -50px) scale(1.12); }
+    0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.48; }
+    50% { transform: translate(-70px, -50px) scale(1.12); opacity: 0.64; }
 }
 
 /* glifos de comida flotando */
@@ -2053,7 +2531,7 @@ header {
     backdrop-filter: blur(14px);
     border: 1px solid rgba(255, 255, 255, 0.7);
     width: 220px;
-    padding: 32px 22px;
+    padding: 42px 22px 28px;
     border-radius: 26px;
     cursor: pointer;
     transition: transform 0.32s var(--ease-out), box-shadow 0.32s, border-color 0.32s, background 0.32s;
@@ -2115,18 +2593,22 @@ header {
 
 .role-badge {
     position: absolute;
-    top: 12px;
-    right: 12px;
-    background: linear-gradient(135deg, #FFEDD5, #FFE0B8);
-    color: #e67e22;
-    font-size: 0.68rem;
-    font-weight: 800;
-    padding: 4px 11px;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #FF9F43, #FF7F50);
+    color: #fff;
+    font-size: 0.66rem;
+    font-weight: 900;
+    padding: 5px 14px;
     border-radius: 999px;
     text-transform: uppercase;
-    letter-spacing: 0.4px;
-    box-shadow: 0 3px 8px rgba(230, 126, 34, 0.15);
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    box-shadow: 0 6px 14px rgba(255, 127, 80, 0.35);
+    transition: transform 0.3s var(--ease-spring);
 }
+.family-card-glass:hover .role-badge { transform: translateX(-50%) translateY(-2px) scale(1.05); }
 
 .action-card .icon-box-dashed {
     width: 66px;
@@ -2962,12 +3444,19 @@ header {
     .recipe-badges {
         top: 10px !important;
         left: 10px !important;
-        right: 44px !important;
+        right: 10px !important;
     }
 
     .recipe-content {
-        padding: 14px !important;
+        padding: 12px !important;
     }
+
+    /* En móvil (tarjetas angostas) los 3 botones van como iconos y no se corta "Eliminar" */
+    .recipe-actions { gap: 8px !important; justify-content: space-between !important; }
+    .recipe-actions .btn-locked-wrapper { flex: none !important; }
+    .recipe-del-text { display: none; }
+    .recipe-del-btn { width: 42px; height: 42px; padding: 0; gap: 0; }
+    .recipe-act { width: 42px; height: 42px; }
 
     .recipe-title {
         font-size: 1.02rem !important;
@@ -3026,24 +3515,22 @@ header {
        ===================== */
     .shopping-form-row {
         flex-direction: column !important;
-        gap: 10px !important;
+        align-items: stretch !important;
+        gap: 12px !important;
     }
-
-    .shopping-form-row input[type="text"] {
+    /* Cada campo (envuelto en un div) ocupa todo el ancho en móvil */
+    .shopping-form-row > div {
         width: 100% !important;
         min-width: unset !important;
         flex: unset !important;
     }
-
-    .shopping-form-row input[type="number"] {
-        width: 100% !important;
-    }
-
+    .shopping-form-row .nv-field,
+    .shopping-form-row .nv-select,
+    .shopping-form-row input,
     .shopping-form-row select {
         width: 100% !important;
     }
-
-    .shopping-form-row button {
+    .shopping-form-row > button {
         width: 100% !important;
     }
 

@@ -273,7 +273,10 @@ const Inventory = ({ currentFamily, userRole }) => {
         <div className="main-content">
             <header>
                 <div className="header-title">
-                    <h1>📦 Mi Inventario</h1>
+                    <h1 style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
+                        <span className="nv-title-ic"><Snowflake size={22} weight="fill" /></span>
+                        Mi Inventario
+                    </h1>
                     <p>Gestiona lo que tienes en tu nevera
                         {currentFamily && <span style={{ color: '#FF9F43', fontWeight: 600 }}> — {currentFamily.name}</span>}
                     </p>

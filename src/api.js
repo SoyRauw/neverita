@@ -178,6 +178,10 @@ export const recipesService = {
         method: 'POST',
         body: JSON.stringify(data),
     }),
+    update: (id, data) => fetchAPI(`/recipes/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+    }),
     delete: (id) => fetchAPI(`/recipes/${id}`, { method: 'DELETE' }),
     validateExpiration: (data) => fetchAPI('/recipes/validate-expiration', {
         method: 'POST',

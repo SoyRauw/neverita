@@ -78,8 +78,10 @@ const CalendarGrid = ({ data, onMealClick, onEmptyClick, canEdit = true }) => {
                     width: 100%;
                     max-width: 100%;
                     margin: 0 auto;
-                    overflow: hidden;
-                    padding: 0;
+                    /* overflow visible: permite que las tarjetas "floten" al hover
+                       sin que la 1ª fila/columna se corte con el marco */
+                    overflow: visible;
+                    padding: 6px 4px;
                     box-sizing: border-box;
                 }
             `}</style>

@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { showToast } from '../Toast';
-import { CheckCircle, Circle, Trash, MagicWand, X } from '@phosphor-icons/react';
+import { CheckCircle, Circle, Trash, MagicWand, X, Plus } from '@phosphor-icons/react';
+import NvSelect from './NvSelect';
+
+const UNIT_OPTIONS = [
+    { value: 'unidad', label: 'unidad' },
+    { value: 'g', label: 'g' },
+    { value: 'kg', label: 'kg' },
+    { value: 'ml', label: 'ml' },
+    { value: 'l', label: 'l' },
+];
 import { shoppingListService, aiService, ingredientsService, inventoryService, menuPlansService, dailyMealsService } from '../api';
 
 const ShoppingList = ({ currentFamily }) => {
@@ -305,16 +314,18 @@ const ShoppingList = ({ currentFamily }) => {
             <div className="shopping-card-container" style={{ background: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(12px)', padding: '26px', borderRadius: '22px', boxShadow: '0 24px 60px rgba(180,100,30,0.12)', border: '1px solid rgba(255,159,67,0.16)', maxWidth: '800px', marginBottom: 40 }}>
 
                 {/* --- AÑADIR MANUAL --- */}
-                <div className="shopping-form-row" style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '30px', flexWrap: 'wrap', borderBottom: '2px solid rgba(255,159,67,0.16)', paddingBottom: '24px' }}>
+                <div className="shopping-form-row" style={{ position: 'relative', display: 'flex', alignItems: 'flex-end', gap: '12px', marginBottom: '30px', flexWrap: 'wrap', borderBottom: '2px solid rgba(255,159,67,0.16)', paddingBottom: '24px' }}>
 
                     <div style={{ flex: 2, minWidth: '200px', position: 'relative' }}>
+                        <label className="shop-field-label">Ingrediente</label>
                         <input
                             type="text"
+                            className="nv-field"
                             placeholder="Buscar ingrediente..."
                             value={searchText}
                             onChange={(e) => { setSearchText(e.target.value); setSelectedIngredient(null); setShowSuggestions(true); }}
                             onFocus={() => setShowSuggestions(true)}
-                            style={{ width: '100%', border: selectedIngredient ? '2px solid #22C55E' : '2px solid rgba(230,126,34,0.18)', borderRadius: '12px', padding: '11px 14px', fontSize: '1rem', outline: 'none', background: selectedIngredient ? '#F0FFF4' : 'rgba(255,250,244,0.85)', boxSizing: 'border-box', fontWeight: 600 }}
+                            style={{ width: '100%', ...(selectedIngredient ? { borderColor: '#22C55E', background: '#F0FFF4' } : {}) }}
                         />
                         {selectedIngredient && (
                             <span style={{ position: 'absolute', right: 12, top: 12, fontSize: '0.8rem', color: '#22C55E', fontWeight: 700 }}>✓ {selectedIngredient.unit}</span>
@@ -341,9 +352,9 @@ const ShoppingList = ({ currentFamily }) => {
 
                         {creatingNew && (
                             <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999, background: '#FFFBF5', border: '2px dashed #FFD9A0', borderRadius: 8, padding: 12, marginTop: 4, display: 'flex', gap: 8 }}>
-                                <select value={newIngredient.unit} onChange={e => setNewIngredient({...newIngredient, unit: e.target.value})} style={{ flex: 1, padding: '6px', borderRadius: 6, border: '1px solid rgba(230,126,34,0.25)' }}>
-                                    <option value="g">g</option><option value="kg">kg</option><option value="ml">ml</option><option value="l">l</option><option value="unidad">unidad</option>
-                                </select>
+                                <div style={{ flex: 1 }}>
+                                    <NvSelect value={newIngredient.unit} onChange={(v) => setNewIngredient({ ...newIngredient, unit: v })} options={UNIT_OPTIONS} />
+                                </div>
                                 <button onClick={handleCreateIngredient} disabled={aiLoading} style={{ background: '#FF9F43', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer' }}>
                                     {aiLoading ? 'IA...' : 'Crear'}
                                 </button>
@@ -351,17 +362,29 @@ const ShoppingList = ({ currentFamily }) => {
                         )}
                     </div>
 
-                    <input
-                        type="number" min="0.1" step="any" placeholder="Cant." value={quantity} onChange={e => setQuantity(e.target.value)}
-                        style={{ width: '80px', border: '2px solid rgba(230,126,34,0.18)', borderRadius: '12px', padding: '11px', fontSize: '1rem', outline: 'none', background: 'rgba(255,250,244,0.85)', fontWeight: 600 }}
-                    />
+                    <div style={{ width: '92px' }}>
+                        <label className="shop-field-label">Cantidad</label>
+                        <input
+                            type="number" min="0.1" step="any" placeholder="Ej. 500" value={quantity} onChange={e => setQuantity(e.target.value)}
+                            className="nv-field"
+                            style={{ width: '100%' }}
+                        />
+                    </div>
 
-                    {!selectedIngredient && (
-                        <input type="text" placeholder="Unidad" value={unit} onChange={e => setUnit(e.target.value)} style={{ width: '80px', border: '2px solid rgba(230,126,34,0.18)', borderRadius: '12px', padding: '11px', fontSize: '1rem', outline: 'none', background: 'rgba(255,250,244,0.85)', fontWeight: 600 }} />
+                    {!selectedIngredient ? (
+                        <div style={{ width: '110px' }}>
+                            <label className="shop-field-label">Unidad</label>
+                            <NvSelect value={unit || 'unidad'} onChange={setUnit} options={UNIT_OPTIONS} />
+                        </div>
+                    ) : (
+                        <div style={{ width: '110px' }}>
+                            <label className="shop-field-label">Unidad</label>
+                            <div className="nv-field" style={{ width: '100%', background: '#FFF6EC', color: '#9b8d7c', textAlign: 'center', cursor: 'default' }}>{selectedIngredient.unit}</div>
+                        </div>
                     )}
 
-                    <button onClick={handleAddManual} style={{ background: 'linear-gradient(135deg, #FF9F43, #FF7F50)', color: 'white', border: 'none', padding: '11px 22px', borderRadius: '12px', fontWeight: 800, cursor: 'pointer', flexShrink: 0, boxShadow: '0 8px 18px rgba(255,127,80,0.32)' }}>
-                        Añadir
+                    <button onClick={handleAddManual} className="btn-primary" style={{ flexShrink: 0 }}>
+                        <Plus size={18} weight="bold" /> Añadir
                     </button>
                 </div>
 
@@ -372,18 +395,18 @@ const ShoppingList = ({ currentFamily }) => {
                 </h3>
                 <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 30px 0' }}>
                     {loading ? <p style={{ color: '#9b8d7c' }}>Cargando...</p> : toBuy.length === 0 ? <p style={{ color: '#9b8d7c', fontSize: '0.9rem' }}>Todo al día.</p> : toBuy.map(item => (
-                        <li key={item.item_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 12px', borderBottom: '1px solid rgba(255,159,67,0.12)', transition: 'background 0.2s', borderRadius: 10 }} onMouseEnter={e => e.currentTarget.style.background = '#FFF6EC'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer', flex: 1 }} onClick={() => openInventoryModal(item)}>
-                                <Circle size={28} color="#FFC48A" />
-                                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                    <span style={{ fontSize: '1.05rem', color: '#2A2118', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <li key={item.item_id} className="shop-item">
+                            <div className="shop-item-main" onClick={() => openInventoryModal(item)} title="Marcar como comprado">
+                                <Circle className="shop-check" size={28} weight="bold" />
+                                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                                    <span className="shop-name">
                                         {item.name}
-                                        {item.source === 'ai' && <span style={{ background: '#FFF1F2', color: '#E11D48', fontSize: '0.7rem', padding: '2px 6px', borderRadius: 12, fontWeight: 800 }}>✨ IA</span>}
+                                        {item.source === 'ai' && <span className="shop-ai-tag">✨ IA</span>}
                                     </span>
-                                    <span style={{ fontSize: '0.85rem', color: '#6B5E4F', fontWeight: '600' }}>{item.quantity} {item.unit}</span>
+                                    <span className="shop-qty">{item.quantity} {item.unit}</span>
                                 </div>
                             </div>
-                            <button onClick={() => handleDelete(item.item_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', opacity: 0.5, padding: 8 }}>
+                            <button className="shop-del" onClick={() => handleDelete(item.item_id)} title="Eliminar">
                                 <Trash size={20} />
                             </button>
                         </li>
@@ -399,15 +422,15 @@ const ShoppingList = ({ currentFamily }) => {
                         </h3>
                         <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 20px 0', opacity: 0.7 }}>
                             {bought.map(item => (
-                                <li key={item.item_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', borderBottom: '1px solid rgba(255,159,67,0.1)' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer', flex: 1 }} onClick={() => openInventoryModal(item)}>
-                                        <CheckCircle size={28} color="#10B981" weight="fill" />
-                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                            <span style={{ fontSize: '1.05rem', color: '#9b8d7c', fontWeight: 600, textDecoration: 'line-through' }}>{item.name}</span>
-                                            <span style={{ fontSize: '0.85rem', color: '#D1D5DB' }}>{item.quantity} {item.unit}</span>
+                                <li key={item.item_id} className="shop-item bought">
+                                    <div className="shop-item-main" onClick={() => openInventoryModal(item)}>
+                                        <CheckCircle size={28} color="#10B981" weight="fill" style={{ flex: 'none' }} />
+                                        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                                            <span className="shop-name">{item.name}</span>
+                                            <span className="shop-qty">{item.quantity} {item.unit}</span>
                                         </div>
                                     </div>
-                                    <button onClick={() => handleDelete(item.item_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', opacity: 0.5 }}>
+                                    <button className="shop-del" onClick={() => handleDelete(item.item_id)} title="Eliminar">
                                         <Trash size={20} />
                                     </button>
                                 </li>
