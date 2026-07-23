@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { sanitizeShoppingList } from '../shopping_units.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -624,6 +625,11 @@ router.post('/shopping-list', async (req, res) => {
 
         const result = await model.generateContent(systemPrompt);
         const data = JSON.parse(result.response.text());
+        // La IA a veces ignora la regla de unidades (devuelve "700 L", "200 kg",
+        // "500 unidad" de tomate). Forzamos g/ml/unidad con cantidades sensatas.
+        if (data && Array.isArray(data.items)) {
+            data.items = sanitizeShoppingList(data.items, n);
+        }
         res.json(data);
 
     } catch (error) {

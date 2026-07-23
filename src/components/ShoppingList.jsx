@@ -26,6 +26,7 @@ const UNIT_OPTIONS = [
 ];
 import { shoppingListService, aiService, ingredientsService, inventoryService, menuPlansService, dailyMealsService } from '../api';
 import { formatQty, isReasonableQty } from '../units';
+import { convertQty } from '../reservation';
 
 const ShoppingList = ({ currentFamily }) => {
     const [items, setItems] = useState([]);
@@ -234,13 +235,14 @@ const ShoppingList = ({ currentFamily }) => {
             if (response.items && response.items.length > 0) {
                 const newItems = [];
                 for (const item of response.items) {
-                    // Si el ingrediente existe en DB, usar su nombre y unidad exactos
+                    // El backend ya saneó unidad (g/ml/unidad) y cantidad; confiamos en eso.
+                    // Solo usamos el nombre canónico del catálogo si el ingrediente ya existe.
                     const dbIng = ingredients.find(i => i.name.toLowerCase() === item.name.toLowerCase());
                     const created = await shoppingListService.create({
                         family_id: familyId,
                         name: dbIng ? dbIng.name : item.name,
                         quantity: item.quantity,
-                        unit: dbIng ? dbIng.unit : item.unit,
+                        unit: item.unit,
                         source: 'ai'
                     });
                     newItems.push(created);
@@ -298,10 +300,18 @@ const ShoppingList = ({ currentFamily }) => {
                 });
                 setIngredients([...ingredients, ing]);
             }
+            // El inventario interpreta la cantidad en la unidad CANÓNICA del ingrediente
+            // (ing.unit, que puede ser kg/l). El item de compra viene saneado en g/ml/unidad,
+            // así que convertimos antes de guardar para no inflar (p.ej. 1500 g -> 1.5 kg).
+            let qtyToStore = Number(modalQty);
+            if (ing && ing.unit && modalItem.unit && ing.unit.toLowerCase() !== modalItem.unit.toLowerCase()) {
+                const conv = convertQty(qtyToStore, modalItem.unit, ing.unit, ing.name || modalItem.name);
+                if (conv != null && conv > 0) qtyToStore = Math.round(conv * 100) / 100;
+            }
             await inventoryService.create({
                 family_id: currentFamily.family_id || currentFamily.id,
                 ingredient_id: ing.ingredient_id,
-                quantity: Number(modalQty),
+                quantity: qtyToStore,
                 expiration_date: modalExpDate || null
             });
             await shoppingListService.update(modalItem.item_id, { checked: true, quantity: Number(modalQty) });
