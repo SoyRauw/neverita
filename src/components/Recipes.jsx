@@ -351,14 +351,25 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
         reader.onload = (ev) => {
             const img = new Image();
             img.onload = () => {
-                const maxW = 900;
-                const scale = Math.min(1, maxW / img.width);
-                const w = Math.round(img.width * scale);
-                const h = Math.round(img.height * scale);
+                // La columna image_url es MEDIUMTEXT (16 MB) y la foto se guarda como data URL.
+                // Mantenemos buena calidad (1000px, 0.85) y solo comprimimos si superara un tope
+                // generoso, para no inflar en exceso la respuesta de /recipes.
+                const LIMIT = 500000; // ~365 KB de imagen (holgado, buena calidad)
                 const canvas = document.createElement('canvas');
-                canvas.width = w; canvas.height = h;
-                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                setNewRecipe(prev => ({ ...prev, img: canvas.toDataURL('image/jpeg', 0.82) }));
+                const ctx = canvas.getContext('2d');
+                const render = (maxW, q) => {
+                    const scale = Math.min(1, maxW / img.width);
+                    const w = Math.max(1, Math.round(img.width * scale));
+                    const h = Math.max(1, Math.round(img.height * scale));
+                    canvas.width = w; canvas.height = h;
+                    ctx.drawImage(img, 0, 0, w, h);
+                    return canvas.toDataURL('image/jpeg', q);
+                };
+                let maxW = 1000, q = 0.85;
+                let url = render(maxW, q);
+                while (url.length > LIMIT && q > 0.45) { q = Math.round((q - 0.1) * 100) / 100; url = render(maxW, q); }
+                while (url.length > LIMIT && maxW > 480) { maxW = Math.round(maxW * 0.85); url = render(maxW, q); }
+                setNewRecipe(prev => ({ ...prev, img: url }));
             };
             img.src = ev.target.result;
         };
