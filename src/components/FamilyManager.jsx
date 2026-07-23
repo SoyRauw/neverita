@@ -330,7 +330,7 @@ const FamilyManager = ({
                 </div>
 
                 {/* CONTENIDO DINÁMICO */}
-                <div style={{ padding: '22px', maxHeight: '72vh', overflowY: 'auto', overflowX: 'hidden' }}>
+                <div style={{ padding: '22px', paddingBottom: 'calc(22px + env(safe-area-inset-bottom))', maxHeight: '72dvh', overflowY: 'auto', overflowX: 'hidden' }}>
                     
                     {/* --- MODO: DETALLES (Vista Principal) --- */}
                     {mode === 'details' && (

@@ -1046,8 +1046,8 @@ header {
 }
 .recipe-act {
     flex: none;
-    width: 38px;
-    height: 38px;
+    width: 40px;
+    height: 40px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -3162,7 +3162,7 @@ select.nv-field { cursor: pointer; appearance: none; -webkit-appearance: none; p
     }
 
     .main-content {
-        padding: 16px 14px 100px 14px !important;
+        padding: 16px 14px calc(var(--tabbar-total) + var(--space-4)) 14px !important;
         margin-left: 0 !important;
         width: 100% !important;
         max-width: 100% !important;
@@ -3227,7 +3227,7 @@ select.nv-field { cursor: pointer; appearance: none; -webkit-appearance: none; p
         bottom: 0;
         left: 0;
         right: 0;
-        height: 74px;
+        height: calc(var(--tabbar-h) + var(--safe-b));
         background: rgba(255, 252, 248, 0.9);
         backdrop-filter: blur(18px);
         -webkit-backdrop-filter: blur(18px);
@@ -3361,10 +3361,11 @@ select.nv-field { cursor: pointer; appearance: none; -webkit-appearance: none; p
         padding-bottom: 5px;
     }
 
+    /* Grid contenido que ENVUELVE a 2 columnas en pantallas estrechas (nunca desborda). */
     .mobile-meals-grid {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 10px;
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: var(--space-3);
         width: 100%;
     }
 
@@ -3372,35 +3373,42 @@ select.nv-field { cursor: pointer; appearance: none; -webkit-appearance: none; p
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 5px;
+        gap: var(--space-2);
         cursor: pointer;
+        min-width: 0; /* permite encoger dentro del grid y que el título recorte con ellipsis */
     }
 
     .mobile-meal-img-container {
         width: 100%;
-        aspect-ratio: 4 / 3;
+        aspect-ratio: 4 / 3; /* mismo aspect-ratio en todos los slots; object-fit:cover en la foto */
         background: rgba(255, 246, 236, 0.7);
         border: 1.5px dashed rgba(255, 159, 67, 0.4);
-        border-radius: 12px;
+        border-radius: var(--radius-sm);
         display: flex;
         align-items: center;
         justify-content: center;
         overflow: hidden;
         transition: border-color 0.2s, background 0.2s;
     }
+    /* Slot LLENO: la foto ocupa todo, sin el borde punteado de estado "vacío". */
+    .mobile-meal-slot.has-meal .mobile-meal-img-container { border: none; background: transparent; }
     .mobile-meal-slot:active .mobile-meal-img-container { border-color: var(--primary); }
 
-    .filled-img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-
+    /* Título del plato: hasta 2 líneas con ellipsis, nunca desborda ni corta a mitad de palabra. */
     .mobile-meal-label {
-        font-size: 0.65rem;
+        font-size: 0.72rem;
         color: var(--ink-soft);
         font-weight: 800;
         text-transform: uppercase;
+        line-height: 1.2;
+        text-align: center;
+        width: 100%;
+        max-width: 100%;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        overflow-wrap: anywhere;
     }
 
     /* =====================
@@ -3515,8 +3523,8 @@ select.nv-field { cursor: pointer; appearance: none; -webkit-appearance: none; p
     .recipe-actions { gap: 8px !important; justify-content: space-between !important; }
     .recipe-actions .btn-locked-wrapper { flex: none !important; }
     .recipe-del-text { display: none; }
-    .recipe-del-btn { width: 42px; height: 42px; padding: 0; gap: 0; }
-    .recipe-act { width: 42px; height: 42px; }
+    .recipe-del-btn { width: 44px; height: 44px; padding: 0; gap: 0; }
+    .recipe-act { width: 44px; height: 44px; }
 
     .recipe-title {
         font-size: 1.02rem !important;
@@ -3563,12 +3571,8 @@ select.nv-field { cursor: pointer; appearance: none; -webkit-appearance: none; p
         grid-template-columns: 1fr !important;
     }
 
-    .plan-mini-grid {
-        grid-template-columns: 50px repeat(7, 1fr) !important;
-        gap: 5px !important;
-        min-width: 320px !important;
-        font-size: 0.8rem;
-    }
+    /* En móvil la cuadrícula 7×3 se oculta: usamos el layout vertical por día. */
+    .plan-mini-grid { display: none !important; }
 
     /* =====================
        LISTA DE COMPRAS
@@ -3995,6 +3999,25 @@ select.nv-field { cursor: pointer; appearance: none; -webkit-appearance: none; p
 .nv-dp-day:disabled { opacity: 0.28; cursor: not-allowed; }
 .nv-dp-empty { aspect-ratio: 1; }
 
+/* Título clickeable (abre selección de mes / año) */
+.nv-dp-title-btn { border: none; background: none; cursor: pointer; padding: 4px 10px; border-radius: 9px; transition: background 0.16s, transform 0.18s var(--ease-spring); }
+.nv-dp-title-btn:hover { background: rgba(255, 255, 255, 0.6); transform: scale(1.04); }
+.nv-dp-title-btn:active { transform: scale(0.96); }
+
+/* Grilla de meses / años (3 columnas) */
+.nv-dp-mgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; animation: nv-dp-grid-in 0.28s var(--ease-out); }
+.nv-dp-mbtn {
+    border: none; background: none; border-radius: 11px; cursor: pointer; padding: 12px 4px;
+    font-family: var(--font-body); font-weight: 700; font-size: 0.86rem; color: var(--ink);
+    transition: background 0.16s, color 0.16s, transform 0.18s var(--ease-spring), box-shadow 0.18s;
+}
+.nv-dp-mbtn:hover:not(:disabled) { background: #FFF3E6; color: var(--primary-deep); transform: translateY(-2px) scale(1.05); }
+.nv-dp-mbtn:active:not(:disabled) { transform: scale(0.94); }
+.nv-dp-mbtn.today { color: var(--primary-deep); box-shadow: inset 0 0 0 2px rgba(255, 159, 67, 0.55); }
+.nv-dp-mbtn.sel { background: linear-gradient(135deg, var(--primary), var(--primary-2)); color: #fff; box-shadow: 0 8px 18px rgba(255, 127, 80, 0.45); }
+.nv-dp-mbtn.sel:hover { color: #fff; }
+.nv-dp-mbtn:disabled { opacity: 0.28; cursor: not-allowed; }
+
 /* ====== Correcciones responsive (auditoría móvil) ====== */
 /* Botón borrar de compras: en táctil siempre visible; solo se atenúa donde hay hover real */
 @media (hover: none) { .shop-del { opacity: 1 !important; } }
@@ -4007,7 +4030,7 @@ select.nv-field { cursor: pointer; appearance: none; -webkit-appearance: none; p
 }
 .sg-input { font-size: 16px; }                   /* evita el auto-zoom de iOS Safari */
 /* Barra CRUD de selección múltiple: por encima de la nav inferior en móvil */
-@media (max-width: 768px) { .nv-crud-bar { bottom: calc(80px + env(safe-area-inset-bottom)) !important; } }
+@media (max-width: 768px) { .nv-crud-bar { bottom: calc(var(--tabbar-total) + var(--space-2)) !important; } }
 
 /* ====== Búsqueda: lupa animada (item 17) ====== */
 .nv-searchbar { position: relative; }
@@ -4029,4 +4052,61 @@ select.nv-field { cursor: pointer; appearance: none; -webkit-appearance: none; p
 /* Corners planos + área segura para el bottom-sheet de confirmación en móvil */
 @media (max-width: 768px) {
     .modal-overlay .nv-confirm-card { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+}
+
+/* Indicador "reservado por el plan" en el inventario (tabla y tarjeta) */
+.inv-reserved {
+    display: block;
+    margin-top: 3px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #9b8d7c;
+    line-height: 1.3;
+}
+
+/* ── Cuadrícula del "Chef Inteligente": grid en desktop, vertical por día en móvil ── */
+.plan-mini-grid { display: grid; }
+.plan-mini-vertical { display: none; }
+
+@media (max-width: 768px) {
+    .plan-mini-vertical {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+    }
+    .pmv-day {
+        border: 1px solid rgba(255, 159, 67, 0.18);
+        border-radius: var(--radius-md);
+        padding: var(--space-3);
+        background: #fff;
+        box-shadow: 0 3px 10px rgba(150, 80, 20, 0.06);
+    }
+    .pmv-day-h {
+        font-size: 0.8rem;
+        font-weight: 800;
+        color: var(--primary-deep);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: var(--space-2);
+    }
+    .pmv-day-h.blocked { color: #EF4444; }
+    .pmv-meals {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: var(--space-2);
+    }
+    .pmv-cell {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+    }
+    .pmv-cell-label {
+        font-size: 0.62rem;
+        font-weight: 800;
+        color: var(--ink-faint);
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
 }

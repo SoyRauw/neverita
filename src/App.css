@@ -2,16 +2,17 @@
    APP.CSS - Solo utilidades globales
    ============================================ */
 
-/* Prevenir scroll horizontal en toda la app */
+/* Guarda contra scroll horizontal. `clip` (no `hidden`) NO crea un contenedor de
+   scroll, así que NO rompe position:sticky. Las CAUSAS reales de desborde ya están
+   arregladas (slots con min-width:0, chef-grid vertical, barras con 100% en vez de 100vw);
+   esto queda solo como red de seguridad. */
 html, body {
-  overflow-x: hidden !important;
+  overflow-x: clip;
   width: 100%;
   max-width: 100%;
-  position: relative;
 }
 
 #root {
-  overflow-x: hidden !important;
   width: 100%;
   max-width: 100%;
 }

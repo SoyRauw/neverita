@@ -101,7 +101,7 @@ const CalendarGrid = ({ data, onMealClick, onEmptyClick, canEdit = true, selectM
                                 return (
                                     <div
                                         key={mealKey}
-                                        className={`mobile-meal-slot${selectMode ? ' select-mode' : ''}${selM ? ' selected' : ''}`}
+                                        className={`mobile-meal-slot${meal ? ' has-meal' : ''}${selectMode ? ' select-mode' : ''}${selM ? ' selected' : ''}`}
                                         onClick={() => handleSlotClick(meal, dayIndex, type)}
                                     >
                                         <div className="mobile-meal-img-container">
@@ -114,7 +114,7 @@ const CalendarGrid = ({ data, onMealClick, onEmptyClick, canEdit = true, selectM
                                                 ? <span className="meal-sel-check"><Check size={13} weight="bold" /></span>
                                                 : <span className="meal-edit-badge"><PencilSimple size={11} weight="bold" /></span>)}
                                         </div>
-                                        <span className="mobile-meal-label" title={meal ? meal.name : type} style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{meal ? meal.name : type}</span>
+                                        <span className="mobile-meal-label" title={meal ? meal.name : type}>{meal ? meal.name : type}</span>
                                     </div>
                                 );
                             })}

@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { showToast } from '../Toast';
 import { Trash, PlusCircle, X, Warning, WarningOctagon, CheckCircle, Snowflake, ListChecks, Package, MagnifyingGlass } from '@phosphor-icons/react';
-import { inventoryService, ingredientsService, aiService } from '../api';
+import { inventoryService, ingredientsService, aiService, userFamilyService, menuPlansService, dailyMealsService } from '../api';
 import { formatQty, isReasonableQty, maxReasonable } from '../units';
+import { computeReserved, aggregateAvailable, normName } from '../reservation';
 import NvDatePicker from './NvDatePicker';
 import NvSelect from './NvSelect';
 
@@ -51,6 +52,8 @@ const Inventory = ({ currentFamily, userRole }) => {
     const [ingredients, setIngredients] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    // Reservado por el plan activo (comidas planificadas y aún no cocinadas).
+    const [reservedMap, setReservedMap] = useState({});
 
     // Modal
     const [showModal, setShowModal] = useState(false);
@@ -132,6 +135,58 @@ const Inventory = ({ currentFamily, userRole }) => {
         };
         load();
     }, [currentFamily]);
+
+    // ---------- Calcular lo "reservado" por el plan activo (comidas no cocinadas) ----------
+    useEffect(() => {
+        const familyId = currentFamily?.family_id || currentFamily?.id;
+        if (!familyId) { setReservedMap({}); return; }
+        let cancelled = false;
+        (async () => {
+            try {
+                const [plans, members] = await Promise.all([
+                    menuPlansService.getByFamily(familyId),
+                    userFamilyService.getMembers(familyId).catch(() => []),
+                ]);
+                const now = new Date(); now.setHours(12, 0, 0, 0);
+                const activePlan = (plans || []).find(p => {
+                    const sd = (p.start_date || '').includes('T') ? p.start_date.split('T')[0] : p.start_date;
+                    if (!sd) return false;
+                    const start = new Date(sd + 'T12:00:00');
+                    const end = new Date(start); end.setDate(end.getDate() + 6);
+                    return now >= start && now <= end;
+                });
+                if (!activePlan) { if (!cancelled) setReservedMap({}); return; }
+                const meals = await dailyMealsService.getByPlan(activePlan.menu_plan_id);
+                if (!cancelled) setReservedMap(computeReserved(meals, members || []));
+            } catch (e) {
+                console.error('No se pudo calcular lo reservado:', e);
+                if (!cancelled) setReservedMap({});
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [currentFamily]);
+
+    // Disponible por nombre = total en inventario − reservado por el plan.
+    const availByName = useMemo(() => aggregateAvailable(items, reservedMap), [items, reservedMap]);
+    // Como el reservado/disp. es un AGREGADO por ingrediente, lo mostramos una sola vez:
+    // en la primera fila (lote) de cada nombre, no repetido en cada lote.
+    const firstRowForName = useMemo(() => {
+        const seen = {};
+        for (const it of items) { const k = normName(it.name); if (!(k in seen)) seen[k] = it.inventory_id; }
+        return seen;
+    }, [items]);
+    // Etiqueta "X reservado · Y disp." (solo si hay algo reservado de ese producto).
+    const renderReserved = (item) => {
+        const key = normName(item.name);
+        if (firstRowForName[key] !== item.inventory_id) return null; // una sola vez por ingrediente
+        const a = availByName[key];
+        if (!a || a.reserved <= 0) return null;
+        return (
+            <span className="inv-reserved" title={`${formatQty(a.reserved, a.unit)} apartado por comidas planificadas`}>
+                🍽️ {formatQty(a.reserved, a.unit)} reservado · <strong style={{ color: a.available > 0 ? '#16A34A' : '#DC2626' }}>{formatQty(a.available, a.unit)} disp.</strong>
+            </span>
+        );
+    };
 
     // Debounce: llamar a la IA 700ms después de que el usuario deja de escribir el nombre
     useEffect(() => {
@@ -401,7 +456,10 @@ const Inventory = ({ currentFamily, userRole }) => {
                                                     </span>
                                                 )}
                                             </td>
-                                            <td style={{ color: status === 'expired' ? '#9b8d7c' : 'inherit' }}>{formatQty(item.quantity, item.unit)}</td>
+                                            <td style={{ color: status === 'expired' ? '#9b8d7c' : 'inherit' }}>
+                                                <span>{formatQty(item.quantity, item.unit)}</span>
+                                                {renderReserved(item)}
+                                            </td>
                                             <td>
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                                     <span style={{
@@ -483,7 +541,8 @@ const Inventory = ({ currentFamily, userRole }) => {
                                                     </span>
                                                 )}
                                             </h4>
-                                            <p style={{ color: status === 'expired' ? '#9b8d7c' : 'inherit' }}>{formatQty(item.quantity, item.unit)}</p>
+                                            <p style={{ color: status === 'expired' ? '#9b8d7c' : 'inherit', margin: 0 }}>{formatQty(item.quantity, item.unit)}</p>
+                                            {renderReserved(item)}
                                             {item.expiration_date && (
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
                                                     <span className="inv-card-expiry" style={{ 
@@ -685,7 +744,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                             </div>
                         </div>
 
-                        <div style={{ padding: '16px 24px 24px', display: 'flex', gap: 12, justifyContent: 'flex-end', flexShrink: 0 }}>
+                        <div style={{ padding: '16px 24px calc(24px + env(safe-area-inset-bottom))', display: 'flex', gap: 12, justifyContent: 'flex-end', flexShrink: 0 }}>
                             <button className="btn-secondary" onClick={() => { setShowModal(false); resetModal(); }}>Cancelar</button>
                             <button className="btn-primary" onClick={handleAdd} disabled={saving || !selectedIngredient}>
                                 {saving ? 'Guardando...' : 'Agregar'}

@@ -1,0 +1,38 @@
+/* ============================================================
+   NEVERITA — TOKENS DE DISEÑO (archivo central)
+   Sistema único de breakpoints, spacing, radios y área segura.
+   Se importa ANTES de index.css para estar disponible en todo el CSS.
+   ============================================================ */
+:root {
+    /* ── BREAKPOINTS (referencia — CSS no permite var() en @media) ──
+       Usar SOLO estos dos de ancho. (Se abandonan 640px y 720px.)
+         480px  → móvil estrecho (ajustes finos)
+         768px  → corte móvil / desktop (dominante) */
+
+    /* ── ESCALA DE SPACING (múltiplos de 4) ── */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+
+    /* ── RADIOS (complementan a --radius-sm/md/lg ya existentes) ── */
+    --radius-pill: 999px;
+
+    /* ── BARRA INFERIOR + ÁREA SEGURA (notch / home indicator de iPhone) ──
+       UNA sola fuente de verdad para: alto de la nav, padding-bottom del
+       contenido, y la posición del FAB y de la barra CRUD flotante.
+       Antes había 4 números sueltos (74/80/88/100) que se desalineaban. */
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --safe-t: env(safe-area-inset-top, 0px);
+    --tabbar-h: 74px;                                        /* alto visible de la nav */
+    --tabbar-total: calc(var(--tabbar-h) + var(--safe-b));  /* alto real que ocupa abajo */
+    --fab-gap: 16px;                                         /* separación del FAB sobre la nav */
+
+    /* ── ALTURAS DINÁMICAS (dvh con fallback vh para iOS Safari) ── */
+    --vh-full: 100vh;
+    --vh-full: 100dvh;
+}

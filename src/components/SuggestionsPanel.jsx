@@ -213,7 +213,7 @@ body.nv-modal-open .sg-fab{display:none;}
 .sg-send:disabled{opacity:.6;cursor:not-allowed;}
 
 @media (max-width:768px){
-  .sg-fab{bottom:88px;right:16px;width:54px;height:54px;}
+  .sg-fab{bottom:calc(var(--tabbar-total) + var(--fab-gap));right:16px;width:54px;height:54px;}
   .sg-panel{width:100%;}
 }
 @media (prefers-reduced-motion: reduce){ .sg-overlay,.sg-panel,.sg-msg{animation:none!important;} }

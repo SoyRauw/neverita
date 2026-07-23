@@ -20,7 +20,7 @@ const GRAMS_PER_UNIT = {
 
 const UNIT_LIKE = ['unidad', 'unidades', 'ud', 'uds', 'u'];
 
-function gramsPerUnitFor(name) {
+export function gramsPerUnitFor(name) {
     // Coincidencia por PALABRA completa (no subcadena) para evitar falsos positivos
     // como papaya→papa, ajoporro→ajo o cebollín→cebolla.
     const words = String(name || '').toLowerCase().split(/[\s,()./-]+/).filter(Boolean);

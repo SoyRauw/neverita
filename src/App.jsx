@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { showToast } from './Toast';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { Sparkle, CircleNotch, ShoppingCart, Check, X, ChefHat, CalendarBlank, Coffee, UsersThree, Plus, Sun, Warning, BookOpen, MagnifyingGlass, Trash, ArrowsClockwise, Fire, Clock, ListNumbers, SpeakerHigh, Pause, Play, Leaf, Heartbeat, Lightbulb, CheckSquare, PencilSimple } from '@phosphor-icons/react';
@@ -18,11 +18,13 @@ import ShoppingList from './components/ShoppingList';
 import Stats from './components/Stats';
 import Avatar from './components/Avatar';
 import NvSelect from './components/NvSelect';
-import { familiesService, userFamilyService, menuPlansService, dailyMealsService, aiService, inventoryService, ingredientsService, recipesService, familyRecipesService, imgProxy } from './api';
+import { familiesService, userFamilyService, menuPlansService, dailyMealsService, aiService, inventoryService, ingredientsService, recipesService, familyRecipesService, shoppingListService, imgProxy } from './api';
 import { portionFactor, totalPortions, roundQty, portionsLabel } from './nutrition';
 import { goalLabel } from './profileOptions';
 import { buildSuggestions } from './suggestions';
 import { plateAmount } from './plating';
+import { formatQty } from './units';
+import { computeReserved, aggregateAvailable, computeShortfalls, normName } from './reservation';
 
 // --- ESTILOS CSS INYECTADOS (MODAL MODERNO) ---
 const modalStyles = `
@@ -37,7 +39,7 @@ const modalStyles = `
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
     animation: slideUp 0.3s ease-out;
     overflow: hidden; display: flex; flex-direction: column;
-    max-height: 85vh;
+    max-height: 85vh; max-height: 85dvh;
   }
   .modal-header-modern {
     padding: 24px 24px 0; display: flex; justify-content: space-between; align-items: start;
@@ -97,7 +99,7 @@ const modalStyles = `
       width: 100%;
       max-width: none;
       border-radius: 28px 28px 0 0; /* Redondeado solo arriba */
-      max-height: 92vh;
+      max-height: 92vh; max-height: 92dvh;
       animation: mobileSlideUp 0.4s cubic-bezier(0, 0, 0.2, 1);
     }
     .modal-footer-modern {
@@ -536,6 +538,8 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
     const [balanceWarning, setBalanceWarning] = useState([]);
     // Popup animado con el MOTIVO por el que no se pudo planificar/generar (item 1)
     const [planNotice, setPlanNotice] = useState(null); // { title, reason, hint }
+    // Aviso "no alcanza el inventario" al planificar: faltantes + acción de comprar
+    const [shortfallNotice, setShortfallNotice] = useState(null); // { items: [{name, unit, missing}] }
     // Receta generada por IA esperando confirmación de personas
     const [aiDish, setAiDish] = useState(null);
     const [aiPlanServings, setAiPlanServings] = useState(1);
@@ -546,6 +550,67 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
     const [selectedMemberIds, setSelectedMemberIds] = useState([]);
     const [aiFromExisting, setAiFromExisting] = useState(false); // el paso de personas vino de "receta ya creada"
     const toggleMember = (id) => setSelectedMemberIds(ids => ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]);
+
+    // ── Reserva de inventario ──
+    // Los ingredientes de comidas PLANIFICADAS pero NO cocinadas quedan reservados,
+    // para no contarlos como disponibles al planificar otra receta (misma fórmula de
+    // escalado que el descuento real). disponible = inventario − reservado.
+    const reservedMap = useMemo(
+        () => computeReserved(Object.values(plannerData || {}), familyMembers),
+        [plannerData, familyMembers]
+    );
+    const availableByName = useMemo(
+        () => aggregateAvailable(myInventory, reservedMap),
+        [myInventory, reservedMap]
+    );
+    // Líneas "Nombre (disponible unidad)" para pasar a la IA (solo lo realmente disponible).
+    const availableLinesFor = (items) => {
+        const names = [...new Set((items || []).map(i => normName(i.name)))];
+        return names
+            .map(n => availableByName[n])
+            .filter(a => a && a.available > 0)
+            .map(a => `${a.name} (${a.available} ${a.unit})`);
+    };
+    // Faltantes del plan: por cada receta escala por comensales (aún no elegidos → toda la
+    // familia, igual que el descuento real) y compara contra lo disponible, reconciliando
+    // unidades y acumulando el consumo entre recetas del mismo lote (computeShortfalls).
+    const computePlanShortfalls = (dishes) => {
+        const consumed = {};
+        const acc = {};
+        for (const dish of dishes || []) {
+            const base = Number(dish?.servings) || 1;
+            const mult = familyMembers.length ? totalPortions(familyMembers) / base : 1;
+            const sf = computeShortfalls(dish?.ingredients || [], mult, availableByName, consumed);
+            for (const s of sf) {
+                const k = normName(s.name);
+                if (!acc[k]) acc[k] = { name: s.name, unit: s.unit, missing: 0 };
+                acc[k].missing = Math.round((acc[k].missing + s.missing) * 100) / 100;
+            }
+        }
+        return Object.values(acc).filter(s => s.missing > 0.01);
+    };
+    // Agrega los faltantes a la lista de compras de la familia.
+    const addShortfallsToShopping = async (list) => {
+        const fid = currentFamily?.family_id || currentFamily?.id;
+        if (!fid || !Array.isArray(list) || !list.length) { setShortfallNotice(null); return; }
+        try {
+            for (const it of list) {
+                await shoppingListService.create({
+                    family_id: fid,
+                    name: it.name,
+                    quantity: Math.max(1, Math.ceil(it.missing)),
+                    unit: it.unit,
+                    source: 'ai',
+                });
+            }
+            showToast('🛒 Agregamos a tu lista de compras lo que falta.', 'success');
+        } catch (e) {
+            console.error('Error agregando faltantes a la compra:', e);
+            showToast('No se pudo agregar a la lista de compras.', 'warning');
+        } finally {
+            setShortfallNotice(null);
+        }
+    };
     // Bloque 7: comensales por cuadro. Por defecto comen todos (editable por el usuario).
     const eatersFor = (slot) => (slotEaters[slot] !== undefined ? slotEaters[slot] : familyMembers.map(m => m.user_id));
     const toggleSlotEater = (slot, id) => setSlotEaters(prev => {
@@ -685,8 +750,13 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         setAiChosenTurn(null);
 
         try {
-            const ingredientsWithQty = selectedItems
-                .map(i => `${i.name} (${i.quantity} ${i.unit})`);
+            // Solo lo realmente disponible (inventario − reservado por comidas ya planificadas).
+            const ingredientsWithQty = availableLinesFor(selectedItems);
+            if (ingredientsWithQty.length === 0) {
+                setAiStep('config');
+                setPlanNotice({ title: 'Todo está reservado', reason: 'Los ingredientes que elegiste ya están apartados por comidas que planificaste y aún no cocinas.', hint: 'Marca alguna comida como hecha, quítala del plan, o agrega más ingredientes al inventario.' });
+                return;
+            }
             const data = await aiService.suggest(ingredientsWithQty);
 
             if (data.suggestions && data.suggestions.length > 0) {
@@ -724,8 +794,15 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         setPlanItems(slots.map(s => ({ slot: s, title: null, recipe: null, status: 'pending' })));
         try {
             const selectedItems = myInventory.filter(i => selectedIngredients.includes(i.id));
-            const ingredientsWithQty = selectedItems.map(i => `${i.name} (${i.quantity} ${i.unit})`);
+            // Solo lo realmente disponible (inventario − reservado por comidas ya planificadas).
+            const ingredientsWithQty = availableLinesFor(selectedItems);
             const fid = currentFamily?.family_id || currentFamily?.id;
+            if (ingredientsWithQty.length === 0) {
+                setAiStep('config');
+                setPlanNotice({ title: 'Todo está reservado', reason: 'Los ingredientes que elegiste ya están apartados por comidas que planificaste y aún no cocinas.', hint: 'Marca alguna comida como hecha, quítala del plan, o agrega más ingredientes al inventario.' });
+                return;
+            }
+            const generatedDishes = [];
             const sugg = await aiService.suggest(ingredientsWithQty, slots.length + 2); // extra por si repite
             const titles = [...new Set((sugg.suggestions || []).map(s => s.title).filter(Boolean))];
             if (titles.length === 0) {
@@ -748,12 +825,16 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                         steps: r.instructions ? r.instructions.split('\n').filter(Boolean) : [],
                         description: r.description || '', recipe_id: r.recipe_id, servings: 1,
                     };
+                    generatedDishes.push(dish);
                     setPlanItems(prev => prev.map((p, idx) => idx === i ? { ...p, recipe: dish, status: 'done' } : p));
                 } catch (e) {
                     console.error('Error generando receta del plan:', e);
                     setPlanItems(prev => prev.map((p, idx) => idx === i ? { ...p, status: 'error' } : p));
                 }
             }
+            // Aviso "no alcanza": si las recetas del plan piden más de lo disponible.
+            const shortfalls = computePlanShortfalls(generatedDishes);
+            if (shortfalls.length) setShortfallNotice({ items: shortfalls });
         } catch (e) {
             console.error('Error en el plan variado:', e);
             setAiStep('config');
@@ -1449,62 +1530,86 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                     }
                     return false;
                 };
+                // Celda reutilizable (misma lógica) para la cuadrícula desktop y el layout móvil.
+                const renderCell = (dayIndex, meal) => {
+                    const slotKey = `${dayIndex}-${meal}`;
+                    const isSelected = selectedSlots.includes(slotKey);
+                    const isPlanned = !isSelected && !!(plannerData && plannerData[slotKey]); // ya tiene comida
+                    const isExpiredBlocked = expiredDayIndexes.has(dayIndex);
+                    const isTimeDisabled = isSlotDisabled(dayIndex, meal);
+                    const isBlocked = isExpiredBlocked || isTimeDisabled || isPlanned;
+                    // Toda acción bloqueada NOTIFICA el porqué al usuario.
+                    const handleCell = () => {
+                        if (isSelected) { toggleSlot(dayIndex, meal); return; } // permitir deseleccionar
+                        if (isPlanned) { showToast('Ese cuadro ya tiene una comida planificada. Para cambiarla o quitarla, tócala en el calendario.', 'info'); return; }
+                        if (isExpiredBlocked) { showToast('Ese día tiene ingredientes vencidos, no puedes planificar ahí.', 'warning'); return; }
+                        if (isTimeDisabled) { showToast(dayIndex < currentDayIndex ? 'Ese día ya pasó, no puedes planificar ahí.' : 'Ese horario de hoy ya pasó.', 'warning'); return; }
+                        toggleSlot(dayIndex, meal);
+                    };
+                    return (
+                        <div key={slotKey} onClick={handleCell} title={isPlanned ? 'Ya planificado' : (isExpiredBlocked ? 'Ingrediente vencido este día' : (isTimeDisabled ? 'Horario pasado' : ''))} style={{
+                            aspectRatio: '1', borderRadius: '8px', overflow: 'hidden',
+                            border: isPlanned ? '2px solid #F7B27B' : (isExpiredBlocked ? '2px solid #FECACA' : (isTimeDisabled ? '2px solid #e2e8f0' : (isSelected ? '2px solid #FF9F43' : '2px dashed #e2e8f0'))),
+                            background: isPlanned ? '#FFF3E6' : (isExpiredBlocked ? '#FEF2F2' : (isTimeDisabled ? '#f1f5f9' : (isSelected ? '#fffaf0' : 'transparent'))),
+                            cursor: isBlocked ? 'not-allowed' : 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            transition: 'all 0.2s', minWidth: '40px', width: '100%',
+                            opacity: (isExpiredBlocked || isTimeDisabled) ? 0.6 : 1,
+                        }}>
+                            {isPlanned
+                                ? <img src={imgProxy(plannerData[slotKey].img)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                : isExpiredBlocked
+                                    ? <span style={{ fontSize: '0.8rem', color: '#DC2626' }}>🚫</span>
+                                    : isTimeDisabled
+                                        ? <span style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>✕</span>
+                                        : isSelected
+                                            ? <Check size={18} weight="bold" color="#FF9F43" />
+                                            : null}
+                        </div>
+                    );
+                };
                 return (
-                    <div className="plan-mini-grid" style={{ display: 'grid', gridTemplateColumns: '70px repeat(7, 1fr)', gap: 8, overflowX: 'auto', paddingBottom: '10px' }}>
-                        <div></div>
-                        {weekDays.map((d, dayIndex) => {
-                            const isBlocked = expiredDayIndexes.has(dayIndex);
-                            return (
-                                <div key={d} style={{ textAlign: 'center', fontSize: '0.75rem', fontWeight: 800, color: isBlocked ? '#EF4444' : '#a0aec0', textTransform: 'uppercase' }} title={isBlocked ? 'Ingrediente vencido este día' : ''}>
-                                    {d.substring(0, 3)}{isBlocked && ' 🚫'}
-                                </div>
-                            );
-                        })}
-                        {mealTypesOptions.map(meal => (
-                            <React.Fragment key={meal}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', fontSize: '0.85rem', fontWeight: 700, color: '#4a5568', paddingRight: 8 }}>
-                                    {meal}
-                                </div>
-                                {weekDays.map((_, dayIndex) => {
-                                    const slotKey = `${dayIndex}-${meal}`;
-                                    const isSelected = selectedSlots.includes(slotKey);
-                                    const isPlanned = !isSelected && !!(plannerData && plannerData[slotKey]); // ya tiene comida
-                                    const isExpiredBlocked = expiredDayIndexes.has(dayIndex);
-                                    const isTimeDisabled = isSlotDisabled(dayIndex, meal);
-                                    const isBlocked = isExpiredBlocked || isTimeDisabled || isPlanned;
-                                    // Toda acción bloqueada NOTIFICA el porqué al usuario.
-                                    const handleCell = () => {
-                                        if (isSelected) { toggleSlot(dayIndex, meal); return; } // permitir deseleccionar
-                                        if (isPlanned) { showToast('Ese cuadro ya tiene una comida planificada. Para cambiarla o quitarla, tócala en el calendario.', 'info'); return; }
-                                        if (isExpiredBlocked) { showToast('Ese día tiene ingredientes vencidos, no puedes planificar ahí.', 'warning'); return; }
-                                        if (isTimeDisabled) { showToast(dayIndex < currentDayIndex ? 'Ese día ya pasó, no puedes planificar ahí.' : 'Ese horario de hoy ya pasó.', 'warning'); return; }
-                                        toggleSlot(dayIndex, meal);
-                                    };
-                                    return (
-                                        <div key={slotKey} onClick={handleCell} title={isPlanned ? 'Ya planificado' : (isExpiredBlocked ? 'Ingrediente vencido este día' : (isTimeDisabled ? 'Horario pasado' : ''))} style={{
-                                            aspectRatio: '1', borderRadius: '8px', overflow: 'hidden',
-                                            border: isPlanned ? '2px solid #F7B27B' : (isExpiredBlocked ? '2px solid #FECACA' : (isTimeDisabled ? '2px solid #e2e8f0' : (isSelected ? '2px solid #FF9F43' : '2px dashed #e2e8f0'))),
-                                            background: isPlanned ? '#FFF3E6' : (isExpiredBlocked ? '#FEF2F2' : (isTimeDisabled ? '#f1f5f9' : (isSelected ? '#fffaf0' : 'transparent'))),
-                                            cursor: isBlocked ? 'not-allowed' : 'pointer',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            transition: 'all 0.2s', minWidth: '40px',
-                                            opacity: (isExpiredBlocked || isTimeDisabled) ? 0.6 : 1,
-                                        }}>
-                                            {isPlanned
-                                                ? <img src={imgProxy(plannerData[slotKey].img)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                                : isExpiredBlocked
-                                                    ? <span style={{ fontSize: '0.8rem', color: '#DC2626' }}>🚫</span>
-                                                    : isTimeDisabled
-                                                        ? <span style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>✕</span>
-                                                        : isSelected
-                                                            ? <Check size={18} weight="bold" color="#FF9F43" />
-                                                            : null}
+                    <>
+                        {/* DESKTOP: cuadrícula 7 días × 3 comidas */}
+                        <div className="plan-mini-grid" style={{ gridTemplateColumns: '70px repeat(7, 1fr)', gap: 8, paddingBottom: '10px' }}>
+                            <div></div>
+                            {weekDays.map((d, dayIndex) => {
+                                const isBlocked = expiredDayIndexes.has(dayIndex);
+                                return (
+                                    <div key={d} style={{ textAlign: 'center', fontSize: '0.75rem', fontWeight: 800, color: isBlocked ? '#EF4444' : '#a0aec0', textTransform: 'uppercase' }} title={isBlocked ? 'Ingrediente vencido este día' : ''}>
+                                        {d.substring(0, 3)}{isBlocked && ' 🚫'}
+                                    </div>
+                                );
+                            })}
+                            {mealTypesOptions.map(meal => (
+                                <React.Fragment key={meal}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', fontSize: '0.85rem', fontWeight: 700, color: '#4a5568', paddingRight: 8 }}>
+                                        {meal}
+                                    </div>
+                                    {weekDays.map((_, dayIndex) => renderCell(dayIndex, meal))}
+                                </React.Fragment>
+                            ))}
+                        </div>
+                        {/* MÓVIL: vertical por día (sin scroll horizontal, cabe en cualquier iPhone) */}
+                        <div className="plan-mini-vertical">
+                            {weekDays.map((d, dayIndex) => {
+                                const isBlocked = expiredDayIndexes.has(dayIndex);
+                                return (
+                                    <div key={d} className="pmv-day">
+                                        <div className={`pmv-day-h${isBlocked ? ' blocked' : ''}`}>{d}{isBlocked && ' 🚫'}</div>
+                                        <div className="pmv-meals">
+                                            {mealTypesOptions.map(meal => (
+                                                <div key={meal} className="pmv-cell">
+                                                    <span className="pmv-cell-label">{meal}</span>
+                                                    {renderCell(dayIndex, meal)}
+                                                </div>
+                                            ))}
                                         </div>
-                                    );
-                                })}
-                            </React.Fragment>
-                        ))}
-                    </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </>
                 );
             })()}
         </>
@@ -1856,7 +1961,13 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                                     {item.isExpired && <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#9b8d7c', marginRight: 6, display: 'inline-block' }} title="Vencido"></div>}
                                                     {!!item.is_frozen && <span style={{ color: '#0EA5E9', marginRight: 4 }}>❄️</span>}
                                                     <span style={{ textDecoration: item.isExpired ? 'line-through' : 'none' }}>{item.name}</span>
-                                                    <span style={{ fontSize: '0.8rem', opacity: 0.7, marginLeft: 4 }}>({item.quantity} {item.unit})</span>
+                                                    {(() => {
+                                                        const a = availableByName[normName(item.name)];
+                                                        if (a && a.reserved > 0) {
+                                                            return <span style={{ fontSize: '0.78rem', marginLeft: 4 }} title={`${formatQty(a.total, item.unit)} en total · ${formatQty(a.reserved, item.unit)} reservado por el plan`}>(<strong style={{ color: a.available > 0 ? 'inherit' : '#DC2626' }}>{formatQty(a.available, item.unit)} disp.</strong> · {formatQty(a.reserved, item.unit)} reserv.)</span>;
+                                                        }
+                                                        return <span style={{ fontSize: '0.8rem', opacity: 0.7, marginLeft: 4 }}>({item.quantity} {item.unit})</span>;
+                                                    })()}
                                                     {item.isExpired && <span style={{ background: '#FEE2E2', color: '#DC2626', fontSize: '0.65rem', padding: '2px 6px', borderRadius: 10, marginLeft: 6, fontWeight: 800 }}>Vencido</span>}
                                                     {selectedIngredients.includes(item.id) && <Check size={14} weight="bold" style={{marginLeft: 4}} />}
                                                 </div>
@@ -2471,6 +2582,43 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                 </div>
             )}
 
+            {/* === POPUP "NO ALCANZA EL INVENTARIO" === */}
+            {shortfallNotice && Array.isArray(shortfallNotice.items) && shortfallNotice.items.length > 0 && (
+                <div className="modal-overlay" onClick={() => setShortfallNotice(null)} style={{ zIndex: 3000 }}>
+                    <div onClick={e => e.stopPropagation()} style={{
+                        background: '#fff', borderRadius: 24, padding: '30px 26px 24px', maxWidth: 440, width: 'calc(100% - 40px)',
+                        textAlign: 'center', boxShadow: '0 30px 70px rgba(120,60,10,0.32)', animation: 'nv-pop 0.34s cubic-bezier(.34,1.56,.64,1)',
+                    }}>
+                        <div style={{ width: 68, height: 68, borderRadius: '50%', margin: '0 auto 16px', display: 'grid', placeItems: 'center', background: 'linear-gradient(135deg,#FFE7CF,#FFD3AE)', color: '#e67e22', boxShadow: '0 8px 20px rgba(230,126,34,0.25)' }}>
+                            <ShoppingCart size={32} weight="fill" />
+                        </div>
+                        <h3 style={{ margin: '0 0 8px', fontSize: '1.3rem', fontWeight: 800, color: '#2A2118' }}>No te alcanza para todo el plan</h3>
+                        <p style={{ margin: 0, color: '#6B5E4F', fontSize: '0.96rem', lineHeight: 1.5 }}>
+                            Con lo que tienes disponible (ya descontando lo reservado por otras comidas), te faltaría:
+                        </p>
+                        <div style={{ background: '#FFF7ED', border: '1px solid rgba(230,126,34,0.2)', borderRadius: 12, padding: '12px 14px', margin: '14px 0 0', textAlign: 'left' }}>
+                            {shortfallNotice.items.map((it, i) => (
+                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '4px 0', fontSize: '0.9rem', color: '#6B5E4F', fontWeight: 600 }}>
+                                    <span>{it.name}</span>
+                                    <span style={{ color: '#DC2626', fontWeight: 800 }}>faltan {formatQty(it.missing, it.unit)}</span>
+                                </div>
+                            ))}
+                        </div>
+                        <div style={{ display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
+                            <button onClick={() => setShortfallNotice(null)} style={{
+                                flex: '1 1 130px', padding: '13px 18px', borderRadius: 14, border: '2px solid #EADBC7', background: '#fff',
+                                color: '#6B5E4F', fontWeight: 800, fontSize: '0.95rem', cursor: 'pointer', fontFamily: 'inherit',
+                            }}>Planificar igual</button>
+                            <button onClick={() => addShortfallsToShopping(shortfallNotice.items)} style={{
+                                flex: '1 1 170px', padding: '13px 18px', borderRadius: 14, border: 'none',
+                                background: 'linear-gradient(135deg,#FF9F43,#FF7F50)', color: '#fff', fontWeight: 800, fontSize: '0.95rem', cursor: 'pointer', fontFamily: 'inherit',
+                                boxShadow: '0 8px 20px rgba(255,127,80,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                            }}><ShoppingCart size={18} weight="fill" /> Agregar a la compra</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* === MODAL SOBRAS === */}
             {pendingLeftovers && (
                 <div className="modal-overlay" onClick={() => setPendingLeftovers(null)}>
@@ -2614,7 +2762,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                 <div className="nv-crud-bar" style={{
                     position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)', zIndex: 1200,
                     display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', justifyContent: 'center',
-                    maxWidth: 'calc(100vw - 24px)',
+                    maxWidth: 'calc(100% - 24px)',
                     background: '#fff', border: '1px solid rgba(230,126,34,0.25)', borderRadius: 18,
                     padding: '12px 16px', boxShadow: '0 18px 45px rgba(120,60,10,0.25)',
                     animation: 'nv-toast-in 0.25s ease',
