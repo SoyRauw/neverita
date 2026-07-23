@@ -3,9 +3,24 @@ import { showToast } from '../Toast';
 import {
     Plus, Fire, Clock, X, MagnifyingGlass,
     ChefHat, ListNumbers, Check, ArrowRight, Trash, LockSimple, UsersThree,
-    SpeakerHigh, Pause, Play, PencilSimple, Info, UploadSimple
+    SpeakerHigh, Pause, Play, PencilSimple, Info, UploadSimple, ForkKnife
 } from '@phosphor-icons/react';
-import { recipesService, familyRecipesService, inventoryService, ingredientsService } from '../api';
+import { recipesService, familyRecipesService, inventoryService, userFamilyService, aiService, imgProxy } from '../api';
+
+// Imagen de receta con respaldo bonito (degradado + icono) si la URL no carga (item 15).
+const RecipeImg = ({ src, alt, className, style }) => {
+    const [broken, setBroken] = React.useState(false);
+    React.useEffect(() => { setBroken(false); }, [src]);
+    if (!src || broken) {
+        return (
+            <div className={className} style={{ ...style, display: 'grid', placeItems: 'center', background: 'linear-gradient(135deg, #FFB980, #FF8A4C)' }}>
+                <ForkKnife size={30} weight="duotone" color="#fff" />
+            </div>
+        );
+    }
+    return <img src={imgProxy(src)} alt={alt || ''} className={className} style={style} loading="lazy" onError={() => setBroken(true)} />;
+};
+import { portionFactor, totalPortions, roundQty } from '../nutrition';
 
 // ==========================================
 // Pluraliza unidades contables cuando la cantidad ≠ 1
@@ -186,6 +201,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
 
     const [viewRecipe, setViewRecipe] = useState(null);
     const [detailServings, setDetailServings] = useState(2); // personas en el detalle (escala ingredientes)
+    const [nutrition, setNutrition] = useState(null); // Bloque 4: kcal + macros por porción (calculado de los ingredientes)
     const [isAdding, setIsAdding] = useState(false);
     const [isAddingExisting, setIsAddingExisting] = useState(false);
     const [availableRecipes, setAvailableRecipes] = useState([]);
@@ -198,7 +214,10 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
     const [pendingRecipe, setPendingRecipe] = useState(null); // receta que espera confirmación
     const [planServings, setPlanServings] = useState(2);     // personas elegidas
     const [planBaseServings, setPlanBaseServings] = useState(2); // servings base de la receta
-    const [myInventory, setMyInventory] = useState([]); // para validar incremento
+    // Bloque 3: integrantes que comerán → porciones balanceadas por persona
+    const [familyMembers, setFamilyMembers] = useState([]);
+    const [selectedMemberIds, setSelectedMemberIds] = useState([]);
+    const toggleMember = (id) => setSelectedMemberIds(ids => ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]);
 
     const [newRecipe, setNewRecipe] = useState({
         name: "", cal: "", time: "", category: [],
@@ -234,9 +253,17 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
         setNewRecipe({ name: "", cal: "", time: "", category: [], img: "", imgType: "url", ingredients: "", steps: "", description: "", servings: 2 });
     };
 
-    // Al abrir el detalle de una receta, arrancar con sus personas base
+    // Al abrir el detalle de una receta: personas base + calcular nutrición desde ingredientes
     useEffect(() => {
-        if (viewRecipe) setDetailServings(viewRecipe.servings || 2);
+        if (!viewRecipe) { setNutrition(null); return; }
+        setDetailServings(viewRecipe.servings || 2);
+        setNutrition(null);
+        const rid = viewRecipe.recipe_id || viewRecipe.id;
+        if (rid) {
+            aiService.recipeNutrition(rid)
+                .then(res => setNutrition(res?.per_serving || null))
+                .catch(() => { /* si falla, se queda la caloría existente */ });
+        }
     }, [viewRecipe]);
 
     // ---------- Cargar recetas ----------
@@ -285,6 +312,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
             setAvailableRecipes(data.map(mapRecipe));
         } catch (error) {
             console.error('Error al obtener recetas disponibles:', error);
+            showToast('No se pudieron cargar las recetas disponibles. Revisa tu conexión.', 'error');
         }
     };
 
@@ -339,27 +367,39 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
     };
 
     const handleCreateRecipe = async () => {
-        if (!newRecipe.name || !newRecipe.cal) {
-            showToast("Por favor completa el nombre y las calorías.");
-            return;
+        // Validaciones con mensajes CONCRETOS (items 8/14/17).
+        const name = (newRecipe.name || '').trim();
+        if (!name) { showToast('Escribe el nombre de la receta.', 'warning'); return; }
+        const calRaw = newRecipe.cal;
+        const calNum = (calRaw === '' || calRaw == null) ? null : Number(calRaw);
+        if (calNum !== null && (!Number.isFinite(calNum) || calNum < 0)) { showToast('Las calorías deben ser un número válido (0 o más).', 'warning'); return; }
+        if (newRecipe.servings !== '' && newRecipe.servings != null && (!Number.isFinite(Number(newRecipe.servings)) || Number(newRecipe.servings) <= 0)) {
+            showToast('Las porciones deben ser un número mayor que 0.', 'warning'); return;
         }
+        const srvNum = Number(newRecipe.servings);
+        const servings = (Number.isFinite(srvNum) && srvNum > 0) ? Math.round(srvNum) : 2;
+        const ingredient_lines = (newRecipe.ingredients || '').split('\n').map(s => s.trim()).filter(Boolean);
+        if (ingredient_lines.length === 0) { showToast('Agrega al menos un ingrediente (uno por línea).', 'warning'); return; }
+
         setSaving(true);
         try {
             const payload = {
-                title: newRecipe.name,
+                title: name,
                 description: newRecipe.description || '',
                 instructions: newRecipe.steps || '',
                 difficulty: 'regular',
                 preparation_time: parseInt(newRecipe.time) || 0,
-                servings: Math.max(1, parseInt(newRecipe.servings) || 2),
+                servings,
                 image_url: newRecipe.img || '',
-                calories_per_serving: parseInt(newRecipe.cal) || null,
+                calories_per_serving: calNum,
                 created_by: userProfile?.user_id || null,
                 family_id: currentFamily?.family_id || currentFamily?.id || null,
                 recommended_meal: newRecipe.category.length > 0 ? newRecipe.category[0].toLowerCase() : 'cualquiera',
+                ingredient_lines,
             };
             if (editingId) {
-                await recipesService.update(editingId, payload);
+                const updated = await recipesService.update(editingId, payload);
+                const newIngs = (updated && Array.isArray(updated.ingredients)) ? updated.ingredients : null;
                 setRecipes(prev => prev.map(r => r.id === editingId ? {
                     ...r,
                     name: payload.title,
@@ -371,16 +411,19 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                     servings: payload.servings,
                     description: payload.description,
                     steps: payload.instructions ? payload.instructions.split('\n').filter(Boolean) : r.steps,
+                    ingredients: newIngs || r.ingredients,
                 } : r));
-                if (viewRecipe?.id === editingId) setViewRecipe(prev => prev ? { ...prev, name: payload.title, description: payload.description, servings: payload.servings } : prev);
+                if (viewRecipe?.id === editingId) setViewRecipe(prev => prev ? { ...prev, name: payload.title, description: payload.description, servings: payload.servings, ingredients: newIngs || prev.ingredients } : prev);
+                showToast('Receta actualizada.', 'success');
             } else {
                 const created = await recipesService.create(payload);
                 setRecipes(prev => [...prev, mapRecipe(created)]);
+                showToast('Receta creada.', 'success');
             }
             closeCreateModal();
         } catch (err) {
-            showToast('Error al guardar la receta.');
             console.error(err);
+            showToast(err?.message || 'No se pudo guardar la receta.', 'error');
         } finally {
             setSaving(false);
         }
@@ -410,9 +453,9 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
             const bQty = parseFloat(match[4]);
             const bUnit = match[5].trim();
             
-            const scaledBQty = Math.round(bQty * factor * 100) / 100;
+            const scaledBQty = roundQty(bQty * factor, bUnit);
             if (mQty) {
-                const scaledMQty = Math.round(mQty * factor * 100) / 100;
+                const scaledMQty = roundQty(mQty * factor, mUnit);
                 return pluralizeUnits(`${scaledMQty} ${mUnit} de ${name} (${scaledBQty} ${bUnit})`);
             } else {
                 return pluralizeUnits(`${name} (${scaledBQty} ${bUnit})`);
@@ -422,30 +465,35 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
 
     const handleConfirmPlan = async () => {
         if (selectedSlots.length === 0) return showToast("Selecciona al menos un espacio.");
-        const multiplier = planBaseServings > 0 ? planServings / planBaseServings : 1;
+        // Porciones balanceadas: suma de factores por persona (Mifflin-St Jeor). Fallback: base.
+        const selMembers = familyMembers.filter(m => selectedMemberIds.includes(m.user_id));
+        const factor = selMembers.length ? totalPortions(selMembers) : (planBaseServings || 1);
+        const multiplier = planBaseServings > 0 ? factor / planBaseServings : 1;
         
+        if (familyMembers.length > 0 && selMembers.length === 0) {
+            return showToast('Selecciona al menos una persona que comerá esta receta.', 'error');
+        }
+        const eaters = selMembers.length ? selMembers.map(m => m.user_id) : null;
+
         let successCount = 0;
         for (const slot of selectedSlots) {
             const [dayIndexStr, meal] = slot.split('-');
-            const success = await onAddToPlanner(planRecipe, parseInt(dayIndexStr, 10), meal, multiplier);
-            if (success) {
-                successCount++;
-            }
+            const success = await onAddToPlanner(planRecipe, parseInt(dayIndexStr, 10), meal, multiplier, eaters);
+            if (success) successCount++;
         }
 
-        // Descontar inventario escalado por personas
-        const fid = currentFamily?.family_id || currentFamily?.id;
-        if (planRecipe?.recipe_id && fid && successCount > 0) {
-            try {
-                const totalMultiplier = multiplier * successCount;
-                await inventoryService.deduct(planRecipe.recipe_id, fid, totalMultiplier);
-            } catch (err) {
-                console.error('Error al descontar inventario escalado:', err);
-            }
+        // El inventario ya NO se descuenta al planificar (se descuenta al marcar como cocinada).
+        // El sistema SIEMPRE avisa el resultado.
+        if (successCount === selectedSlots.length) {
+            showToast(`Receta planificada en ${successCount} ${successCount === 1 ? 'espacio' : 'espacios'}.`, 'success');
+            setPlanRecipe(null); setShowServingsStep(false); setViewRecipe(null);
+        } else if (successCount > 0) {
+            showToast(`Se planificó en ${successCount} de ${selectedSlots.length}. Algún espacio no se pudo guardar.`, 'warning');
+            setPlanRecipe(null); setShowServingsStep(false); setViewRecipe(null);
+        } else {
+            showToast('No se pudo planificar. Revisa que tengas un plan de la semana activo e intenta de nuevo.', 'error');
+            // No cerramos: dejamos que el usuario reintente.
         }
-        setPlanRecipe(null);
-        setShowServingsStep(false);
-        setViewRecipe(null);
     };
 
     const handlePlanClick = async (recipe) => {
@@ -460,24 +508,14 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
             if (!ingCheck.valid) {
                 setMissingIngredients(ingCheck.missingIngredients);
             } else {
-                // Cargar inventario para validar incremento en tiempo real
+                // Cargar integrantes para elegir quién comerá (Bloque 3: porciones balanceadas)
                 try {
-                    const [inv, allIngs] = await Promise.all([
-                        inventoryService.getAll(),
-                        ingredientsService.getAll()
-                    ]);
-                    const filtered = fid ? inv.filter(i => i.family_id === fid) : inv;
-                    const inventoryItems = filtered.map(item => {
-                        const ing = allIngs.find(i => i.ingredient_id === item.ingredient_id);
-                        return {
-                            id: item.inventory_id,
-                            name: ing ? ing.name : '',
-                            quantity: Number(item.quantity) || 0,
-                            unit: ing ? ing.unit : '',
-                        };
-                    });
-                    setMyInventory(inventoryItems);
-                } catch(err) { console.error('Error cargando inventario local:', err); }
+                    const members = await userFamilyService.getMembers(fid);
+                    setFamilyMembers(members || []);
+                    setSelectedMemberIds((members || []).map(m => m.user_id)); // por defecto, todos comen
+                } catch (e) {
+                    setFamilyMembers([]); setSelectedMemberIds([]);
+                }
 
                 // Mostrar el paso intermedio de personas
                 setPendingRecipe(recipe);
@@ -505,23 +543,10 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
 
     const filtered = recipes.filter(r => r.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    // Determinar si podemos incrementar personas según inventario
-    let canIncrementPlan = planServings < 20;
-    if (canIncrementPlan && pendingRecipe && pendingRecipe.ingredients && myInventory.length > 0) {
-        const base = pendingRecipe.servings || 2;
-        const factor = (planServings + 1) / base;
-        for (const ingStr of pendingRecipe.ingredients) {
-            const match = ingStr.match(/^(?:([\d.]+)\s+(.+?)\s+de\s+)?(.+?)\s*\(([\d.]+)\s*(.+?)\)$/);
-            if (!match) continue;
-            const name = match[3].trim().toLowerCase();
-            const reqQty = parseFloat(match[4]) * factor;
-            const invItem = myInventory.find(i => i.name.toLowerCase() === name);
-            if (invItem && reqQty > invItem.quantity) {
-                canIncrementPlan = false;
-                break;
-            }
-        }
-    }
+    // Bloque 3: integrantes elegidos y porciones adulto-equivalentes (preview + multiplicador)
+    const selectedMembers = familyMembers.filter(m => selectedMemberIds.includes(m.user_id));
+    const planFactor = selectedMembers.length ? totalPortions(selectedMembers) : (planBaseServings || planServings || 1);
+
 
     // Helper para bloquear días pasados
     const now = new Date();
@@ -539,15 +564,21 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
     };
 
     return (
-        <div className="main-content">
+        <div className="main-content recipes-page">
+            {/* Fondo animado borroso (item 13) */}
+            <div className="recipes-bg-decor" aria-hidden="true">
+                <span className="rbg-blob r1"></span>
+                <span className="rbg-blob r2"></span>
+                <span className="rbg-blob r3"></span>
+            </div>
             <header>
                 <div className="header-title">
                     <h1>Mis Recetas</h1>
                     <p>Explora y gestiona tu colección culinaria</p>
                 </div>
                 <div className="header-actions">
-                    <div className="search-wrapper" style={{ position: 'relative' }}>
-                        <MagnifyingGlass size={18} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9b8d7c' }} />
+                    <div className="search-wrapper nv-searchbar" style={{ position: 'relative' }}>
+                        <MagnifyingGlass size={18} className="nv-search-ic" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9b8d7c' }} />
                         <input
                             className="form-input"
                             style={{ paddingLeft: 40, width: '100%', maxWidth: 250 }}
@@ -586,22 +617,23 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                         filtered.map(recipe => (
                             <div key={recipe.id} className="recipe-card" onClick={() => setViewRecipe(recipe)} style={{ position: 'relative' }}>
                                 <div className="recipe-img-wrap">
-                                    <img src={recipe.img} alt={recipe.name} className="recipe-img" />
+                                    <RecipeImg src={recipe.img} alt={recipe.name} className="recipe-img" />
                                     <div className="recipe-badges">
                                         {recipe.category.map(cat => (
                                             <span key={cat} className="mini-badge" style={{ background: getMealColor(cat) }}>{cat}</span>
                                         ))}
+                                    </div>
+                                    {/* Indicadores kcal/tiempo como chips "glass" sobre la foto */}
+                                    <div className="recipe-stats">
+                                        <span className="stat-item"><Fire weight="fill" size={13} /> {recipe.cal || '—'} kcal</span>
+                                        <span className="stat-item"><Clock weight="fill" size={13} /> {recipe.time}</span>
                                     </div>
                                     <span className="recipe-view-hint">Ver receta →</span>
                                 </div>
 
                                 <div className="recipe-content">
                                     <h3 className="recipe-title">{recipe.name}</h3>
-                                    <div className="recipe-stats">
-                                        <div className="stat-item"><Fire weight="fill" color="#F7B27B" /> {recipe.cal || '—'} kcal</div>
-                                        <div className="stat-item"><Clock weight="fill" color="#F7B27B" /> {recipe.time}</div>
-                                    </div>
-                                    {/* Acciones abajo: info, editar, eliminar */}
+                                    {/* Acciones: info, editar, eliminar */}
                                     <div className="recipe-actions">
                                         <button
                                             className="recipe-act info"
@@ -730,48 +762,49 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
             {showServingsStep && pendingRecipe && (
                 <div className="modal-overlay" style={{ zIndex: 7500 }} onClick={() => { setShowServingsStep(false); setPendingRecipe(null); }}>
                     <div className="modal-modern" onClick={e => e.stopPropagation()} style={{ maxWidth: 380, textAlign: 'center', padding: '30px 24px' }}>
-                        <div style={{ width: 60, height: 60, background: '#FFF7ED', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 18px' }}>
+                        <div style={{ width: 60, height: 60, background: '#FFF7ED', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
                             <UsersThree size={30} weight="fill" color="#FF9F43" />
                         </div>
-                        <h3 style={{ margin: '0 0 6px', fontSize: '1.3rem', fontWeight: 800, color: '#2A2118' }}>¿Para cuántas personas?</h3>
-                        <p style={{ margin: '0 0 24px', color: '#6B5E4F', fontSize: '0.9rem' }}>Los ingredientes se escalarán automáticamente.</p>
+                        <h3 style={{ margin: '0 0 6px', fontSize: '1.3rem', fontWeight: 800, color: '#2A2118' }}>¿Quiénes comerán?</h3>
+                        <p style={{ margin: '0 0 18px', color: '#6B5E4F', fontSize: '0.9rem' }}>Ajustamos las cantidades a cada persona según sus datos.</p>
 
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 20 }}>
-                            <button
-                                onClick={() => setPlanServings(p => Math.max(1, p - 1))}
-                                style={{ width: 40, height: 40, borderRadius: '50%', border: '2px solid #EADBC7', background: 'white', cursor: 'pointer', fontSize: '1.4rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
-                                onMouseEnter={e => { e.currentTarget.style.background = '#FFF7ED'; e.currentTarget.style.borderColor = '#FF9F43'; }}
-                                onMouseLeave={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#EADBC7'; }}
-                            >&minus;</button>
-                            <div style={{ textAlign: 'center' }}>
-                                <span style={{ display: 'block', fontSize: '2.2rem', fontWeight: 900, color: '#2A2118', lineHeight: 1 }}>{planServings}</span>
-                                <span style={{ fontSize: '0.8rem', color: '#9b8d7c' }}>{planServings === 1 ? 'persona' : 'personas'}</span>
+                        {familyMembers.length > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16, textAlign: 'left' }} role="group" aria-label="Integrantes que comerán">
+                                {familyMembers.map(m => {
+                                    const on = selectedMemberIds.includes(m.user_id);
+                                    const f = portionFactor(m);
+                                    return (
+                                        <button type="button" key={m.user_id} onClick={() => toggleMember(m.user_id)} aria-pressed={on}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 12,
+                                                border: on ? '2px solid #FF9F43' : '2px solid #EADBC7',
+                                                background: on ? '#FFF7ED' : '#fff', cursor: 'pointer', transition: 'all 0.15s', width: '100%',
+                                            }}>
+                                            <span style={{
+                                                width: 22, height: 22, borderRadius: 7, flex: 'none', display: 'grid', placeItems: 'center',
+                                                background: on ? 'linear-gradient(135deg, #FF9F43, #FF7F50)' : '#F3EADF', color: '#fff',
+                                            }}>{on && <Check size={14} weight="bold" />}</span>
+                                            <span style={{ flex: 1, fontWeight: 700, color: '#2A2118', fontSize: '0.92rem' }}>{m.name}</span>
+                                            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#e67e22', background: '#FFF3E6', padding: '3px 9px', borderRadius: 999 }} title="Factor de porción">×{f}</span>
+                                        </button>
+                                    );
+                                })}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, fontSize: '0.82rem', fontWeight: 800, color: '#6B5E4F' }}>
+                                    <span>{selectedMembers.length} {selectedMembers.length === 1 ? 'persona' : 'personas'}</span>
+                                    <span style={{ color: '#e67e22' }}>≈ {planFactor} porciones</span>
+                                </div>
                             </div>
-                            <button
-                                disabled={!canIncrementPlan}
-                                onClick={() => {
-                                    if (canIncrementPlan) setPlanServings(p => p + 1);
-                                }}
-                                style={{ 
-                                    width: 40, height: 40, borderRadius: '50%', border: '2px solid #EADBC7', 
-                                    background: 'white', fontSize: '1.4rem', fontWeight: 700, 
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                                    transition: 'all 0.15s',
-                                    cursor: canIncrementPlan ? 'pointer' : 'not-allowed',
-                                    opacity: canIncrementPlan ? 1 : 0.4
-                                }}
-                                onMouseEnter={e => { if (canIncrementPlan) { e.currentTarget.style.background = '#FFF7ED'; e.currentTarget.style.borderColor = '#FF9F43'; } }}
-                                onMouseLeave={e => { if (canIncrementPlan) { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#EADBC7'; } }}
-                            >+</button>
-                        </div>
+                        ) : (
+                            <p style={{ fontSize: '0.82rem', color: '#9b8d7c', marginBottom: 16 }}>No se pudieron cargar los integrantes; se usará la porción base de la receta.</p>
+                        )}
 
-                        {/* Preview de ingredientes escalados */}
+                        {/* Preview de ingredientes ajustados a las porciones */}
                         {pendingRecipe.ingredients && pendingRecipe.ingredients.length > 0 && (
                             <div style={{ background: '#FFF9F2', border: '1px solid #EADBC7', borderRadius: 10, padding: '10px 14px', marginBottom: 20, textAlign: 'left', maxHeight: 130, overflowY: 'auto' }}>
-                                <p style={{ margin: '0 0 6px', fontSize: '0.78rem', fontWeight: 700, color: '#9b8d7c', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Ingredientes escalados</p>
-                                {getScaledIngredients(pendingRecipe, planServings).map((ing, i) => (
+                                <p style={{ margin: '0 0 6px', fontSize: '0.78rem', fontWeight: 700, color: '#9b8d7c', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Ingredientes ajustados</p>
+                                {getScaledIngredients(pendingRecipe, planFactor).map((ing, i) => (
                                     <div key={i} style={{ fontSize: '0.85rem', color: '#2A2118', padding: '2px 0', borderBottom: i < pendingRecipe.ingredients.length - 1 ? '1px dashed #EADBC7' : 'none' }}>
-                                        🥄 {ing}
+                                        {ing}
                                     </div>
                                 ))}
                             </div>
@@ -779,7 +812,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
 
                         <div style={{ display: 'flex', gap: 10 }}>
                             <button className="btn-secondary" style={{ flex: 1 }} onClick={() => { setShowServingsStep(false); setPendingRecipe(null); }}>Cancelar</button>
-                            <button className="btn-primary" style={{ flex: 1 }} onClick={handleConfirmServings}>
+                            <button className="btn-primary" style={{ flex: 1 }} onClick={handleConfirmServings} disabled={familyMembers.length > 0 && selectedMembers.length === 0}>
                                 Continuar <ArrowRight weight="bold" />
                             </button>
                         </div>
@@ -793,13 +826,13 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                     <div className="modal-modern" style={{ maxWidth: 600 }} onClick={e => e.stopPropagation()}>
                         <div className="modal-header" style={{ borderBottom: '1px solid #eee', paddingBottom: 15, marginBottom: 20 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 15 }}>
-                                <img src={planRecipe.img} alt={planRecipe.name} style={{ width: 50, height: 50, borderRadius: 10, objectFit: 'cover' }} />
+                                <img src={imgProxy(planRecipe.img)} alt={planRecipe.name} style={{ width: 50, height: 50, borderRadius: 10, objectFit: 'cover' }} />
                                 <div>
                                     <h3 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800, color: '#2d3436' }}>Planificar Plato</h3>
                                     <p style={{ margin: 0, color: '#9b8d7c', fontSize: '0.9rem' }}>Toca donde quieres comer <span style={{ color: '#F7B27B', fontWeight: 600 }}>{planRecipe.name}</span></p>
                                     <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: '#9b8d7c' }}>
                                         <UsersThree size={13} weight="fill" style={{ verticalAlign: 'middle', marginRight: 3 }} />
-                                        Para {planServings} {planServings === 1 ? 'persona' : 'personas'}
+                                        Para {selectedMembers.length} {selectedMembers.length === 1 ? 'persona' : 'personas'} · ≈{planFactor} porciones
                                     </p>
                                 </div>
                             </div>
@@ -866,7 +899,7 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                                 <div className="import-list nv-stagger">
                                     {availableRecipes.map(recipe => (
                                         <div key={recipe.id} className="import-row">
-                                            <img src={recipe.img} alt={recipe.name} className="import-row-img" />
+                                            <img src={imgProxy(recipe.img)} alt={recipe.name} className="import-row-img" />
                                             <div className="import-row-info">
                                                 <span className="import-row-name">{recipe.name}</span>
                                                 <span className="import-row-meta"><Fire size={13} weight="fill" color="#FF8A4C" /> {recipe.cal || '—'} kcal · <Clock size={13} weight="fill" color="#FF8A4C" /> {recipe.time}</span>
@@ -919,18 +952,23 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                                 {/* Columna izquierda: foto + datos rápidos */}
                                 <div className="recipe-book-left">
                                     <div className="recipe-hero-wrapper">
-                                        <img src={viewRecipe.img} className="recipe-hero-img" alt={viewRecipe.name} />
+                                        <RecipeImg src={viewRecipe.img} className="recipe-hero-img" alt={viewRecipe.name} />
                                     </div>
                                     <div className="recipe-book-stats">
-                                        <div className="rb-stat"><Fire weight="fill" color="#FF8A4C" size={18} /> <span>{viewRecipe.cal || '—'} kcal</span></div>
+                                        <div className="rb-stat"><Fire weight="fill" color="#FF8A4C" size={18} /> <span>{(nutrition ? nutrition.kcal : viewRecipe.cal) || '—'} kcal</span></div>
                                         <div className="rb-stat"><Clock weight="fill" color="#FF8A4C" size={18} /> <span>{viewRecipe.time}</span></div>
-                                        <div className="rb-stat rb-stat-serv">
-                                            <UsersThree weight="fill" color="#FF8A4C" size={18} />
-                                            <button className="rb-serv-btn" onClick={() => setDetailServings(s => Math.max(1, s - 1))} title="Menos personas">−</button>
-                                            <span>{detailServings} pers.</span>
-                                            <button className="rb-serv-btn" onClick={() => setDetailServings(s => Math.min(20, s + 1))} title="Más personas">+</button>
-                                        </div>
+                                        <div className="rb-stat" style={{ background: 'transparent', boxShadow: 'none', color: '#9b8d7c', fontWeight: 600, fontSize: '0.82rem' }}><UsersThree weight="regular" color="#c9b8a3" size={16} /> <span>Rinde {viewRecipe.servings || 2}</span></div>
                                     </div>
+                                    {nutrition && (
+                                        <div style={{ marginTop: 10 }}>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                                <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#e67e22', background: '#FFF3E6', padding: '4px 10px', borderRadius: 999 }}>Proteína {nutrition.protein} g</span>
+                                                <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#e67e22', background: '#FFF3E6', padding: '4px 10px', borderRadius: 999 }}>Grasa {nutrition.fat} g</span>
+                                                <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#e67e22', background: '#FFF3E6', padding: '4px 10px', borderRadius: 999 }}>Carbos {nutrition.carbs} g</span>
+                                            </div>
+                                            <p style={{ fontSize: '0.7rem', color: '#9b8d7c', marginTop: 6, fontWeight: 600 }}>Por porción · calculado de los ingredientes</p>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Columna derecha: categoría + descripción + ingredientes + pasos */}
@@ -946,24 +984,25 @@ const Recipes = ({ onAddToPlanner, currentFamily, userProfile, userRole }) => {
                                         <p className="rb-desc">{viewRecipe.description}</p>
                                     )}
                                     <div className="detail-card-section">
-                                        <h4><ChefHat size={24} weight="duotone" /> Ingredientes <span className="rb-serv-note">para {detailServings} {detailServings === 1 ? 'persona' : 'personas'}</span></h4>
+                                        <h4><ChefHat size={24} weight="duotone" /> Ingredientes <span className="rb-serv-note">(cantidades base)</span></h4>
                                         <ul className="detail-list">
                                             {viewRecipe.ingredients && viewRecipe.ingredients.length > 0
-                                                ? getScaledIngredients(viewRecipe, detailServings).map((ing, i) => <li key={i}>{ing}</li>)
+                                                ? viewRecipe.ingredients.map((ing, i) => <li key={i}>{ing}</li>)
                                                 : <li style={{ color: '#c9b9a6' }}>Sin ingredientes registrados</li>}
                                         </ul>
                                     </div>
                                     <div className="detail-card-section">
                                         <h4><ListNumbers size={24} weight="duotone" /> Pasos</h4>
-                                        <ol className="detail-list" style={{ listStyle: 'none', padding: 0 }}>
-                                            {viewRecipe.steps && viewRecipe.steps.length > 0
-                                                ? viewRecipe.steps.map((step, i) => (
-                                                    <li key={i} style={{ marginBottom: 15 }}>
-                                                        <span style={{ fontWeight: '800', color: '#F7B27B', marginRight: 5 }}>{i + 1}.</span> {step.replace(/^\d+[\.\-]?\s*/, '')}
+                                        {viewRecipe.steps && viewRecipe.steps.length > 0 ? (
+                                            <ol className="nv-instr-list">
+                                                {viewRecipe.steps.map((step, i) => (
+                                                    <li key={i} className="nv-instr">
+                                                        <span className="nv-step-n">{i + 1}</span>
+                                                        <span className="nv-step-tx">{step.replace(/^\d+[\.\-]?\s*/, '')}</span>
                                                     </li>
-                                                ))
-                                                : <li style={{ color: '#c9b9a6' }}>Sin instrucciones registradas</li>}
-                                        </ol>
+                                                ))}
+                                            </ol>
+                                        ) : <p style={{ color: '#c9b9a6' }}>Sin instrucciones registradas</p>}
                                     </div>
                                 </div>
                             </div>

@@ -1,7 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { showToast } from '../Toast';
-import { Trash, PlusCircle, X, Warning, WarningOctagon, CheckCircle, Snowflake, ListChecks } from '@phosphor-icons/react';
+import { Trash, PlusCircle, X, Warning, WarningOctagon, CheckCircle, Snowflake, ListChecks, Package, MagnifyingGlass } from '@phosphor-icons/react';
 import { inventoryService, ingredientsService, aiService } from '../api';
+import { formatQty, isReasonableQty, maxReasonable } from '../units';
+import NvDatePicker from './NvDatePicker';
+import NvSelect from './NvSelect';
+
+const UNIT_OPTS = [
+    { value: 'g', label: 'Gramos (g)' }, { value: 'kg', label: 'Kilogramos (kg)' },
+    { value: 'ml', label: 'Mililitros (ml)' }, { value: 'l', label: 'Litros (l)' },
+    { value: 'cup', label: 'Taza' }, { value: 'unidad', label: 'Unidad' },
+];
+const CAT_OPTS = [
+    { value: 'vegetal', label: 'Vegetal' }, { value: 'fruta', label: 'Fruta' },
+    { value: 'proteína', label: 'Proteína' }, { value: 'lácteo', label: 'Lácteo' },
+    { value: 'grano', label: 'Grano' }, { value: 'condimento', label: 'Condimento' },
+    { value: 'grasa', label: 'Grasa' }, { value: 'bebida', label: 'Bebida' }, { value: 'otro', label: 'Otro' },
+];
+// Vencimiento mínimo permitido: mañana (no se pueden agregar productos ya vencidos/de hoy).
+const tomorrowStr = () => { const d = new Date(); d.setDate(d.getDate() + 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
 // Devuelve el estado de caducidad de un item
 // 'expired' | 'critical' | 'warning' | 'ok' | 'none'
@@ -129,6 +146,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                     unit: info.unit || prev.unit,
                     category: info.category || prev.category,
                     average_expiry_days: info.average_expiry_days || prev.average_expiry_days,
+                    is_food: info.is_food !== false,
                 }));
             } catch (e) { /* silencioso */ }
             finally { setAiLoading(false); }
@@ -201,10 +219,15 @@ const Inventory = ({ currentFamily, userRole }) => {
 
     // ---------- Crear ingrediente nuevo ----------
     const handleCreateIngredient = async () => {
-        if (!newIngredient.name.trim()) { showToast('Escribe el nombre del ingrediente.'); return; }
+        const nm = newIngredient.name.trim();
+        if (!nm) { showToast('Escribe el nombre del ingrediente.'); return; }
+        if (nm.length < 2 || !/[a-záéíóúñ]/i.test(nm)) { showToast('Escribe un nombre de alimento válido.', 'warning'); return; }
+        if (aiLoading) { showToast('Espera un momento, estamos verificando el alimento…', 'info'); return; }
+        // Item 5: no dejar agregar cosas que no son alimentos (la IA lo marcó).
+        if (newIngredient.is_food === false) { showToast(`"${nm}" no parece un alimento. Escribe un ingrediente comestible.`, 'error'); return; }
         try {
             const created = await ingredientsService.create({
-                name: newIngredient.name.trim(),
+                name: nm,
                 unit: newIngredient.unit,
                 category: newIngredient.category,
                 average_expiry_days: newIngredient.average_expiry_days,
@@ -219,8 +242,8 @@ const Inventory = ({ currentFamily, userRole }) => {
             setCreatingNew(false);
             setNewIngredient({ name: '', unit: 'g', category: 'otro' });
         } catch (err) {
-            showToast('Error al crear el ingrediente.');
             console.error(err);
+            showToast(err?.message || 'Error al crear el ingrediente.', 'error');
         }
     };
 
@@ -247,7 +270,11 @@ const Inventory = ({ currentFamily, userRole }) => {
     // ---------- Agregar al inventario ----------
     const handleAdd = async () => {
         if (!selectedIngredient) { showToast('Selecciona o crea un ingrediente primero.'); return; }
-        if (!quantity || Number(quantity) <= 0) { showToast('Indica una cantidad válida.'); return; }
+        if (!quantity || Number(quantity) <= 0) { showToast('Indica una cantidad válida (mayor a 0).'); return; }
+        if (!isReasonableQty(quantity, selectedIngredient.unit)) {
+            showToast(`Esa cantidad es demasiado alta para "${selectedIngredient.unit}". Máximo razonable: ${maxReasonable(selectedIngredient.unit)} ${selectedIngredient.unit}.`, 'warning');
+            return;
+        }
         setSaving(true);
         try {
             const payload = {
@@ -261,8 +288,8 @@ const Inventory = ({ currentFamily, userRole }) => {
             setShowModal(false);
             resetModal();
         } catch (err) {
-            showToast('Error al agregar el producto.');
             console.error(err);
+            showToast(err?.message || 'Error al agregar el producto.', 'error');
         } finally {
             setSaving(false);
         }
@@ -281,7 +308,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                         {currentFamily && <span style={{ color: '#FF9F43', fontWeight: 600 }}> — {currentFamily.name}</span>}
                     </p>
                 </div>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <div className="header-actions" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                     {!loading && !error && items.length > 0 && (
                         selectionMode ? (
                             <button className="btn-secondary" onClick={exitSelection}>
@@ -374,7 +401,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                                                     </span>
                                                 )}
                                             </td>
-                                            <td style={{ color: status === 'expired' ? '#9b8d7c' : 'inherit' }}>{item.quantity} {item.unit}</td>
+                                            <td style={{ color: status === 'expired' ? '#9b8d7c' : 'inherit' }}>{formatQty(item.quantity, item.unit)}</td>
                                             <td>
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                                     <span style={{
@@ -441,7 +468,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                                         {selectionMode && (
                                             <input type="checkbox" className="inv-check" checked={selectedIds.includes(item.inventory_id)} onChange={() => toggleSelected(item.inventory_id)} style={{ alignSelf: 'center', marginRight: 4 }} />
                                         )}
-                                        <div className="inv-card-icon">{status === 'frozen' ? <Snowflake size={24} weight="fill" color="#0EA5E9" /> : status === 'expired' ? '🗑️' : status === 'critical' ? '⚠️' : status === 'warning' ? '⏳' : '📦'}</div>
+                                        <div className="inv-card-icon">{status === 'frozen' ? <Snowflake size={24} weight="fill" color="#0EA5E9" /> : status === 'expired' ? <Trash size={24} weight="fill" color="#DC2626" /> : status === 'critical' ? <Warning size={24} weight="fill" color="#EF4444" /> : status === 'warning' ? <WarningOctagon size={24} weight="fill" color="#F59E0B" /> : <Package size={24} weight="fill" color="#9b8d7c" />}</div>
                                         <div className="inv-card-info">
                                             <h4 style={{ color: status === 'expired' ? '#DC2626' : 'inherit', textDecoration: status === 'expired' ? 'line-through' : 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
                                                 {item.name}
@@ -456,7 +483,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                                                     </span>
                                                 )}
                                             </h4>
-                                            <p style={{ color: status === 'expired' ? '#9b8d7c' : 'inherit' }}>{item.quantity} {item.unit}</p>
+                                            <p style={{ color: status === 'expired' ? '#9b8d7c' : 'inherit' }}>{formatQty(item.quantity, item.unit)}</p>
                                             {item.expiration_date && (
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
                                                     <span className="inv-card-expiry" style={{ 
@@ -506,14 +533,14 @@ const Inventory = ({ currentFamily, userRole }) => {
             {showModal && (
                 <div className="modal-overlay" onClick={() => { setShowModal(false); resetModal(); }}>
                     <div className="modal-modern" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
-                        <div style={{ padding: '24px 24px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ padding: '24px 24px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
                             <h3 style={{ margin: 0, fontWeight: 800 }}>Agregar Producto</h3>
-                            <button onClick={() => { setShowModal(false); resetModal(); }} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                            <button onClick={() => { setShowModal(false); resetModal(); }} style={{ background: 'none', border: 'none', cursor: 'pointer', width: 40, height: 40, display: 'grid', placeItems: 'center', borderRadius: 10 }}>
                                 <X size={22} color="#9b8d7c" />
                             </button>
                         </div>
 
-                        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16, flex: 1, minHeight: 0, overflowY: 'auto' }}>
 
                             {/* ---- BUSCADOR AUTOCOMPLETE ---- */}
                             <div>
@@ -528,7 +555,8 @@ const Inventory = ({ currentFamily, userRole }) => {
                                 </div>
 
                                 {!creatingNew && (
-                                    <div style={{ position: 'relative' }}>
+                                    <div className="nv-searchbar" style={{ position: 'relative' }}>
+                                        <MagnifyingGlass size={18} className="nv-search-ic" style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: '#9b8d7c' }} />
                                         <input
                                             type="text"
                                             placeholder="Busca un ingrediente... (ej: Arroz)"
@@ -536,7 +564,7 @@ const Inventory = ({ currentFamily, userRole }) => {
                                             onChange={e => { setSearchText(e.target.value); setSelectedIngredient(null); setShowSuggestions(true); }}
                                             onFocus={() => setShowSuggestions(true)}
                                             onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                                            style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: selectedIngredient ? '2px solid #22C55E' : '2px solid #EADBC7', fontSize: '1rem', outline: 'none', boxSizing: 'border-box', background: selectedIngredient ? '#F0FFF4' : 'white' }}
+                                            style={{ width: '100%', padding: '10px 14px 10px 40px', borderRadius: 12, border: selectedIngredient ? '2px solid #22C55E' : '2px solid #EADBC7', fontSize: '1rem', outline: 'none', boxSizing: 'border-box', background: selectedIngredient ? '#F0FFF4' : 'white' }}
                                         />
                                         {selectedIngredient && (
                                             <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#22C55E', fontWeight: 700 }}>
@@ -601,25 +629,8 @@ const Inventory = ({ currentFamily, userRole }) => {
                                         )}
 
                                         <div style={{ display: 'flex', gap: 8 }}>
-                                            <select value={newIngredient.unit} onChange={e => setNewIngredient({ ...newIngredient, unit: e.target.value })} style={{ flex: 1, padding: '8px 10px', borderRadius: 10, border: '2px solid #EADBC7', fontSize: '0.9rem' }}>
-                                                <option value="g">Gramos (g)</option>
-                                                <option value="kg">Kilogramos (kg)</option>
-                                                <option value="ml">Mililitros (ml)</option>
-                                                <option value="l">Litros (l)</option>
-                                                <option value="cup">Taza</option>
-                                                <option value="unidad">Unidad</option>
-                                            </select>
-                                            <select value={newIngredient.category} onChange={e => setNewIngredient({ ...newIngredient, category: e.target.value })} style={{ flex: 1, padding: '8px 10px', borderRadius: 10, border: '2px solid #EADBC7', fontSize: '0.9rem' }}>
-                                                <option value="vegetal">Vegetal</option>
-                                                <option value="fruta">Fruta</option>
-                                                <option value="proteína">Proteína</option>
-                                                <option value="lácteo">Lácteo</option>
-                                                <option value="grano">Grano</option>
-                                                <option value="condimento">Condimento</option>
-                                                <option value="grasa">Grasa</option>
-                                                <option value="bebida">Bebida</option>
-                                                <option value="otro">Otro</option>
-                                            </select>
+                                            <NvSelect value={newIngredient.unit} onChange={v => setNewIngredient({ ...newIngredient, unit: v })} options={UNIT_OPTS} placeholder="Unidad" style={{ flex: 1 }} />
+                                            <NvSelect value={newIngredient.category} onChange={v => setNewIngredient({ ...newIngredient, category: v })} options={CAT_OPTS} placeholder="Categoría" style={{ flex: 1 }} />
                                         </div>
                                         <button onClick={handleCreateIngredient} disabled={aiLoading} style={{ background: aiLoading ? '#EADBC7' : '#FF9F43', color: aiLoading ? '#9b8d7c' : 'white', border: 'none', borderRadius: 10, padding: '8px 16px', fontWeight: 700, cursor: aiLoading ? 'not-allowed' : 'pointer', fontSize: '0.9rem' }}>
                                             {aiLoading ? '✨ Consultando IA...' : 'Crear y seleccionar'}
@@ -630,16 +641,26 @@ const Inventory = ({ currentFamily, userRole }) => {
                             </div>
 
                             {/* ---- CANTIDAD ---- */}
-                            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+                            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                                 <div style={{ flex: 2 }}>
                                     <label style={{ fontWeight: 600, fontSize: '0.9rem', color: '#555', display: 'block', marginBottom: 6 }}>Cantidad</label>
-                                    <input
-                                        type="number" min="0" step="any"
-                                        value={quantity}
-                                        onChange={e => setQuantity(e.target.value)}
-                                        placeholder="Ej: 500"
-                                        style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: '2px solid #EADBC7', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }}
-                                    />
+                                    {(() => {
+                                        const qOk = quantity !== '' && selectedIngredient && isReasonableQty(quantity, selectedIngredient.unit);
+                                        const qBad = quantity !== '' && (!(Number(quantity) > 0) || (selectedIngredient && !isReasonableQty(quantity, selectedIngredient.unit)));
+                                        const border = quantity === '' ? '#EADBC7' : (qBad ? '#FCA5A5' : '#86EFAC');
+                                        return (
+                                            <>
+                                                <input
+                                                    type="number" min="0" step="any"
+                                                    value={quantity}
+                                                    onChange={e => setQuantity(e.target.value)}
+                                                    placeholder="Ej: 500"
+                                                    style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: `2px solid ${border}`, fontSize: '1rem', outline: 'none', boxSizing: 'border-box', background: quantity === '' ? '#fff' : (qBad ? '#FEF2F2' : '#F0FFF4'), transition: 'border-color .15s, background .15s' }}
+                                                />
+                                                {qBad && <span style={{ fontSize: '0.75rem', color: '#DC2626', fontWeight: 600, marginTop: 4, display: 'inline-block' }}>{Number(quantity) > 0 ? `Máximo razonable: ${maxReasonable(selectedIngredient.unit)} ${selectedIngredient.unit}` : 'Debe ser mayor que 0'}</span>}
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                                 <div style={{ flex: 1 }}>
                                     <label style={{ fontWeight: 600, fontSize: '0.9rem', color: '#555', display: 'block', marginBottom: 6 }}>Unidad</label>
@@ -654,22 +675,17 @@ const Inventory = ({ currentFamily, userRole }) => {
                                 <label style={{ fontWeight: 600, fontSize: '0.9rem', color: '#555', display: 'block', marginBottom: 6 }}>
                                     Fecha de vencimiento <span style={{ fontWeight: 400, color: '#9b8d7c' }}>(opcional)</span>
                                 </label>
-                                <input
-                                    type="date"
-                                    value={expirationDate}
-                                    onChange={e => setExpirationDate(e.target.value)}
-                                    style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: '2px solid #EADBC7', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }}
-                                />
+                                <NvDatePicker value={expirationDate} onChange={v => setExpirationDate(v)} min={tomorrowStr()} placeholder="Debe vencer después de hoy" />
                                 {estimatedExpiry && (
-                                    <p style={{ margin: '6px 0 0', fontSize: '0.8rem', color: '#6B5E4F', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                        <CheckCircle size={14} color="#22C55E" weight="fill" />
-                                        Se usará fecha estimada: <strong style={{ marginLeft: 3 }}>{new Date(estimatedExpiry + 'T12:00:00').toLocaleDateString()}</strong>&nbsp;({selectedIngredient.average_expiry_days} días)
-                                    </p>
+                                    <div style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#166534', background: '#F0FFF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', lineHeight: 1.4 }}>
+                                        <CheckCircle size={15} color="#22C55E" weight="fill" style={{ flexShrink: 0 }} />
+                                        <span>Fecha estimada: <strong>{new Date(estimatedExpiry + 'T12:00:00').toLocaleDateString()}</strong> · dura {selectedIngredient.average_expiry_days} días</span>
+                                    </div>
                                 )}
                             </div>
                         </div>
 
-                        <div style={{ padding: '16px 24px 24px', display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                        <div style={{ padding: '16px 24px 24px', display: 'flex', gap: 12, justifyContent: 'flex-end', flexShrink: 0 }}>
                             <button className="btn-secondary" onClick={() => { setShowModal(false); resetModal(); }}>Cancelar</button>
                             <button className="btn-primary" onClick={handleAdd} disabled={saving || !selectedIngredient}>
                                 {saving ? 'Guardando...' : 'Agregar'}

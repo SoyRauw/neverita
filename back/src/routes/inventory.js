@@ -39,8 +39,16 @@ router.post('/', async (req, res, next) => {
     if (!family_id || !ingredient_id) {
       return res.status(400).json({ error: 'family_id e ingredient_id son obligatorios.' });
     }
-    if (quantity === undefined || quantity === null || Number(quantity) <= 0) {
+    if (quantity === undefined || quantity === null || !Number.isFinite(Number(quantity)) || Number(quantity) <= 0) {
       return res.status(400).json({ error: 'La cantidad debe ser un número mayor que 0.' });
+    }
+
+    // Si se envió fecha, validar que sea válida y no anterior a hoy (no se agrega comida ya vencida).
+    if (expiration_date) {
+      const exp = new Date(`${expiration_date}T12:00:00`);
+      if (isNaN(exp.getTime())) return res.status(400).json({ error: 'Fecha de vencimiento inválida.' });
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      if (exp < today) return res.status(400).json({ error: 'La fecha de vencimiento no puede ser anterior a hoy.' });
     }
 
     // Si no se envió fecha de vencimiento, calcularla automáticamente

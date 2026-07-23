@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Fire, ChartPieSlice, Recycle, ForkKnife, CalendarBlank, CircleNotch, Leaf, FilePdf } from '@phosphor-icons/react';
-import { menuPlansService, dailyMealsService, inventoryService, ingredientsService } from '../api';
+import { menuPlansService, dailyMealsService, inventoryService, ingredientsService, userFamilyService } from '../api';
+import { portionFactor } from '../nutrition';
+import { goalLabel } from '../profileOptions';
 
 /* ============ utilidades de fecha ============ */
 const toDateStr = (d) => (typeof d === 'string' ? d.split('T')[0] : d.toISOString().split('T')[0]);
@@ -90,8 +92,9 @@ const Bars = ({ data, color = '#FF9F43', unit = '' }) => {
 /* ============ componente principal ============ */
 const Stats = ({ currentFamily }) => {
     const [view, setView] = useState('week'); // 'week' | 'month'
+    const [scope, setScope] = useState('home'); // 'home' | 'person' (Bloque 5)
     const [loading, setLoading] = useState(true);
-    const [raw, setRaw] = useState({ plansMeals: [], inventory: [], catMap: {} });
+    const [raw, setRaw] = useState({ plansMeals: [], inventory: [], catMap: {}, members: [] });
 
     const familyId = currentFamily?.family_id || currentFamily?.id;
 
@@ -101,10 +104,11 @@ const Stats = ({ currentFamily }) => {
             if (!familyId) { setLoading(false); return; }
             setLoading(true);
             try {
-                const [plans, inventory, ingredients] = await Promise.all([
+                const [plans, inventory, ingredients, members] = await Promise.all([
                     menuPlansService.getByFamily(familyId).catch(() => []),
                     inventoryService.getByFamily(familyId).catch(() => []),
                     ingredientsService.getAll().catch(() => []),
+                    userFamilyService.getMembers(familyId).catch(() => []),
                 ]);
 
                 // mapa nombre(min) -> categoría
@@ -125,10 +129,10 @@ const Stats = ({ currentFamily }) => {
                     const meals = await dailyMealsService.getByPlan(p.menu_plan_id).catch(() => []);
                     plansMeals.push({ plan: p, meals: Array.isArray(meals) ? meals : [] });
                 }
-                if (!cancel) setRaw({ plansMeals, inventory: Array.isArray(inventory) ? inventory : [], catMap });
+                if (!cancel) setRaw({ plansMeals, inventory: Array.isArray(inventory) ? inventory : [], catMap, members: Array.isArray(members) ? members : [] });
             } catch (e) {
                 console.error('Error cargando estadísticas:', e);
-                if (!cancel) setRaw({ plansMeals: [], inventory: [], catMap: {} });
+                if (!cancel) setRaw({ plansMeals: [], inventory: [], catMap: {}, members: [] });
             } finally {
                 if (!cancel) setLoading(false);
             }
@@ -208,8 +212,25 @@ const Stats = ({ currentFamily }) => {
         const totalInv = fresh + expired;
         const aprov = totalInv ? Math.round((fresh / totalInv) * 100) : 100;
 
-        return { totalCal, mealsCount, calBars, protein, carbs, fat, sugar, groupArr, fresh, expired, totalInv, aprov, hasData: mealsCount > 0 };
+        return { totalCal, mealsCount, calBars, protein, carbs, fat, sugar, groupArr, fresh, expired, totalInv, aprov, hasData: mealsCount > 0, allMeals };
     }, [raw, view]);
+
+    /* ---- Bloque 5: métricas por integrante ----
+       Se asume que cada comida planificada la comen todos los integrantes, y a
+       cada uno se le escala por su factor de porción (Mifflin-St Jeor + objetivo).
+       Macros: estimados desde sus kcal, igual que en la vista de hogar. */
+    const perPerson = useMemo(() => {
+        const members = raw.members || [];
+        return members.map(m => {
+            const f = portionFactor(m);
+            const kcal = Math.round(agg.allMeals.reduce((a, meal) => a + (Number(meal.calories_per_serving) || 0) * f, 0));
+            const protein = Math.round((kcal * 0.25) / 4);
+            const carbs = Math.round((kcal * 0.50) / 4);
+            const fat = Math.round((kcal * 0.25) / 9);
+            const sugar = Math.round(carbs * 0.28);
+            return { ...m, factor: f, kcal, protein, carbs, fat, sugar };
+        }).sort((a, b) => b.kcal - a.kcal);
+    }, [raw.members, agg.allMeals]);
 
     /* ---- render ---- */
     if (loading) {
@@ -244,6 +265,10 @@ const Stats = ({ currentFamily }) => {
                     </div>
                     <div className="st-actions">
                         <div className="st-toggle" role="tablist">
+                            <button className={scope === 'home' ? 'on' : ''} onClick={() => setScope('home')}>Hogar</button>
+                            <button className={scope === 'person' ? 'on' : ''} onClick={() => setScope('person')}>Por persona</button>
+                        </div>
+                        <div className="st-toggle" role="tablist">
                             <button className={view === 'week' ? 'on' : ''} onClick={() => setView('week')}>Semana</button>
                             <button className={view === 'month' ? 'on' : ''} onClick={() => setView('month')}>Mes</button>
                         </div>
@@ -259,6 +284,38 @@ const Stats = ({ currentFamily }) => {
                         <h3>Aún no hay nada que mostrar</h3>
                         <p>Planifica algunas comidas {periodLabel} y aquí verás tus calorías, nutrientes y aprovechamiento con gráficas.</p>
                     </div>
+                ) : scope === 'person' ? (
+                    /* ===== BLOQUE 5: POR PERSONA ===== */
+                    <>
+                        {perPerson.length === 0 ? (
+                            <div className="st-empty"><p>No hay integrantes para mostrar en esta familia.</p></div>
+                        ) : (
+                            <div className="st-people">
+                                {perPerson.map(p => {
+                                    const initial = (p.name || '?').trim().charAt(0).toUpperCase();
+                                    return (
+                                        <div className="st-person" key={p.user_id}>
+                                            <div className="st-person-head">
+                                                <span className="st-person-av">{initial}</span>
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div className="st-person-name">{p.name}</div>
+                                                    <div className="st-person-sub">×{p.factor}{p.goal ? ' · ' + goalLabel(p.goal) : ''}</div>
+                                                </div>
+                                                <div className="st-person-kcal">{p.kcal.toLocaleString('es')}<span>KCAL {periodLabel}</span></div>
+                                            </div>
+                                            <div className="st-person-macros">
+                                                <div className="st-pm"><b>{p.protein}</b><span>Proteína (g)</span></div>
+                                                <div className="st-pm"><b>{p.carbs}</b><span>Carbos (g)</span></div>
+                                                <div className="st-pm"><b>{p.fat}</b><span>Grasa (g)</span></div>
+                                                <div className="st-pm"><b>{p.sugar}</b><span>Azúcares (g)</span></div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                        <p className="st-foot">Se asume que cada comida planificada la comen todos, escalada por el factor de porción de cada quien (edad, peso, altura, sexo, actividad y objetivo). Los macros son una estimación a partir de las calorías.</p>
+                    </>
                 ) : (
                     <>
                         {/* KPIs */}
@@ -397,6 +454,20 @@ const ST_CSS = `
 .st-group-val{width:32px;text-align:right;font-weight:800;color:#2A2118;font-size:.88rem;}
 
 .st-foot{margin:22px 0 0;text-align:center;color:#9b8d7c;font-size:.8rem;font-style:italic;}
+
+/* ====== BLOQUE 5: por persona ====== */
+.st-people{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:16px;}
+.st-person{background:#fff;border:1px solid rgba(230,126,34,.14);border-radius:20px;padding:18px 20px;box-shadow:0 10px 26px rgba(150,80,20,.07);animation:st-in .5s ease both;}
+.st-person-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
+.st-person-av{width:44px;height:44px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:800;font-size:1.15rem;color:#fff;background:linear-gradient(135deg,#FFB980,#FF8A4C);box-shadow:0 6px 14px rgba(255,127,80,.3);}
+.st-person-name{font-family:'Nunito',sans-serif;font-weight:700;font-size:1.1rem;color:#2A2118;line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.st-person-sub{font-size:.76rem;color:#9b8d7c;font-weight:700;margin-top:2px;}
+.st-person-kcal{text-align:right;flex:none;font-family:'Nunito',sans-serif;font-weight:800;font-size:1.35rem;color:#e67e22;line-height:1;}
+.st-person-kcal span{display:block;font-size:.6rem;color:#9b8d7c;font-weight:800;letter-spacing:.04em;margin-top:3px;}
+.st-person-macros{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+.st-pm{background:#FFF9F2;border:1px solid rgba(230,126,34,.14);border-radius:12px;padding:10px 4px;text-align:center;}
+.st-pm b{display:block;font-weight:800;font-size:1.05rem;color:#2A2118;}
+.st-pm span{display:block;font-size:.6rem;color:#9b8d7c;font-weight:700;margin-top:3px;line-height:1.2;}
 .st-loading{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;min-height:50vh;color:#6B5E4F;font-weight:600;}
 .st-empty{background:#fff;border:1px dashed rgba(230,126,34,.3);border-radius:24px;padding:48px 28px;text-align:center;max-width:560px;margin:30px auto;}
 .st-empty h3{font-family:'Nunito',sans-serif;color:#2A2118;margin:14px 0 8px;font-size:1.4rem;}

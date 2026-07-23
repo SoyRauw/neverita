@@ -21,20 +21,22 @@ router.get('/', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
     try {
         const { family_id, name, quantity, unit, source = 'manual' } = req.body;
-        if (!family_id || !name) return res.status(400).json({ error: 'Faltan campos obligatorios' });
+        if (!family_id || !name || !String(name).trim()) return res.status(400).json({ error: 'Faltan campos obligatorios' });
+        const qty = quantity === undefined || quantity === null || quantity === '' ? 1 : Number(quantity);
+        if (!Number.isFinite(qty) || qty <= 0) return res.status(400).json({ error: 'La cantidad debe ser un número mayor que 0.' });
 
         const [result] = await db.query(
             'INSERT INTO shopping_list (family_id, name, quantity, unit, source) VALUES (?, ?, ?, ?, ?)',
-            [family_id, name, quantity || 1, unit || 'unidad', source]
+            [family_id, String(name).trim(), qty, unit || 'unidad', source]
         );
-        res.status(201).json({ 
-            item_id: result.insertId, 
-            family_id, 
-            name, 
-            quantity: quantity || 1, 
-            unit: unit || 'unidad', 
-            checked: 0, 
-            source 
+        res.status(201).json({
+            item_id: result.insertId,
+            family_id,
+            name: String(name).trim(),
+            quantity: qty,
+            unit: unit || 'unidad',
+            checked: 0,
+            source
         });
     } catch (err) { next(err); }
 });
@@ -51,8 +53,10 @@ router.put('/:id', async (req, res, next) => {
             params.push(checked ? 1 : 0);
         }
         if (quantity !== undefined) {
+            const q = Number(quantity);
+            if (!Number.isFinite(q) || q <= 0) return res.status(400).json({ error: 'La cantidad debe ser un número mayor que 0.' });
             updates.push('quantity = ?');
-            params.push(quantity);
+            params.push(q);
         }
         if (unit !== undefined) {
             updates.push('unit = ?');

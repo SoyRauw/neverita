@@ -5,8 +5,9 @@ import { CaretDown, Check } from '@phosphor-icons/react';
  * Lista desplegable moderna (reemplaza <select> nativo).
  * Animada, con color y estado activo. options: [{ value, label }].
  */
-const NvSelect = ({ value, onChange, options = [], placeholder = 'Elegir', style = {}, className = '' }) => {
+const NvSelect = ({ value, onChange, options = [], placeholder = 'Elegir', style = {}, className = '', up = false }) => {
     const [open, setOpen] = useState(false);
+    const [flipUp, setFlipUp] = useState(false); // decidido automáticamente según el espacio
     const ref = useRef(null);
 
     useEffect(() => {
@@ -18,20 +19,37 @@ const NvSelect = ({ value, onChange, options = [], placeholder = 'Elegir', style
         return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onEsc); };
     }, [open]);
 
+    // Al abrir: si no hay espacio abajo (p.ej. últimas tarjetas pegadas al borde del modal),
+    // abre hacia arriba. El prop `up` sigue forzando la dirección si se pasa explícito.
+    const toggle = () => {
+        setOpen(prev => {
+            if (prev) return false;
+            const el = ref.current;
+            if (el) {
+                const rect = el.getBoundingClientRect();
+                const spaceBelow = window.innerHeight - rect.bottom;
+                const spaceAbove = rect.top;
+                setFlipUp(spaceBelow < 260 && spaceAbove > spaceBelow);
+            }
+            return true;
+        });
+    };
+
     const selected = options.find(o => String(o.value) === String(value));
+    const openUp = up || flipUp;
 
     return (
         <div className={`nv-select ${className}`} ref={ref} style={style}>
             <button
                 type="button"
                 className={`nv-select-trigger${open ? ' open' : ''}`}
-                onClick={() => setOpen(o => !o)}
+                onClick={toggle}
             >
                 <span className={selected ? '' : 'nv-select-ph'}>{selected ? selected.label : placeholder}</span>
                 <CaretDown size={16} weight="bold" className="nv-select-caret" />
             </button>
             {open && (
-                <div className="nv-select-menu" role="listbox">
+                <div className={`nv-select-menu${openUp ? ' up' : ''}`} role="listbox">
                     {options.map(o => (
                         <button
                             type="button"

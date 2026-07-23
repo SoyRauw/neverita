@@ -1,5 +1,5 @@
-const API_BASE_URL = 'https://neverita.onrender.com';
-//const API_BASE_URL = 'http://localhost:3000';
+//const API_BASE_URL = 'https://neverita.onrender.com';
+const API_BASE_URL = 'http://localhost:3000';
 
 /**
  * Función genérica para hacer peticiones al backend.
@@ -8,6 +8,18 @@ const API_BASE_URL = 'https://neverita.onrender.com';
  * @param {object} options - Opciones para fetch (método, headers, body)
  * @returns {Promise<any>} - La respuesta parseada de JSON
  */
+/**
+ * Devuelve una URL de imagen servida por NUESTRO backend (mismo origen), para que
+ * ningún bloqueador de anuncios/hotlink/CORP impida que se vea. Las imágenes locales
+ * (data:/blob:) y las ya-locales pasan sin cambios.
+ */
+export const imgProxy = (url) => {
+    if (!url || typeof url !== 'string') return url;
+    if (url.startsWith('data:') || url.startsWith('blob:')) return url;
+    if (url.startsWith(API_BASE_URL)) return url;
+    return `${API_BASE_URL}/img?url=${encodeURIComponent(url)}`;
+};
+
 async function fetchAPI(endpoint, options = {}) {
     const url = `${API_BASE_URL}${endpoint}`;
 
@@ -109,6 +121,21 @@ export const authService = {
     }),
 };
 
+export const usersService = {
+    /** Obtiene un usuario con sus datos de perfil (edad/peso/altura/sexo/actividad) */
+    getById: (userId) => fetchAPI(`/users/${userId}`),
+    /** Actualiza SOLO los datos físicos del perfil de un usuario */
+    updateProfile: (userId, data) => fetchAPI(`/users/${userId}/profile`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+    }),
+    /** Actualiza la CUENTA: usuario, nombre, correo y (opcional) contraseña (requiere current_password) */
+    updateAccount: (userId, data) => fetchAPI(`/users/${userId}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+    }),
+};
+
 export const userFamilyService = {
     /**
      * Obtiene las familias completas a las que pertenece un usuario
@@ -142,6 +169,13 @@ export const userFamilyService = {
     kick: (requesterId, targetUserId, familyId) => fetchAPI('/user-family/kick', {
         method: 'DELETE',
         body: JSON.stringify({ requester_id: requesterId, target_user_id: targetUserId, family_id: familyId }),
+    }),
+    /**
+     * Salir de una familia. Si eres el creador y hay más integrantes, pasa newOwnerId para transferir el mando.
+     */
+    leave: (userId, familyId, newOwnerId) => fetchAPI('/user-family/leave', {
+        method: 'POST',
+        body: JSON.stringify({ user_id: userId, family_id: familyId, new_owner_id: newOwnerId || undefined }),
     }),
 };
 
@@ -218,10 +252,10 @@ export const menuPlansService = {
 };
 
 export const aiService = {
-    /** Sugiere 3 recetas basadas en ingredientes disponibles */
-    suggest: (ingredients, servings) => fetchAPI('/ai/suggest', {
+    /** Sugiere recetas (por defecto 3; pasa count para pedir más, distintas) */
+    suggest: (ingredients, count) => fetchAPI('/ai/suggest', {
         method: 'POST',
-        body: JSON.stringify({ ingredients, servings }),
+        body: JSON.stringify({ ingredients, count }),
     }),
     /** Genera una receta completa a partir de un título y los ingredientes disponibles */
     generate: (selectedTitle, availableIngredients, familyId, servings) => fetchAPI('/ai/generate', {
@@ -243,6 +277,11 @@ export const aiService = {
         method: 'POST',
         body: JSON.stringify(payload),
     }),
+    /** Calcula y cachea la nutrición (kcal + macros por porción) de una receta desde sus ingredientes */
+    recipeNutrition: (recipeId) => fetchAPI('/ai/recipe-nutrition', {
+        method: 'POST',
+        body: JSON.stringify({ recipe_id: recipeId }),
+    }),
 };
 
 export const dailyMealsService = {
@@ -259,6 +298,11 @@ export const dailyMealsService = {
     toggleComplete: (dailyMealId, isCompleted) => fetchAPI(`/daily-meals/${dailyMealId}/complete`, {
         method: 'PUT',
         body: JSON.stringify({ is_completed: isCompleted }),
+    }),
+    /** Actualiza SOLO los comensales (eaters) de una comida planificada */
+    updateEaters: (dailyMealId, eaters) => fetchAPI(`/daily-meals/${dailyMealId}/eaters`, {
+        method: 'PUT',
+        body: JSON.stringify({ eaters }),
     }),
 };
 
@@ -279,5 +323,17 @@ export const shoppingListService = {
         method: 'DELETE',
     }),
     getSuggestions: (familyId) => fetchAPI(`/shopping-list/suggestions?family_id=${familyId}`),
+};
+
+export const mealSuggestionsService = {
+    /** Lista las sugerencias de comida de una familia (con autor y datos de receta) */
+    getByFamily: (familyId) => fetchAPI(`/meal-suggestions?family_id=${familyId}`),
+    /** Crea una sugerencia: { family_id, user_id, day_of_week, meal_type, kind, content, recipe_id } */
+    create: (data) => fetchAPI('/meal-suggestions', {
+        method: 'POST',
+        body: JSON.stringify(data),
+    }),
+    /** Borra una sugerencia por id (requiere requesterId: autor o creador) */
+    remove: (id, requesterId) => fetchAPI(`/meal-suggestions/${id}${requesterId ? `?requester_id=${requesterId}` : ''}`, { method: 'DELETE' }),
 };
 

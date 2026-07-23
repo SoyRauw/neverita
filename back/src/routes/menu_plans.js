@@ -45,6 +45,15 @@ router.post('/', async (req, res, next) => {
     if (!plan_name || !start_date || !created_by || !family_id) {
       return res.status(400).json({ error: 'plan_name, start_date, created_by y family_id son obligatorios.' });
     }
+    // Idempotente: si ya existe un plan para esta familia + semana, se reutiliza en
+    // vez de crear un duplicado (el efecto del front puede dispararse 2 veces).
+    const [existing] = await db.query(
+      'SELECT * FROM menu_plans WHERE family_id = ? AND start_date = ? ORDER BY menu_plan_id ASC LIMIT 1',
+      [family_id, start_date]
+    );
+    if (existing.length) {
+      return res.status(200).json(normalizePlan(existing[0]));
+    }
     const [result] = await db.query(
       'INSERT INTO menu_plans (plan_name, start_date, created_by, family_id) VALUES (?, ?, ?, ?)',
       [plan_name, start_date, created_by, family_id]
@@ -56,6 +65,9 @@ router.post('/', async (req, res, next) => {
 router.put('/:id', async (req, res, next) => {
   try {
     const { plan_name, start_date, created_by, family_id } = req.body;
+    if (!plan_name || !start_date || !created_by || !family_id) {
+      return res.status(400).json({ error: 'plan_name, start_date, created_by y family_id son obligatorios.' });
+    }
     const [result] = await db.query(
       'UPDATE menu_plans SET plan_name = ?, start_date = ?, created_by = ?, family_id = ? WHERE menu_plan_id = ?',
       [plan_name, start_date, created_by, family_id, req.params.id]

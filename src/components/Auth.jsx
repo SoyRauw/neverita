@@ -1,8 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { User, Lock, EnvelopeSimple, ForkKnife, CircleNotch, Eye, EyeSlash, CheckCircle, XCircle, ArrowLeft, PaperPlaneTilt, ShieldCheck, Sparkle, PlayCircle, Snowflake, CalendarBlank, ShoppingCart, Check, Gear } from '@phosphor-icons/react';
-import { authService } from '../api';
+import { User, Lock, EnvelopeSimple, ForkKnife, CircleNotch, Eye, EyeSlash, CheckCircle, XCircle, ArrowLeft, ArrowRight, PaperPlaneTilt, ShieldCheck, Sparkle, PlayCircle, Snowflake, CalendarBlank, ShoppingCart, Check, Gear, Heartbeat, Ruler, Barbell, Leaf, Target, Warning } from '@phosphor-icons/react';
+import { authService, usersService } from '../api';
+import NvSelect from './NvSelect';
+import NvDatePicker from './NvDatePicker';
+import { DIET_OPTS, GOAL_OPTS, RESTRICTION_OPTS } from '../profileOptions';
 import PhoneMockup from './PhoneMockup';
 import FridgeIcon from './FridgeIcon';
+
+// Opciones de sexo y actividad + cálculo de edad (para el onboarding físico tras el registro)
+const SEX_OPTS = [{ value: 'm', label: 'Masculino' }, { value: 'f', label: 'Femenino' }, { value: 'otro', label: 'Otro' }];
+const ACTIVITY_OPTS = [{ value: 'bajo', label: 'Bajo (poco ejercicio)' }, { value: 'medio', label: 'Medio (moderado)' }, { value: 'alto', label: 'Alto (muy activo)' }];
+const calcAge = (birth) => {
+    if (!birth) return null;
+    const b = new Date(String(birth).split('T')[0] + 'T00:00:00');
+    if (isNaN(b.getTime())) return null;
+    const now = new Date();
+    let age = now.getFullYear() - b.getFullYear();
+    const m = now.getMonth() - b.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
+    return age >= 0 && age < 130 ? age : null;
+};
 
 // --- Validaciones de contraseña ---
 function getPasswordRules(password) {
@@ -32,9 +49,10 @@ const PasswordField = ({ name, placeholder, value, onChange, showPw, onToggleSho
             type="button"
             onClick={onToggleShow}
             style={{
-                position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)',
-                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                color: '#9b8d7c', display: 'flex', alignItems: 'center',
+                position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)',
+                background: 'none', border: 'none', cursor: 'pointer',
+                width: 40, height: 40, display: 'grid', placeItems: 'center', borderRadius: 10,
+                color: '#9b8d7c',
             }}
             title={showPw ? 'Ocultar contraseña' : 'Mostrar contraseña'}
         >
@@ -54,6 +72,12 @@ const Auth = ({ onLogin, onShowLanding, forceRegister }) => {
     const [formData, setFormData] = useState({ username: '', password: '', confirmPassword: '', name: '', email: '' });
     const [errorMsg, setErrorMsg] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+
+    // --- Onboarding obligatorio tras el registro (usuario desde cero), 2 pasos ---
+    const [pendingUser, setPendingUser] = useState(null); // usuario recién registrado, aún sin entrar
+    const [onbStep, setOnbStep] = useState(1);             // 1 = datos físicos, 2 = preferencias
+    const [physical, setPhysical] = useState({ birth_date: '', sex: '', height_cm: '', weight_kg: '', activity_level: 'medio' });
+    const [diet, setDiet] = useState({ diet_type: '', goal: '', restrictions: [] });
 
     // Visibilidad de contraseñas
     const [showPw, setShowPw] = useState(false);
@@ -93,18 +117,70 @@ const Auth = ({ onLogin, onShowLanding, forceRegister }) => {
         const cleanPassword = formData.password.trim();
 
         try {
-            let userData;
             if (isRegistering) {
-                userData = await authService.register({
+                const userData = await authService.register({
                     username: cleanUsername, password: cleanPassword,
                     name: formData.name.trim(), email: formData.email.trim().toLowerCase(),
                 });
+                // Cuenta creada: aún NO entra. Pasa al onboarding físico obligatorio.
+                setPendingUser(userData);
             } else {
-                userData = await authService.login(cleanUsername, cleanPassword);
+                const userData = await authService.login(cleanUsername, cleanPassword);
+                onLogin(userData);
             }
-            onLogin(userData);
         } catch (err) {
             setErrorMsg(err.message || 'Error de autenticación');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // --- Onboarding: validación por paso y guardado final ---
+    const onbAge = calcAge(physical.birth_date);
+    const onbHeight = Number(physical.height_cm);
+    const onbWeight = Number(physical.weight_kg);
+    const physicalValid =
+        !!physical.birth_date && onbAge !== null &&
+        !!physical.sex &&
+        physical.height_cm !== '' && Number.isFinite(onbHeight) && onbHeight >= 30 && onbHeight <= 260 &&
+        physical.weight_kg !== '' && Number.isFinite(onbWeight) && onbWeight >= 1 && onbWeight <= 400 &&
+        !!physical.activity_level;
+    const dietValid = !!diet.diet_type && !!diet.goal;
+
+    const toggleRestriction = (v) => setDiet(d => ({
+        ...d,
+        restrictions: d.restrictions.includes(v) ? d.restrictions.filter(x => x !== v) : [...d.restrictions, v],
+    }));
+
+    // Paso 1 (físico) → Paso 2 (preferencias)
+    const handleNextStep = (e) => {
+        e.preventDefault();
+        setErrorMsg('');
+        if (!physicalValid) { setErrorMsg('Completa todos los datos para continuar.'); return; }
+        setOnbStep(2);
+    };
+
+    // Paso 2 → guardar todo (físico + preferencias) y entrar
+    const handleSaveOnboarding = async (e) => {
+        e.preventDefault();
+        setErrorMsg('');
+        if (!physicalValid) { setOnbStep(1); return; }
+        if (!dietValid) { setErrorMsg('Elige tu tipo de alimentación y tu objetivo.'); return; }
+        setIsLoading(true);
+        try {
+            await usersService.updateProfile(pendingUser.user_id, {
+                birth_date: physical.birth_date,
+                sex: physical.sex,
+                height_cm: Number(physical.height_cm),
+                weight_kg: Number(physical.weight_kg),
+                activity_level: physical.activity_level,
+                diet_type: diet.diet_type,
+                goal: diet.goal,
+                dietary_restrictions: diet.restrictions,
+            });
+            onLogin(pendingUser);
+        } catch (err) {
+            setErrorMsg(err.message || 'No se pudieron guardar tus datos. Intenta de nuevo.');
         } finally {
             setIsLoading(false);
         }
@@ -281,6 +357,129 @@ const Auth = ({ onLogin, onShowLanding, forceRegister }) => {
     );
 
     // =====================
+    // RENDER: ONBOARDING FÍSICO (obligatorio tras registro)
+    // =====================
+    const renderOnboarding = () => (
+        <div className="auth-card-glass">
+            <div className="form-header">
+                <div style={{ width: 56, height: 56, borderRadius: '50%', margin: '0 auto 12px', background: 'linear-gradient(135deg, #FF9F43, #FF7F50)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 20px rgba(255,127,80,0.35)' }}>
+                    {onbStep === 1 ? <Heartbeat size={30} weight="fill" color="white" /> : <Leaf size={30} weight="fill" color="white" />}
+                </div>
+                <h2>{onbStep === 1 ? 'Cuéntanos sobre ti' : 'Tus preferencias'}</h2>
+                <p>{onbStep === 1
+                    ? 'Con estos datos calculamos porciones y calorías a tu medida.'
+                    : 'Ajustamos las recetas a tu dieta y evitamos lo que no puedes comer.'}</p>
+                <div className="nv-steps">
+                    <span className={`nv-step-dot${onbStep === 1 ? ' active' : ''}`} />
+                    <span className={`nv-step-dot${onbStep === 2 ? ' active' : ''}`} />
+                </div>
+            </div>
+
+            {errorMsg && (
+                <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626', borderRadius: '12px', padding: '10px 14px', marginBottom: '14px', fontSize: '0.875rem', textAlign: 'center' }}>
+                    {errorMsg}
+                </div>
+            )}
+
+            {onbStep === 1 ? (
+                /* ===== PASO 1: DATOS FÍSICOS ===== */
+                <form onSubmit={handleNextStep}>
+                    <div className="form-group-floating">
+                        <label>Fecha de nacimiento {onbAge !== null && <span style={{ color: '#FF8A4C', fontWeight: 700 }}>· {onbAge} años</span>}</label>
+                        <NvDatePicker value={physical.birth_date} max={new Date().toISOString().split('T')[0]}
+                            onChange={v => setPhysical(p => ({ ...p, birth_date: v }))} placeholder="Elige tu fecha de nacimiento" />
+                    </div>
+
+                    <div className="form-group-floating">
+                        <label>Sexo</label>
+                        <NvSelect value={physical.sex} onChange={v => setPhysical(p => ({ ...p, sex: v }))} options={SEX_OPTS} placeholder="Elegir" />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 12 }}>
+                        <div className="form-group-floating" style={{ flex: 1 }}>
+                            <label>Altura (cm)</label>
+                            <div className="input-wrapper-floating">
+                                <Ruler size={20} className="input-icon-floating" />
+                                <input type="text" inputMode="numeric" name="height_cm" placeholder="Ej. 170" value={physical.height_cm}
+                                    onChange={e => setPhysical(p => ({ ...p, height_cm: e.target.value.replace(/[^0-9]/g, '') }))} required />
+                            </div>
+                        </div>
+                        <div className="form-group-floating" style={{ flex: 1 }}>
+                            <label>Peso (kg)</label>
+                            <div className="input-wrapper-floating">
+                                <Barbell size={20} className="input-icon-floating" />
+                                <input type="text" inputMode="decimal" name="weight_kg" placeholder="Ej. 70" value={physical.weight_kg}
+                                    onChange={e => setPhysical(p => ({ ...p, weight_kg: e.target.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1') }))} required />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="form-group-floating">
+                        <label>Nivel de actividad</label>
+                        <NvSelect value={physical.activity_level} onChange={v => setPhysical(p => ({ ...p, activity_level: v }))} options={ACTIVITY_OPTS} placeholder="Elegir" />
+                    </div>
+
+                    <button className="btn-floating-primary" disabled={!physicalValid} style={{ opacity: physicalValid ? 1 : 0.6 }}>
+                        Siguiente <ArrowRight size={18} weight="bold" />
+                    </button>
+                </form>
+            ) : (
+                /* ===== PASO 2: PREFERENCIAS DE DIETA ===== */
+                <form onSubmit={handleSaveOnboarding}>
+                    <div className="form-group-floating">
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Leaf size={16} weight="fill" color="#FF7F50" /> Tipo de alimentación</label>
+                        <div className="nv-choice-grid" role="group" aria-label="Tipo de alimentación">
+                            {DIET_OPTS.map(o => (
+                                <button type="button" key={o.value} aria-pressed={diet.diet_type === o.value}
+                                    className={`nv-choice${diet.diet_type === o.value ? ' selected' : ''}`}
+                                    onClick={() => setDiet(d => ({ ...d, diet_type: o.value }))}>
+                                    {diet.diet_type === o.value && <Check size={14} weight="bold" className="nv-choice-check" />}{o.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="form-group-floating">
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Target size={16} weight="fill" color="#FF7F50" /> Objetivo</label>
+                        <div className="nv-choice-grid" role="group" aria-label="Objetivo">
+                            {GOAL_OPTS.map(o => (
+                                <button type="button" key={o.value} aria-pressed={diet.goal === o.value}
+                                    className={`nv-choice${diet.goal === o.value ? ' selected' : ''}`}
+                                    onClick={() => setDiet(d => ({ ...d, goal: o.value }))}>
+                                    {diet.goal === o.value && <Check size={14} weight="bold" className="nv-choice-check" />}{o.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="form-group-floating">
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Warning size={16} weight="fill" color="#FF7F50" /> Alergias o restricciones
+                            <span style={{ color: '#9b8d7c', fontWeight: 600 }}>· opcional</span>
+                        </label>
+                        <div className="nv-choice-grid" role="group" aria-label="Alergias o restricciones">
+                            {RESTRICTION_OPTS.map(o => (
+                                <button type="button" key={o.value} aria-pressed={diet.restrictions.includes(o.value)}
+                                    className={`nv-choice${diet.restrictions.includes(o.value) ? ' selected' : ''}`}
+                                    onClick={() => toggleRestriction(o.value)}>
+                                    {diet.restrictions.includes(o.value) && <Check size={14} weight="bold" className="nv-choice-check" />}{o.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <button className="btn-floating-primary" disabled={isLoading || !dietValid} style={{ opacity: dietValid ? 1 : 0.6 }}>
+                        {isLoading ? <CircleNotch className="ph-spin" size={20} /> : <><Check size={18} weight="bold" /> Guardar y entrar</>}
+                    </button>
+                    <button type="button" className="nv-ghost-back" onClick={() => { setErrorMsg(''); setOnbStep(1); }}>
+                        <ArrowLeft size={15} weight="bold" /> Atrás
+                    </button>
+                </form>
+            )}
+        </div>
+    );
+
+    // =====================
     // RENDER PRINCIPAL
     // =====================
     return (
@@ -328,7 +527,7 @@ const Auth = ({ onLogin, onShowLanding, forceRegister }) => {
                     <div className="amb-badge"><FridgeIcon size={26} color="white" strokeWidth={2.2} /></div>
                     <span className="amb-text">Neve<b>rita.</b></span>
                 </div>
-                {forgotMode ? renderForgotPassword() : (
+                {pendingUser ? renderOnboarding() : forgotMode ? renderForgotPassword() : (
                     <div className="auth-card-glass">
                         <div className="form-header">
                             <h2>{isRegistering ? 'Crear Cuenta' : 'Bienvenido'}</h2>

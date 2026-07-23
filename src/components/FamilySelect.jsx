@@ -1,5 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, House, ArrowLeft, Check, Key, SignIn, CircleNotch, CaretDown, CaretUp, ForkKnife, CookingPot, Carrot } from '@phosphor-icons/react';
+import { Plus, House, ArrowLeft, Check, Key, SignIn, CircleNotch, CaretDown, CaretUp, ForkKnife, CookingPot, Carrot, QrCode } from '@phosphor-icons/react';
+import { showToast } from '../Toast';
+import QrScanner from './QrScanner';
+
+// Extrae el código de invitación del texto de un QR (URL con ?join=CÓDIGO, o el código a secas).
+const extractJoinCode = (text) => {
+    if (!text) return '';
+    try { const u = new URL(text); const j = u.searchParams.get('join'); if (j) return j; } catch { /* no es URL */ }
+    const m = String(text).match(/[?&]join=([^&\s]+)/);
+    if (m) return decodeURIComponent(m[1]);
+    return String(text).trim();
+};
 
 const FamilySelect = ({ families, onSelectFamily, onCreateFamily, onJoinByCode, initialJoinCode, onJoinCodeConsumed }) => {
     const [viewMode, setViewMode] = useState('list'); // 'list', 'create', 'join'
@@ -8,6 +19,7 @@ const FamilySelect = ({ families, onSelectFamily, onCreateFamily, onJoinByCode, 
     const [joinCode, setJoinCode] = useState("");
     const [joinError, setJoinError] = useState("");
     const [isJoining, setIsJoining] = useState(false);
+    const [showScanner, setShowScanner] = useState(false);
 
     // Estado exclusivo para el funcionamiento del acordeón en móvil
     const [isMenuOpen, setIsMenuOpen] = useState(true);
@@ -25,18 +37,19 @@ const FamilySelect = ({ families, onSelectFamily, onCreateFamily, onJoinByCode, 
     }, [initialJoinCode]);
 
     const handleCreate = () => {
-        if (newFamilyName.trim()) {
-            onCreateFamily({ name: newFamilyName, role: "Admin", members: 1 });
-        }
+        if (!newFamilyName.trim()) { showToast('Escribe un nombre para la familia.', 'warning'); return; }
+        onCreateFamily({ name: newFamilyName.trim(), role: "Admin", members: 1 });
     };
 
-    const handleJoin = async () => {
-        if (!joinCode.trim()) return;
+    const handleJoin = async (codeArg) => {
+        const code = (typeof codeArg === 'string' ? codeArg : joinCode).trim();
+        if (!code) { setJoinError('Ingresa el código de invitación.'); return; }
         setJoinError("");
         setIsJoining(true);
         try {
-            const family = await onJoinByCode(joinCode.trim());
-            onSelectFamily({ ...family, id: family.family_id, role: "Miembro", members: 1 });
+            const family = await onJoinByCode(code);
+            // Usar el rol real que devuelve el backend (no un valor inventado que rompe el badge).
+            onSelectFamily({ ...family, id: family.family_id, role: family.role || 'ayudante', members: family.members || 1 });
         } catch (err) {
             setJoinError(err.message || "Error al unirse a la familia");
         } finally {
@@ -191,16 +204,37 @@ const FamilySelect = ({ families, onSelectFamily, onCreateFamily, onJoinByCode, 
                                         value={joinCode}
                                         autoFocus
                                         onChange={(e) => setJoinCode(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter' && !isJoining) handleJoin(); }}
                                     />
                                 </div>
-                                <button className="btn-confirm-huge" onClick={handleJoin} disabled={isJoining}>
+                                <button className="btn-confirm-huge" onClick={() => handleJoin()} disabled={isJoining}>
                                     {isJoining ? <CircleNotch className="ph-spin" size={24} /> : <>Entrar <SignIn size={24} weight="bold" /></>}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowScanner(true)}
+                                    disabled={isJoining}
+                                    style={{ marginTop: 12, width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', borderRadius: 14, border: '2px solid rgba(230,126,34,0.35)', background: '#fff', color: '#e67e22', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}
+                                >
+                                    <QrCode size={22} weight="bold" /> Escanear QR
                                 </button>
                             </>
                         )}
                     </div>
                 )}
             </div>
+
+            {showScanner && (
+                <QrScanner
+                    onClose={() => setShowScanner(false)}
+                    onResult={(text) => {
+                        const code = extractJoinCode(text);
+                        setShowScanner(false);
+                        if (code) { setJoinCode(code); handleJoin(code); }
+                        else showToast('No se pudo leer un código válido del QR.', 'warning');
+                    }}
+                />
+            )}
 
             <style dangerouslySetInnerHTML={{ __html: `
                 .mobile-accordion-card, .mobile-action-grid { display: none; }

@@ -928,7 +928,7 @@ header {
 
 .recipe-img {
     width: 100%;
-    height: 200px;
+    height: 174px;
     object-fit: cover;
     display: block;
     transition: transform 0.55s var(--ease-out);
@@ -963,25 +963,25 @@ header {
 .recipe-card:hover .recipe-view-hint { opacity: 1; transform: none; }
 
 .recipe-content {
-    padding: 12px 14px 13px;
+    padding: 11px 13px 12px;
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 2px;
 }
 
 .recipe-title {
     font-family: var(--font-display);
-    font-size: 1.16rem;
-    font-weight: 600;
-    margin: 0 0 10px;
+    font-size: 1.08rem;
+    font-weight: 700;
+    margin: 0;
     color: var(--ink);
-    line-height: 1.22;
+    line-height: 1.25;
     letter-spacing: -0.3px;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    min-height: 2.5em; /* reserva 2 líneas: alinea los botones entre tarjetas */
 }
 
 /* Etiquetas de tipo de comida, superpuestas arriba a la izquierda de la foto */
@@ -1008,25 +1008,33 @@ header {
     backdrop-filter: blur(2px);
 }
 
+/* Indicadores kcal/tiempo: chips "glass" sobre la foto (esquina inferior izquierda) */
 .recipe-stats {
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    z-index: 2;
     display: flex;
-    gap: 7px;
+    gap: 6px;
     align-items: center;
     flex-wrap: wrap;
-    padding-top: 4px;
 }
 
 .stat-item {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    background: linear-gradient(135deg, #FFF3E6, #FFE8D0);
-    color: var(--primary-deep);
-    padding: 6px 11px;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.92);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    color: #2A2118;
+    padding: 4px 9px;
     border-radius: 999px;
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     font-weight: 800;
+    box-shadow: 0 3px 8px rgba(20, 12, 4, 0.22);
 }
+.stat-item svg { color: var(--primary-deep); }
 
 /* Fila de acciones al pie de la tarjeta (info / editar / eliminar) */
 .recipe-actions {
@@ -1298,6 +1306,46 @@ header {
 .shop-item.bought { opacity: 0.78; background: rgba(220, 252, 231, 0.35); border-color: rgba(16, 185, 129, 0.22); }
 .shop-item.bought .shop-name { color: #9b8d7c; text-decoration: line-through; }
 .shop-item.bought .shop-qty { color: #C7CDBE; }
+
+/* ====== Pasos legibles (formato libro) ====== */
+.nv-instr-list { display: flex; flex-direction: column; align-items: stretch; gap: 13px; margin: 0; padding: 0; list-style: none; }
+.nv-instr { display: flex; gap: 14px; align-items: flex-start; text-align: left; animation: nv-rise-sm .3s var(--ease-out) both; }
+.nv-step-n {
+    flex: none; width: 30px; height: 30px; border-radius: 50%;
+    display: grid; place-items: center; font-weight: 900; font-size: 0.95rem; color: #fff;
+    background: linear-gradient(135deg, #FF9F43, #FF7F50); box-shadow: 0 4px 10px rgba(255, 127, 80, 0.3);
+}
+.nv-step-tx { font-size: 1rem; line-height: 1.6; color: #4a4038; padding-top: 3px; }
+
+/* ====== Fondo animado borroso de Recetas (item 13) ====== */
+.recipes-page { position: relative; }
+.recipes-bg-decor { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.recipes-page > *:not(.recipes-bg-decor):not(.modal-overlay) { position: relative; z-index: 1; }
+.rbg-blob { position: absolute; border-radius: 50%; filter: blur(64px); opacity: 0.5; will-change: transform; }
+.rbg-blob.r1 { width: 400px; height: 400px; background: radial-gradient(circle, #FFD3AE, transparent 70%); top: -90px; left: -70px; animation: nv-blob-drift 20s ease-in-out infinite; }
+.rbg-blob.r2 { width: 340px; height: 340px; background: radial-gradient(circle, #FFC49A, transparent 70%); bottom: -70px; right: -50px; animation: nv-blob-drift2 24s ease-in-out infinite; }
+.rbg-blob.r3 { width: 280px; height: 280px; background: radial-gradient(circle, #FFE6CC, transparent 70%); top: 42%; right: 16%; animation: nv-blob-drift 28s ease-in-out infinite; }
+@media (max-width: 640px) { .rbg-blob { filter: blur(48px); opacity: 0.4; } .rbg-blob.r3 { display: none; } }
+
+/* ====== Secciones de la lista de compras (etiquetas flotantes) ====== */
+.shop-section { animation: nv-rise-sm .4s var(--ease-spring) both; }
+.shop-section-head {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 7px 14px 7px 7px; border-radius: 999px; margin-bottom: 11px;
+    background: #fff; border: 1px solid rgba(230, 126, 34, 0.14);
+    box-shadow: 0 8px 20px rgba(150, 80, 20, 0.10);
+    position: sticky; top: 8px; z-index: 3;
+}
+.shop-section-ic {
+    width: 32px; height: 32px; border-radius: 50%; flex: none;
+    display: grid; place-items: center;
+    animation: nv-float 4s ease-in-out infinite;
+}
+.shop-section-label { font-weight: 800; color: var(--ink); font-size: 0.95rem; letter-spacing: -0.01em; }
+.shop-section-count {
+    font-size: 0.72rem; font-weight: 800; color: var(--ink-faint);
+    background: #F3EADF; padding: 3px 9px; border-radius: 999px; margin-left: 2px;
+}
 
 
 /* =========================================
@@ -1658,6 +1706,18 @@ header {
 }
 @keyframes nv-select-in {
     from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* Variante que se abre hacia ARRIBA (para selects pegados al borde inferior) */
+.nv-select-menu.up {
+    top: auto;
+    bottom: calc(100% + 6px);
+    transform-origin: bottom center;
+    max-height: 220px;
+    animation: nv-select-in-up 0.18s var(--ease-out);
+}
+@keyframes nv-select-in-up {
+    from { opacity: 0; transform: translateY(8px) scale(0.97); }
     to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 .nv-select-opt {
@@ -3703,8 +3763,270 @@ select.nv-field { cursor: pointer; appearance: none; -webkit-appearance: none; p
         to { opacity: 1; }
     }
 
-    @keyframes mobileSlideUp { 
-        from { transform: translateY(100%); } 
-        to { transform: translateY(0); } 
+    @keyframes mobileSlideUp {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
     }
+}
+
+/* =========================================================
+   SELECTOR TIPO PÍLDORA (onboarding · preferencias de dieta)
+   ========================================================= */
+.nv-choice-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.nv-choice {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 16px;
+    border-radius: 999px;
+    border: 1.5px solid rgba(230, 126, 34, 0.22);
+    background: rgba(255, 250, 244, 0.9);
+    color: var(--ink-soft);
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: transform 0.2s var(--ease-spring), background 0.22s, border-color 0.22s, color 0.22s, box-shadow 0.22s;
+}
+.nv-choice:hover {
+    border-color: rgba(230, 126, 34, 0.5);
+    transform: translateY(-2px);
+}
+.nv-choice.selected {
+    background: linear-gradient(135deg, var(--primary), var(--primary-2));
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 8px 18px rgba(255, 127, 80, 0.35);
+}
+.nv-choice:active { transform: scale(0.96); }
+.nv-choice .nv-choice-check {
+    display: inline-grid;
+    place-items: center;
+    animation: nv-pop 0.3s var(--ease-spring);
+}
+
+/* Indicador de pasos del wizard (puntos que se alargan) */
+.nv-steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 14px;
+}
+.nv-step-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    background: rgba(230, 126, 34, 0.25);
+    transition: width 0.3s var(--ease-spring), background 0.3s;
+}
+.nv-step-dot.active {
+    width: 26px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-2));
+}
+
+/* Botón "atrás" tipo texto (wizard/onboarding) */
+.nv-ghost-back {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    width: 100%;
+    margin-top: 12px;
+    padding: 4px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--ink-faint);
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 0.85rem;
+    transition: color 0.2s;
+}
+.nv-ghost-back:hover { color: var(--primary-deep); }
+
+/* =========================================================
+   PASO "¿QUIÉNES COMERÁN?" — estructura del modal
+   ========================================================= */
+.nv-serv-label {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.74rem; font-weight: 800; color: var(--ink-faint);
+    text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;
+}
+.nv-serv-member {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    padding: 10px 12px; border-radius: 14px; cursor: pointer;
+    border: 2px solid rgba(230, 126, 34, 0.16); background: #fff;
+    transition: transform .18s var(--ease-spring), border-color .2s, background .2s, box-shadow .2s;
+}
+.nv-serv-member:hover { border-color: rgba(230, 126, 34, 0.4); transform: translateY(-1px); }
+.nv-serv-member.on { border-color: var(--primary); background: #FFF7ED; box-shadow: 0 6px 16px rgba(255, 127, 80, 0.14); }
+.nv-serv-check { width: 22px; height: 22px; border-radius: 7px; flex: none; display: grid; place-items: center; background: #F3EADF; color: #fff; transition: background .2s; }
+.nv-serv-member.on .nv-serv-check { background: linear-gradient(135deg, var(--primary), var(--primary-2)); }
+.nv-serv-avatar { width: 34px; height: 34px; border-radius: 50%; flex: none; display: grid; place-items: center; font-weight: 800; font-size: 0.95rem; color: #fff; background: linear-gradient(135deg, #FFB980, #FF8A4C); box-shadow: 0 4px 10px rgba(255, 127, 80, 0.28); }
+.nv-serv-avatar.sm { width: 24px; height: 24px; font-size: 0.72rem; box-shadow: none; }
+.nv-serv-x { font-size: 0.72rem; font-weight: 800; color: var(--primary-deep); background: #FFF3E6; padding: 4px 10px; border-radius: 999px; flex: none; }
+
+.nv-serv-stats { display: flex; gap: 10px; }
+.nv-serv-stat { flex: 1; text-align: center; background: #FFF9F2; border: 1px solid rgba(230, 126, 34, 0.16); border-radius: 14px; padding: 10px 6px; }
+.nv-serv-stat-n { display: block; font-weight: 900; font-size: 1.3rem; color: var(--ink); line-height: 1; }
+.nv-serv-stat-l { display: block; font-size: 0.68rem; color: var(--ink-faint); font-weight: 700; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.03em; }
+
+.nv-serv-warn { background: #FEF3E7; border: 1px solid #F7C99A; border-left: 4px solid #F59E0B; border-radius: 10px; padding: 8px 12px; font-size: 0.8rem; color: #92600A; text-align: left; font-weight: 600; }
+.nv-serv-tip { background: #FFF7ED; border: 1px solid rgba(230, 126, 34, 0.2); border-radius: 10px; padding: 8px 12px; font-size: 0.8rem; color: var(--ink-soft); text-align: left; font-weight: 600; }
+
+.nv-serv-toggle { display: inline-flex; background: #F3EADF; border-radius: 12px; padding: 3px; gap: 3px; margin-bottom: 10px; }
+.nv-serv-toggle button { border: none; background: none; cursor: pointer; font-family: var(--font-body); font-weight: 800; font-size: 0.8rem; color: var(--ink-faint); padding: 7px 16px; border-radius: 9px; transition: background .2s, color .2s; }
+.nv-serv-toggle button.on { background: #fff; color: var(--primary-deep); box-shadow: 0 2px 8px rgba(150, 80, 20, 0.12); }
+.nv-serv-toggle button:disabled { opacity: .4; cursor: not-allowed; }
+
+.nv-serv-panel { background: #FFF9F2; border: 1px solid rgba(230, 126, 34, 0.18); border-radius: 14px; padding: 6px 16px; text-align: left; max-height: 180px; overflow-y: auto; }
+.nv-serv-ing { font-size: 0.88rem; color: var(--ink); padding: 7px 0; border-bottom: 1px dashed rgba(230, 126, 34, 0.18); font-weight: 600; }
+.nv-serv-ing:last-child { border-bottom: none; }
+.nv-serv-person { background: #fff; border: 1px solid rgba(230, 126, 34, 0.16); border-radius: 12px; padding: 10px 12px; text-align: left; }
+.nv-serv-person-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+
+/* ====== ¿Quiénes comen? — selector editable en el detalle ====== */
+.nv-eaters-wrap { animation: nv-fade .3s ease; }
+.nv-eaters-count {
+    margin-left: 8px; font-weight: 800; font-size: .68rem; color: var(--primary-deep);
+    background: #FFF3E6; border: 1px solid rgba(230, 126, 34, 0.18); padding: 2px 9px; border-radius: 999px;
+    display: inline-flex; align-items: center; gap: 5px; letter-spacing: .02em; text-transform: none;
+}
+.nv-eaters-row { display: flex; flex-wrap: wrap; gap: 9px; }
+.nv-eater {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 14px 6px 6px; border-radius: 999px;
+    border: 1.5px solid #ecd9c2; background: #fff;
+    font-family: var(--font-body); font-weight: 700; font-size: .84rem; color: #b6a894;
+    cursor: pointer; position: relative; overflow: hidden;
+    transition: transform .2s var(--ease-spring), background .25s, border-color .25s, box-shadow .25s, color .25s;
+    animation: nv-eater-in .35s var(--ease-spring) both;
+}
+.nv-eater::after {
+    content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    background: linear-gradient(120deg, transparent 32%, rgba(255, 255, 255, .55) 50%, transparent 68%);
+    transform: translateX(-130%);
+}
+.nv-eater.on::after { animation: nv-eater-sheen .65s ease; }
+.nv-eater:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--primary); box-shadow: 0 7px 18px rgba(230, 126, 34, .16); }
+.nv-eater:active:not(:disabled) { transform: translateY(0) scale(.95); }
+.nv-eater.on {
+    background: linear-gradient(135deg, #FFF3E6, #FFE7CF);
+    border-color: var(--primary); color: var(--ink);
+    box-shadow: 0 5px 14px rgba(255, 159, 67, .24);
+}
+.nv-eater:disabled { cursor: default; }
+.nv-eater.off-locked { opacity: .45; }
+.nv-eater-av {
+    width: 28px; height: 28px; border-radius: 50%; flex: none;
+    display: grid; place-items: center; font-size: .78rem; font-weight: 800;
+    background: #efe3d3; color: #b6a894;
+    transition: background .25s, color .25s, box-shadow .25s, transform .3s var(--ease-spring);
+}
+.nv-eater.on .nv-eater-av {
+    background: linear-gradient(135deg, var(--primary), var(--primary-2)); color: #fff;
+    box-shadow: 0 3px 10px rgba(255, 127, 80, .45); transform: scale(1.06);
+}
+.nv-eater-fac {
+    font-size: .67rem; font-weight: 800; color: var(--primary-deep);
+    background: #fff; padding: 2px 7px; border-radius: 8px; border: 1px solid rgba(230, 126, 34, .2);
+    animation: nv-pop .3s var(--ease-spring);
+}
+.nv-eater-hint { font-size: .74rem; color: var(--ink-faint); margin-top: 9px; display: flex; align-items: center; gap: 5px; }
+
+@keyframes nv-eater-in { from { opacity: 0; transform: translateY(9px) scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes nv-eater-sheen { from { transform: translateX(-130%); } to { transform: translateX(130%); } }
+
+/* Cantidades que "reaccionan" al cambiar los comensales */
+.nv-recalc { animation: nv-recalc-in .38s var(--ease-spring); }
+@keyframes nv-recalc-in { from { opacity: .25; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+
+/* ====== Selector de fecha propio (NvDatePicker) ====== */
+.nv-dp { position: relative; }
+.nv-dp .nv-select-trigger { width: 100%; }
+.nv-dp-ic { color: var(--primary-deep); flex: none; transition: transform 0.25s var(--ease-spring); }
+.nv-dp .nv-select-trigger.open .nv-dp-ic { transform: scale(1.12) rotate(-8deg); }
+.nv-dp-pop {
+    background: #fff; border: 1px solid rgba(255, 159, 67, 0.2); border-radius: 20px;
+    padding: 14px; width: 100%; overflow: hidden;
+    box-shadow: 0 26px 60px rgba(120, 60, 10, 0.28), 0 6px 16px rgba(120, 60, 10, 0.12);
+    transform-origin: top center; animation: nv-dp-in 0.24s var(--ease-spring);
+}
+.nv-dp-pop.up { transform-origin: bottom center; animation: nv-dp-in-up 0.24s var(--ease-spring); }
+@keyframes nv-dp-in { from { opacity: 0; transform: scale(0.9) translateY(-8px); } to { opacity: 1; transform: none; } }
+@keyframes nv-dp-in-up { from { opacity: 0; transform: scale(0.9) translateY(8px); } to { opacity: 1; transform: none; } }
+
+.nv-dp-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin: -14px -14px 12px; padding: 13px 14px 11px;
+    background: linear-gradient(135deg, #FFF3E6, #FFE3C7);
+    border-bottom: 1px solid rgba(230, 126, 34, 0.14);
+}
+.nv-dp-title { font-family: var(--font-display); font-weight: 800; color: var(--ink); font-size: 1.02rem; letter-spacing: -0.3px; }
+.nv-dp-nav {
+    width: 32px; height: 32px; border-radius: 10px; border: none; background: #fff; color: var(--primary-deep);
+    cursor: pointer; display: grid; place-items: center; box-shadow: 0 4px 10px rgba(150, 80, 20, 0.14);
+    transition: transform 0.2s var(--ease-spring), background 0.2s, color 0.2s;
+}
+.nv-dp-nav:hover { background: linear-gradient(135deg, var(--primary), var(--primary-2)); color: #fff; transform: scale(1.14); }
+.nv-dp-nav:active { transform: scale(0.92); }
+
+.nv-dp-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin-bottom: 6px; }
+.nv-dp-week span { text-align: center; font-size: 0.66rem; font-weight: 800; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.03em; }
+
+.nv-dp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; animation: nv-dp-grid-in 0.28s var(--ease-out); }
+@keyframes nv-dp-grid-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.nv-dp-day {
+    aspect-ratio: 1; border: none; background: none; border-radius: 11px; cursor: pointer;
+    font-family: var(--font-body); font-weight: 700; font-size: 0.86rem; color: var(--ink);
+    display: grid; place-items: center;
+    transition: background 0.16s, color 0.16s, transform 0.18s var(--ease-spring), box-shadow 0.18s;
+}
+.nv-dp-day:hover:not(:disabled) { background: #FFF3E6; color: var(--primary-deep); transform: translateY(-2px) scale(1.08); }
+.nv-dp-day:active:not(:disabled) { transform: scale(0.9); }
+.nv-dp-day.today { color: var(--primary-deep); box-shadow: inset 0 0 0 2px rgba(255, 159, 67, 0.55); }
+.nv-dp-day.sel { background: linear-gradient(135deg, var(--primary), var(--primary-2)); color: #fff; box-shadow: 0 8px 18px rgba(255, 127, 80, 0.45); }
+.nv-dp-day.sel:hover { color: #fff; transform: translateY(-2px) scale(1.08); }
+.nv-dp-day:disabled { opacity: 0.28; cursor: not-allowed; }
+.nv-dp-empty { aspect-ratio: 1; }
+
+/* ====== Correcciones responsive (auditoría móvil) ====== */
+/* Botón borrar de compras: en táctil siempre visible; solo se atenúa donde hay hover real */
+@media (hover: none) { .shop-del { opacity: 1 !important; } }
+@media (max-width: 768px) {
+    .shop-section-head { top: 66px; }            /* debajo de la barra de familia sticky */
+    .shop-del { padding: 10px; }                 /* área táctil */
+    .st-toggle button { min-height: 42px; }      /* toggles de Stats más altos */
+    .sg-composer { padding-bottom: calc(14px + env(safe-area-inset-bottom)); } /* área segura iPhone */
+    .login-form-container { padding-bottom: calc(28px + env(safe-area-inset-bottom)); }
+}
+.sg-input { font-size: 16px; }                   /* evita el auto-zoom de iOS Safari */
+/* Barra CRUD de selección múltiple: por encima de la nav inferior en móvil */
+@media (max-width: 768px) { .nv-crud-bar { bottom: calc(80px + env(safe-area-inset-bottom)) !important; } }
+
+/* ====== Búsqueda: lupa animada (item 17) ====== */
+.nv-searchbar { position: relative; }
+.nv-searchbar > input { transition: border-color .2s, box-shadow .2s; }
+.nv-searchbar > input:focus { border-color: var(--primary) !important; box-shadow: 0 0 0 4px rgba(255,159,67,.15); }
+.nv-search-ic { transition: transform .3s var(--ease-spring), color .2s; pointer-events: none; }
+.nv-searchbar:focus-within .nv-search-ic { color: var(--primary-deep); animation: nv-search-wiggle 1.3s ease-in-out infinite; }
+@keyframes nv-search-wiggle {
+    0%, 100% { transform: translateY(-50%) rotate(0) scale(1); }
+    50% { transform: translateY(-50%) rotate(-14deg) scale(1.12); }
+}
+.family-screen-bg { overflow-y: auto; }          /* permite scroll si el contenido no cabe */
+.inv-card-delete { min-width: 40px; min-height: 40px; } /* área táctil de los botones de tarjeta */
+/* Edición de miembro: sin sangría y una columna en pantallas muy angostas */
+@media (max-width: 480px) {
+    .nv-mm-indent { margin-left: 0 !important; }
+    .nv-mm-grid { grid-template-columns: 1fr !important; }
+}
+/* Corners planos + área segura para el bottom-sheet de confirmación en móvil */
+@media (max-width: 768px) {
+    .modal-overlay .nv-confirm-card { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
 }

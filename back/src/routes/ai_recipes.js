@@ -17,6 +17,7 @@ export const router = express.Router();
 router.post('/suggest', async (req, res) => {
     try {
         const { ingredients } = req.body;
+        const count = Math.min(12, Math.max(1, Number(req.body.count) || 3));
         const apiKey = process.env.GEMINI_API_KEY;
 
         if (!ingredients || ingredients.length === 0) return res.status(400).json({ error: "Faltan ingredientes" });
@@ -37,7 +38,7 @@ router.post('/suggest', async (req, res) => {
             Usa SOLO los ingredientes listados (más agua y, si hace falta, sal/condimentos básicos).
             NO inventes ingredientes que el usuario no tiene.
 
-            Sugiere exactamente 3 recetas razonables con lo disponible:
+            Sugiere exactamente ${count} recetas razonables, DISTINTAS y variadas entre sí (no repitas el mismo plato), con lo disponible:
             { "suggestions": [{ "title": "Nombre del Plato", "description": "Descripción corta de 10 palabras" }, ...] }
 
             Responde SOLO JSON, sin markdown ni explicaciones.
@@ -71,9 +72,10 @@ router.post('/ingredient-info', async (req, res) => {
         const apiKey = process.env.GEMINI_API_KEY;
 
         const prompt = `
-            Eres un experto en conservación de alimentos.
-            Para el ingrediente "${name.trim()}", responde SOLO con este JSON (sin markdown, sin explicaciones):
+            Eres un experto en alimentos y conservación.
+            Para "${name.trim()}", responde SOLO con este JSON (sin markdown, sin explicaciones):
             {
+                "is_food": <true si es un alimento o ingrediente comestible de cocina; false si NO lo es (ej: carro, mesa, teléfono, ropa)>,
                 "average_expiry_days": <número entero de días que dura típicamente en la nevera o despensa>,
                 "category": "<una de: vegetal, fruta, proteína, lácteo, grano, condimento, grasa, bebida, otro>",
                 "unit": "<una de: g, ml, cup, cucharada grande, cucharada pequeña, unidad>"
@@ -96,6 +98,7 @@ router.post('/ingredient-info', async (req, res) => {
         const validUnits = ['g', 'ml', 'cup', 'cucharada grande', 'cucharada pequeña', 'unidad'];
 
         res.json({
+            is_food: data.is_food !== false, // true salvo que la IA lo marque explícitamente como no-alimento
             average_expiry_days: Math.max(1, Math.round(Number(data.average_expiry_days) || 7)),
             category: validCategories.includes(data.category) ? data.category : 'otro',
             unit: validUnits.includes(data.unit) ? data.unit : 'unidad',
@@ -103,9 +106,99 @@ router.post('/ingredient-info', async (req, res) => {
 
     } catch (error) {
         console.error('❌ Error en ingredient-info:', error);
-        // Fallback silencioso para no bloquear al usuario
-        res.json({ average_expiry_days: 7, category: 'otro', unit: 'unidad' });
+        // Fallback silencioso para no bloquear al usuario (asumimos que sí es alimento)
+        res.json({ is_food: true, average_expiry_days: 7, category: 'otro', unit: 'unidad' });
     }
+});
+
+
+// ==========================================
+// NUTRICIÓN: calorías + macros por receta (Bloque 4/5)
+// Estima la nutrición POR 1 unidad de cada ingrediente (una vez, se cachea).
+// ==========================================
+async function estimateNutrition(items, apiKey) {
+    if (!items.length) return [];
+    const list = items.map(i => ({ name: i.name, unit: i.unit || 'unidad' }));
+    const prompt = `
+        Eres nutricionista. Para CADA ingrediente de la lista, estima su aporte nutricional POR 1 de la unidad indicada.
+        Lista (JSON): ${JSON.stringify(list)}
+        Responde SOLO con un JSON array, en el MISMO orden y misma longitud, sin markdown:
+        [{"kcal": <kcal por 1 unidad>, "protein": <g proteína>, "fat": <g grasa>, "carbs": <g carbohidratos>}]
+        Referencias por unidad: huevo(unidad)=70/6.3/4.8/0.4; arroz(g)=1.3/0.027/0.003/0.28; leche(ml)=0.6/0.03/0.03/0.05; aceite(ml)=8.8/0/1/0; pollo(g)=1.65/0.31/0.036/0; pan(unidad)=80/2.7/1/15; azúcar(g)=4/0/0/1.
+    `;
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite", generationConfig: { responseMimeType: "application/json" } });
+    const result = await model.generateContent(prompt);
+    const arr = JSON.parse(result.response.text());
+    if (!Array.isArray(arr)) return [];
+    const num = (v) => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? Math.round(n * 1000) / 1000 : 0; };
+    return items.map((_, k) => {
+        const r = arr[k] || {};
+        return { kcal: num(r.kcal), protein: num(r.protein), fat: num(r.fat), carbs: num(r.carbs) };
+    });
+}
+
+// Calcula (y cachea) la nutrición por porción de una receta desde sus ingredientes.
+router.post('/recipe-nutrition', async (req, res, next) => {
+    try {
+        const { recipe_id } = req.body;
+        if (!recipe_id) return res.status(400).json({ error: 'Falta recipe_id.' });
+
+        const [recipeRows] = await db.query('SELECT recipe_id, servings FROM recipes WHERE recipe_id = ?', [recipe_id]);
+        if (!recipeRows.length) return res.status(404).json({ error: 'Receta no encontrada.' });
+        const servings = Number(recipeRows[0].servings) || 1;
+
+        const [ings] = await db.query(
+            `SELECT i.ingredient_id, i.name, i.unit, i.kcal_unit, i.protein_unit, i.fat_unit, i.carbs_unit, ri.quantity
+             FROM recipe_ingredients ri JOIN ingredients i ON i.ingredient_id = ri.ingredient_id
+             WHERE ri.recipe_id = ?`,
+            [recipe_id]
+        );
+        if (!ings.length) return res.json({ per_serving: { kcal: 0, protein: 0, fat: 0, carbs: 0 }, servings, ingredients: 0 });
+
+        // Rellenar nutrición faltante con IA (una vez por ingrediente; se cachea en la tabla)
+        const missing = ings.filter(x => x.kcal_unit == null);
+        if (missing.length) {
+            const apiKey = process.env.GEMINI_API_KEY;
+            if (apiKey) {
+                try {
+                    const nut = await estimateNutrition(missing.map(m => ({ name: m.name, unit: m.unit })), apiKey);
+                    for (let k = 0; k < missing.length; k++) {
+                        const n = nut[k];
+                        if (!n) continue;
+                        await db.query(
+                            'UPDATE ingredients SET kcal_unit = ?, protein_unit = ?, fat_unit = ?, carbs_unit = ? WHERE ingredient_id = ?',
+                            [n.kcal, n.protein, n.fat, n.carbs, missing[k].ingredient_id]
+                        );
+                        missing[k].kcal_unit = n.kcal; missing[k].protein_unit = n.protein; missing[k].fat_unit = n.fat; missing[k].carbs_unit = n.carbs;
+                    }
+                } catch (aiErr) {
+                    console.error('Error estimando nutrición IA:', aiErr.message);
+                }
+            }
+        }
+
+        // Totales y por porción
+        let kcal = 0, protein = 0, fat = 0, carbs = 0;
+        for (const x of ings) {
+            const q = Number(x.quantity) || 0;
+            kcal += q * (Number(x.kcal_unit) || 0);
+            protein += q * (Number(x.protein_unit) || 0);
+            fat += q * (Number(x.fat_unit) || 0);
+            carbs += q * (Number(x.carbs_unit) || 0);
+        }
+        const per_serving = {
+            kcal: Math.round(kcal / servings),
+            protein: Math.round(protein / servings),
+            fat: Math.round(fat / servings),
+            carbs: Math.round(carbs / servings),
+        };
+
+        // Cachear las calorías por porción en la receta (para las tarjetas / detalle)
+        await db.query('UPDATE recipes SET calories_per_serving = ? WHERE recipe_id = ?', [per_serving.kcal, recipe_id]);
+
+        res.json({ per_serving, servings, ingredients: ings.length });
+    } catch (err) { next(err); }
 });
 
 

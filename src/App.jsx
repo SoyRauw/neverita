@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { showToast } from './Toast';
 import { HashRouter, Routes, Route } from 'react-router-dom';
-import { Sparkle, CircleNotch, ShoppingCart, Check, X, ChefHat, CalendarBlank, Coffee, UsersThree, Plus, Sun, Warning, BookOpen, MagnifyingGlass, Trash, ArrowsClockwise, Fire, Clock, ListNumbers, SpeakerHigh, Pause, Play, Leaf, Heartbeat } from '@phosphor-icons/react';
+import { Sparkle, CircleNotch, ShoppingCart, Check, X, ChefHat, CalendarBlank, Coffee, UsersThree, Plus, Sun, Warning, BookOpen, MagnifyingGlass, Trash, ArrowsClockwise, Fire, Clock, ListNumbers, SpeakerHigh, Pause, Play, Leaf, Heartbeat, Lightbulb, CheckSquare, PencilSimple } from '@phosphor-icons/react';
 
 // --- IMPORTACIÓN DE COMPONENTES ---
 import Sidebar from './components/Sidebar';
+import SuggestionsPanel from './components/SuggestionsPanel';
 import MobileNav from './components/MobileNav';
 import CalendarGrid from './components/CalendarGrid';
 import Inventory from './components/Inventory';
@@ -16,7 +17,12 @@ import FamilyManager from './components/FamilyManager';
 import ShoppingList from './components/ShoppingList';
 import Stats from './components/Stats';
 import Avatar from './components/Avatar';
-import { familiesService, userFamilyService, menuPlansService, dailyMealsService, aiService, inventoryService, ingredientsService, recipesService, familyRecipesService } from './api';
+import NvSelect from './components/NvSelect';
+import { familiesService, userFamilyService, menuPlansService, dailyMealsService, aiService, inventoryService, ingredientsService, recipesService, familyRecipesService, imgProxy } from './api';
+import { portionFactor, totalPortions, roundQty, portionsLabel } from './nutrition';
+import { goalLabel } from './profileOptions';
+import { buildSuggestions } from './suggestions';
+import { plateAmount } from './plating';
 
 // --- ESTILOS CSS INYECTADOS (MODAL MODERNO) ---
 const modalStyles = `
@@ -95,13 +101,16 @@ const modalStyles = `
       animation: mobileSlideUp 0.4s cubic-bezier(0, 0, 0.2, 1);
     }
     .modal-footer-modern {
-      padding-bottom: 30px; /* Espacio extra para pulgares */
+      padding-bottom: calc(24px + env(safe-area-inset-bottom));
       justify-content: space-between;
+      flex-wrap: wrap; /* que los botones bajen a otra fila en vez de aplastar el texto */
     }
     .btn-generate, .btn-cancel {
-      flex: 1; /* Los botones ocupan el mismo ancho en móvil */
+      flex: 1 1 auto;
       justify-content: center;
+      padding-left: 14px; padding-right: 14px;
     }
+    .modal-footer-modern .btn-generate { flex-basis: 100%; order: -1; } /* acción principal, fila propia arriba */
   }
 
   @keyframes slideUp { 
@@ -263,6 +272,8 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
     const [isGenerating, setIsGenerating] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [selectedMealDetails, setSelectedMealDetails] = useState(null);
+    const [detailEaters, setDetailEaters] = useState(null); // comensales editables de la comida abierta (array de user_id)
+    const [savingEaters, setSavingEaters] = useState(false);
     const [selectedMealSlot, setSelectedMealSlot] = useState(null); // { dayIndex, type } del cuadro abierto
     const [slideDir, setSlideDir] = useState(''); // '' | 'left' | 'right'
 
@@ -282,6 +293,9 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         let textToRead = `Receta: ${recipe.name}. `;
         if (recipe.servings) {
             textToRead += `Para ${recipe.servings} ${Number(recipe.servings) === 1 ? 'persona' : 'personas'}. `;
+        }
+        if (recipe.cal) {
+            textToRead += `Aproximadamente ${recipe.cal} calorías en total. `;
         }
         if (recipe.ingredients && recipe.ingredients.length > 0) {
             textToRead += `Ingredientes: ${recipe.ingredients.map(pluralizeUnits).join(', ')}. `;
@@ -344,6 +358,44 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
     const openMealDetails = (meal, dayIndex, type) => {
         setSelectedMealSlot((dayIndex !== undefined && type) ? { dayIndex, type } : null);
         setSelectedMealDetails(meal);
+        // Comensales editables: los guardados, o toda la familia si no hay dato.
+        setDetailEaters((Array.isArray(meal?.eaters) && meal.eaters.length) ? meal.eaters : familyMembers.map(m => m.user_id));
+    };
+
+    // Editar comensales desde el detalle: recalcula (vía estado) y guarda automáticamente.
+    const handleToggleDetailEater = async (userId) => {
+        if (!selectedMealDetails) return;
+        const cur = Array.isArray(detailEaters) ? detailEaters : familyMembers.map(m => m.user_id);
+        const next = cur.includes(userId) ? cur.filter(x => x !== userId) : [...cur, userId];
+        // Validación: debe comer al menos una persona.
+        if (next.length === 0 && familyMembers.length > 0) {
+            showToast('Debe comer al menos una persona. No puedes quitar a todos.', 'error');
+            return;
+        }
+        // Persistencia: subconjunto explícito; vacío o "todos" = toda la familia (null).
+        const toPersist = (arr) => (arr.length && arr.length !== familyMembers.length) ? arr : null;
+        const eatersToPersist = toPersist(next);
+        const prevPersist = toPersist(cur);
+        const slot = resolveMealSlot();
+        const key = slot ? `${slot.dayIndex}-${slot.type}` : null;
+        // Pintado optimista
+        setDetailEaters(next);
+        setSelectedMealDetails(prev => prev ? { ...prev, eaters: eatersToPersist } : prev);
+        if (key) setPlannerData(prev => (prev[key] ? { ...prev, [key]: { ...prev[key], eaters: eatersToPersist } } : prev));
+        const dmId = selectedMealDetails.daily_meal_id;
+        if (dmId) {
+            setSavingEaters(true);
+            try {
+                await dailyMealsService.updateEaters(dmId, eatersToPersist);
+            } catch (e) {
+                console.error('Error guardando comensales:', e);
+                // Revertir el cambio optimista (no quedó guardado en BD).
+                setDetailEaters(cur);
+                setSelectedMealDetails(prev => prev ? { ...prev, eaters: prevPersist } : prev);
+                if (key) setPlannerData(prev => (prev[key] ? { ...prev, [key]: { ...prev[key], eaters: prevPersist } } : prev));
+                showToast('No se pudieron guardar los comensales. Intenta de nuevo.', 'error');
+            } finally { setSavingEaters(false); }
+        }
     };
 
     // Deduce el cuadro (día/turno) de la receta abierta. Usa el slot explícito si
@@ -368,6 +420,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         stopSpeech();
         setSelectedMealDetails(null);
         setSelectedMealSlot(null);
+        setDetailEaters(null);
     };
 
     const handleNavigate = (dir) => {
@@ -386,6 +439,19 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
     // Estados de selección
     const [selectedIngredients, setSelectedIngredients] = useState([]);
     const [selectedSlots, setSelectedSlots] = useState([]);
+    const [planMode, setPlanMode] = useState('plan'); // 'plan' = elegir varios cuadros | 'edit' = bloqueado a 1
+    const [servingsView, setServingsView] = useState('total'); // vista del paso de porciones: 'total' | 'person'
+    const [cookedPrompt, setCookedPrompt] = useState(null); // Bloque 8: aviso "¿cocinaste?" { meal, dayIndex, type, askKey }
+    const [planItems, setPlanItems] = useState([]); // Bloque 7: [{ slot, title, recipe, status }]
+    const [planGenerating, setPlanGenerating] = useState(false);
+    const [slotAssignments, setSlotAssignments] = useState({}); // Bloque 7 (existentes): { slotKey: dish }
+    const [slotEaters, setSlotEaters] = useState({}); // Bloque 7: { slotKey: [user_id...] } comensales por cuadro
+    // Selección múltiple desde el calendario (CRUD desde afuera)
+    const [calSelectMode, setCalSelectMode] = useState(false);
+    const [calSelected, setCalSelected] = useState([]);
+    const [calMode, setCalMode] = useState(null); // null hasta la 1ª selección; luego 'plan' | 'manage'
+    const [editingExisting, setEditingExisting] = useState(false); // edición múltiple de recetas ya planificadas
+    const [pendingBulkDelete, setPendingBulkDelete] = useState(null); // array de slots a eliminar (confirmación)
 
     // Recetas existentes (modo "agregar receta ya creada")
     const [existingRecipes, setExistingRecipes] = useState([]);
@@ -404,6 +470,9 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         // Si ya está seleccionado, permitir deseleccionarlo sin importar si está bloqueado
         if (selectedSlots.includes(slotKey)) {
             setSelectedSlots(prev => prev.filter(k => k !== slotKey));
+            // Limpiar cualquier asignación/comensales de ese cuadro para que no "resucite" al reseleccionar.
+            setSlotAssignments(prev => { if (prev[slotKey] === undefined) return prev; const n = { ...prev }; delete n[slotKey]; return n; });
+            setSlotEaters(prev => { if (prev[slotKey] === undefined) return prev; const n = { ...prev }; delete n[slotKey]; return n; });
             return;
         }
         // No permitir selección nueva en días con ingredientes vencidos
@@ -465,10 +534,62 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
     const [aiError, setAiError] = useState(null);
     // Aviso (no bloqueante) de balance nutricional: grupos importantes ausentes
     const [balanceWarning, setBalanceWarning] = useState([]);
+    // Popup animado con el MOTIVO por el que no se pudo planificar/generar (item 1)
+    const [planNotice, setPlanNotice] = useState(null); // { title, reason, hint }
     // Receta generada por IA esperando confirmación de personas
     const [aiDish, setAiDish] = useState(null);
     const [aiPlanServings, setAiPlanServings] = useState(1);
     const [aiChosenTurn, setAiChosenTurn] = useState(null);   // turno elegido en sugerencias
+
+    // Bloque 3: integrantes que comerán → porciones balanceadas por persona
+    const [familyMembers, setFamilyMembers] = useState([]);
+    const [selectedMemberIds, setSelectedMemberIds] = useState([]);
+    const [aiFromExisting, setAiFromExisting] = useState(false); // el paso de personas vino de "receta ya creada"
+    const toggleMember = (id) => setSelectedMemberIds(ids => ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]);
+    // Bloque 7: comensales por cuadro. Por defecto comen todos (editable por el usuario).
+    const eatersFor = (slot) => (slotEaters[slot] !== undefined ? slotEaters[slot] : familyMembers.map(m => m.user_id));
+    const toggleSlotEater = (slot, id) => setSlotEaters(prev => {
+        const cur = prev[slot] !== undefined ? prev[slot] : familyMembers.map(m => m.user_id);
+        const next = cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id];
+        return { ...prev, [slot]: next };
+    });
+    // Chips para elegir quiénes comen en un cuadro concreto (reutilizado por ambos planes múltiples).
+    const renderSlotEaters = (slot) => {
+        if (!familyMembers.length) return null;
+        const chosen = eatersFor(slot);
+        return (
+            <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#9b8d7c', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <UsersThree size={13} weight="fill" color="#F7B27B" /> ¿Quiénes comen?
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {familyMembers.map(m => {
+                        const on = chosen.includes(m.user_id);
+                        return (
+                            <button type="button" key={m.user_id} onClick={() => toggleSlotEater(slot, m.user_id)} aria-pressed={on}
+                                style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 5, padding: '9px 12px', minHeight: 40, borderRadius: 999, cursor: 'pointer',
+                                    border: on ? '1.5px solid #FF9F43' : '1.5px solid #e7dccb',
+                                    background: on ? '#FFF3E6' : '#fff', transition: 'all 0.15s',
+                                    fontSize: '0.78rem', fontWeight: 700, color: on ? '#2A2118' : '#b6a894',
+                                }}>
+                                {on && <Check size={12} weight="bold" color="#e67e22" />}
+                                {m.name}
+                            </button>
+                        );
+                    })}
+                </div>
+                {chosen.length === 0 && <div style={{ fontSize: '0.72rem', color: '#DC2626', marginTop: 5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}><Warning size={12} weight="fill" /> Selecciona al menos una persona para este cuadro.</div>}
+            </div>
+        );
+    };
+    useEffect(() => {
+        const fid = currentFamily?.family_id || currentFamily?.id;
+        if (!fid) { setFamilyMembers([]); setSelectedMemberIds([]); return; }
+        userFamilyService.getMembers(fid)
+            .then(ms => { setFamilyMembers(ms || []); setSelectedMemberIds((ms || []).map(m => m.user_id)); })
+            .catch(() => { setFamilyMembers([]); setSelectedMemberIds([]); });
+    }, [currentFamily]);
     const [suggestionTurns, setSuggestionTurns] = useState({}); // turno por cada sugerencia (índice -> turno)
 
     // Cargar inventario real CADA VEZ que se abre el modal
@@ -571,19 +692,188 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
             if (data.suggestions && data.suggestions.length > 0) {
                 setSuggestions(data.suggestions);
             } else if (data.error) {
-                // Solo errores reales (conexión, API), nunca bloqueo por categoría faltante
-                setAiError(data.error);
+                // Error real (conexión, API): avisar con el popup animado.
                 setAiStep('config');
+                setPlanNotice({ title: 'No se pudo generar', reason: data.error, hint: 'Revisa tu conexión e intenta de nuevo en un momento.' });
             } else {
+                // La IA no devolvió recetas: NUNCA quedarse en blanco sin avisar.
                 setSuggestions([]);
+                setAiStep('config');
+                setPlanNotice({
+                    title: 'No encontramos un menú',
+                    reason: 'La IA no pudo crear una receta viable con esos ingredientes.',
+                    hint: 'Prueba seleccionando más ingredientes o combinándolos distinto. Un plato suele necesitar una base (arroz, pasta, papa…), una proteína y algo de vegetales.',
+                });
             }
         } catch (err) {
             console.error('Error en sugerencias IA:', err);
-            setAiError('No se pudo conectar con la IA. Intenta de nuevo.');
             setAiStep('config');
+            setPlanNotice({ title: 'Sin conexión con la IA', reason: 'No se pudo conectar con el Chef IA.', hint: 'Revisa tu internet e intenta de nuevo.' });
         } finally {
             setIsGenerating(false);
         }
+    };
+
+    // Bloque 7: generar un PLAN con una receta DISTINTA por cada cuadro seleccionado.
+    const handleGeneratePlan = async () => {
+        if (selectedIngredients.length === 0) { showToast('Selecciona al menos un ingrediente.'); return; }
+        if (selectedSlots.length < 2) { showToast('Selecciona 2 o más cuadros para un plan variado.'); return; }
+        const slots = [...selectedSlots];
+        setAiStep('plan');
+        setPlanGenerating(true);
+        setPlanItems(slots.map(s => ({ slot: s, title: null, recipe: null, status: 'pending' })));
+        try {
+            const selectedItems = myInventory.filter(i => selectedIngredients.includes(i.id));
+            const ingredientsWithQty = selectedItems.map(i => `${i.name} (${i.quantity} ${i.unit})`);
+            const fid = currentFamily?.family_id || currentFamily?.id;
+            const sugg = await aiService.suggest(ingredientsWithQty, slots.length + 2); // extra por si repite
+            const titles = [...new Set((sugg.suggestions || []).map(s => s.title).filter(Boolean))];
+            if (titles.length === 0) {
+                setAiStep('config');
+                setPlanNotice({ title: 'No encontramos recetas', reason: 'La IA no pudo proponer platos con esos ingredientes.', hint: 'Selecciona más ingredientes o combínalos distinto para armar el plan variado.' });
+                return;
+            }
+            for (let i = 0; i < slots.length; i++) {
+                const title = titles[i] || titles[i % Math.max(1, titles.length)] || `Plato ${i + 1}`;
+                setPlanItems(prev => prev.map((p, idx) => idx === i ? { ...p, title, status: 'loading' } : p));
+                try {
+                    const data = await aiService.generate(title, ingredientsWithQty, fid);
+                    const r = data.recipe;
+                    const ingList = data.ingredients || [];
+                    const dish = {
+                        name: r.title, cal: r.calories_per_serving,
+                        time: r.preparation_time ? `${r.preparation_time} min` : 'N/A',
+                        img: r.image_url || 'https://images.unsplash.com/photo-1546554137-f86b9593a222?w=400',
+                        ingredients: ingList.map(it => { const mp = it.measure_qty && it.measure_unit ? `${it.measure_qty} ${it.measure_unit} de ` : ''; const qp = it.quantity ? `(${it.quantity} ${it.unit})` : `(${it.unit})`; return pluralizeUnits(`${mp}${it.name} ${qp}`); }),
+                        steps: r.instructions ? r.instructions.split('\n').filter(Boolean) : [],
+                        description: r.description || '', recipe_id: r.recipe_id, servings: 1,
+                    };
+                    setPlanItems(prev => prev.map((p, idx) => idx === i ? { ...p, recipe: dish, status: 'done' } : p));
+                } catch (e) {
+                    console.error('Error generando receta del plan:', e);
+                    setPlanItems(prev => prev.map((p, idx) => idx === i ? { ...p, status: 'error' } : p));
+                }
+            }
+        } catch (e) {
+            console.error('Error en el plan variado:', e);
+            setAiStep('config');
+            setPlanNotice({ title: 'No se pudo generar el plan', reason: 'Hubo un problema al crear las recetas del plan.', hint: 'Revisa tu conexión e intenta de nuevo.' });
+        } finally {
+            setPlanGenerating(false);
+        }
+    };
+
+    // Guarda una lista de { slot, dish } en sus cuadros (optimista, revierte por-cuadro si falla).
+    // Compartido por el plan variado (IA) y el plan con recetas existentes.
+    const savePlanEntries = async (entries) => {
+        const DAY_ENUM = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+        const MEAL_ENUM = { 'Desayuno': 'desayuno', 'Almuerzo': 'almuerzo', 'Cena': 'cena' };
+        const valid = entries.filter(e => e.dish && e.dish.recipe_id);
+        if (!valid.length) { showToast('No hay recetas para guardar.'); return; }
+        // Sin plan activo no persistimos NADA (evita cuadros fantasma que desaparecen al recargar).
+        if (!currentMenuPlan) { showToast('No hay un plan de menú activo. Recarga la página e intenta de nuevo.', 'error'); return; }
+        // Validación: cada receta debe tener al menos una persona que la coma.
+        if (familyMembers.length > 0) {
+            const sinComensales = valid.filter(e => !(Array.isArray(e.eaters) && e.eaters.length));
+            if (sinComensales.length) {
+                const labels = sinComensales.map(e => { const [d, t] = e.slot.split('-'); return `${weekDays[parseInt(d, 10)] || ''} · ${t}`; }).join(', ');
+                showToast(`Selecciona al menos una persona en: ${labels}.`, 'error');
+                return;
+            }
+        }
+        // eaters: array de user_id elegidos; vacío/undefined = toda la familia (null en BD).
+        const eatersOf = (e) => (Array.isArray(e.eaters) && e.eaters.length ? e.eaters : null);
+        const fid = currentFamily?.family_id || currentFamily?.id;
+        const startDateStr = (currentMenuPlan.start_date || '').split('T')[0];
+
+        // 1) Validar caducidad por cuadro (igual que el flujo de una receta): los vencidos se OMITEN.
+        const toSave = [];
+        let blockedCount = 0;
+        const blockedDays = new Set();
+        for (const e of valid) {
+            const [dayIndexStr] = e.slot.split('-');
+            const dayIndex = parseInt(dayIndexStr, 10);
+            let ok = true;
+            if (fid && startDateStr) {
+                const scheduledDate = new Date(`${startDateStr}T12:00:00`);
+                scheduledDate.setDate(scheduledDate.getDate() + dayIndex);
+                try {
+                    const validation = await recipesService.validateExpiration({
+                        recipe_id: e.dish.recipe_id,
+                        family_id: fid,
+                        scheduled_date: scheduledDate.toISOString().split('T')[0],
+                    });
+                    if (validation && validation.valid === false) { ok = false; blockedCount++; blockedDays.add(DAY_ENUM[dayIndex]); }
+                } catch (err) { console.error('Error validando caducidad (plan):', err); /* error de red: no bloquear */ }
+            }
+            if (ok) toSave.push(e);
+        }
+        if (!toSave.length) {
+            showToast(`No se pudo planificar: ingredientes vencidos (${[...blockedDays].join(', ')}).`, 'error');
+            return;
+        }
+
+        // 2) Pintado optimista SOLO de los cuadros que sí se guardarán.
+        setPlannerData(prev => { const n = { ...prev }; toSave.forEach((e) => { n[e.slot] = { ...e.dish, eaters: eatersOf(e) }; }); return n; });
+
+        // 3) Persistir (revierte por-cuadro si un guardado falla).
+        let savedCount = 0, failedCount = 0;
+        for (const e of toSave) {
+            const { slot, dish } = e;
+            const [dayIndexStr, type] = slot.split('-');
+            const dayIndex = parseInt(dayIndexStr, 10);
+            try {
+                const saved = await dailyMealsService.save({ menu_plan_id: currentMenuPlan.menu_plan_id, recipe_id: dish.recipe_id, meal_type: MEAL_ENUM[type] || type.toLowerCase(), day_of_week: DAY_ENUM[dayIndex], eaters: eatersOf(e) });
+                setPlannerData(prev => ({ ...prev, [slot]: { ...prev[slot], daily_meal_id: saved.daily_meal_id } }));
+                savedCount++;
+            } catch (err) {
+                failedCount++;
+                console.error('Error guardando plan:', err);
+                setPlannerData(prev => { const n = { ...prev }; delete n[slot]; return n; });
+            }
+        }
+
+        // 4) Notificar SIEMPRE el resultado (guardados / vencidos omitidos / fallidos).
+        const parts = [];
+        if (savedCount > 0) parts.push(`${savedCount} ${savedCount === 1 ? 'agregada' : 'agregadas'}`);
+        if (blockedCount > 0) parts.push(`${blockedCount} con ingredientes vencidos`);
+        if (failedCount > 0) parts.push(`${failedCount} no se pudo guardar`);
+        const tone = savedCount > 0 ? ((blockedCount || failedCount) ? 'warning' : 'success') : 'error';
+        showToast(savedCount > 0 ? `Plan: ${parts.join(' · ')}.` : 'No se pudo guardar el plan.', tone);
+        handleCloseModal();
+    };
+
+    // Confirmar el plan variado (IA): guarda cada receta generada en su cuadro.
+    const handleConfirmPlanMulti = async () => {
+        const done = planItems.filter(p => p.status === 'done' && p.recipe?.recipe_id);
+        if (!done.length) { showToast('No hay recetas generadas para guardar.'); return; }
+        await savePlanEntries(done.map(p => ({ slot: p.slot, dish: p.recipe, eaters: eatersFor(p.slot) })));
+    };
+
+    // Bloque 7 (existentes): asigna/quita una receta ya creada a un cuadro concreto.
+    const assignRecipeToSlot = (slot, recipeIdStr) => {
+        if (!recipeIdStr) { setSlotAssignments(prev => { const n = { ...prev }; delete n[slot]; return n; }); return; }
+        const r = existingRecipes.find(x => String(x.recipe_id) === String(recipeIdStr));
+        if (!r) return;
+        const dish = {
+            name: r.title,
+            cal: r.calories_per_serving,
+            time: r.preparation_time ? `${r.preparation_time} min` : 'N/A',
+            img: r.image_url || 'https://images.unsplash.com/photo-1546554137-f86b9593a222?w=400',
+            ingredients: (Array.isArray(r.ingredients) ? r.ingredients : []).map(pluralizeUnits),
+            steps: r.instructions ? r.instructions.split('\n').filter(Boolean) : [],
+            description: r.description || '',
+            recipe_id: r.recipe_id,
+            servings: r.servings || 2,
+        };
+        setSlotAssignments(prev => ({ ...prev, [slot]: dish }));
+    };
+
+    // Confirmar el plan con recetas existentes: guarda cada asignación en su cuadro.
+    const handleConfirmExistingPlan = async () => {
+        const entries = selectedSlots.filter(s => slotAssignments[s]).map(s => ({ slot: s, dish: slotAssignments[s], eaters: eatersFor(s) }));
+        if (!entries.length) { showToast('Asigna al menos una receta a un cuadro.'); return; }
+        await savePlanEntries(entries);
     };
 
     // PASO 2: Generar receta (para 1 persona) y pasar al paso de personas
@@ -632,24 +922,31 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
     };
 
     // Escalar ingredientes de una receta IA (formato "1 cucharada de Nombre (qty unit)" o "Nombre (qty unit)")
-    const scaleAIDish = (dish, persons) => {
-        if (persons === 1 || !dish.ingredients || dish.ingredients.length === 0) return dish.ingredients;
+    const scaleAIDish = (dish, persons, plate = false) => {
+        if (!dish.ingredients || dish.ingredients.length === 0) return dish.ingredients || [];
+        if (persons === 1 && !plate) return dish.ingredients;
         return dish.ingredients.map(ing => {
             const match = ing.match(/^(?:([\d.]+)\s+(.+?)\s+de\s+)?(.+?)\s*\(([\d.]+)\s*(.+?)\)$/);
             if (!match) return ing;
-            
+
             const mQty = match[1] ? parseFloat(match[1]) : null;
             const mUnit = match[2] || '';
             const name = match[3].trim();
             const bQty = parseFloat(match[4]);
             const bUnit = match[5].trim();
-            
-            const scaledBQty = Math.round(bQty * persons * 100) / 100;
+
+            // Cantidad base escalada. En modo "plate" (ya servido) convertimos a gramos lo que se pesa.
+            let outQty = roundQty(bQty * persons, bUnit);
+            let outUnit = bUnit;
+            if (plate) {
+                const p = plateAmount(name, bQty * persons, bUnit);
+                outQty = p.qty; outUnit = p.unit;
+            }
             if (mQty) {
-                const scaledMQty = Math.round(mQty * persons * 100) / 100;
-                return pluralizeUnits(`${scaledMQty} ${mUnit} de ${name} (${scaledBQty} ${bUnit})`);
+                const scaledMQty = roundQty(mQty * persons, mUnit);
+                return pluralizeUnits(`${scaledMQty} ${mUnit} de ${name} (${outQty} ${outUnit})`);
             } else {
-                return pluralizeUnits(`${name} (${scaledBQty} ${bUnit})`);
+                return pluralizeUnits(`${name} (${outQty} ${outUnit})`);
             }
         });
     };
@@ -657,54 +954,72 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
     // PASO 3: Confirmar personas y agregar al planificador
     const handleConfirmAIServings = async () => {
         if (!aiDish) return;
+        // Validación: debe comer al menos una persona.
+        if (familyMembers.length > 0 && selectedMemberIds.length === 0) {
+            showToast('Selecciona al menos una persona que comerá esta receta.', 'error');
+            return;
+        }
+        // Sin plan activo NO pintamos nada (evita "fantasmas" que desaparecen al recargar).
+        if (!currentMenuPlan) { showToast('No hay un plan de menú activo. Recarga la página e intenta de nuevo.', 'error'); return; }
         const DAY_ENUM = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
         const MEAL_ENUM = { 'Desayuno': 'desayuno', 'Almuerzo': 'almuerzo', 'Cena': 'cena' };
 
-        // Crear la versión escalada para mostrar en el planner
-        const scaledDish = {
-            ...aiDish,
-            ingredients: scaleAIDish(aiDish, aiPlanServings),
-            servings: aiPlanServings, // guarda para cuántas personas se planificó
-        };
+        // La receta se guarda con sus servings BASE; el detalle del plato escala solo por familia.
+        const base = aiDish.servings || 1;
 
         // Si se eligió un turno en el paso de sugerencias, se aplica a los DÍAS
-        // seleccionados (el día viene de la cuadrícula; el turno, del selector).
-        // Si no, se usan los slots tal cual se eligieron.
-        const targetSlots = aiChosenTurn
+        // seleccionados. En modo 'edit' se IGNORA el turno: se respeta SIEMPRE el cuadro exacto.
+        let targetSlots = (aiChosenTurn && planMode !== 'edit')
             ? [...new Set(selectedSlots.map(s => parseInt(s.split('-')[0], 10)))].map(d => `${d}-${aiChosenTurn}`)
             : selectedSlots;
 
-        // -- VALIDAR CADUCIDAD PARA LOS SLOTS --
+        // En modo 'plan' no pisamos cuadros ya planificados (editar sí reemplaza a propósito).
+        if (planMode !== 'edit') {
+            const before = targetSlots.length;
+            targetSlots = targetSlots.filter(slot => !plannerData[slot]);
+            if (targetSlots.length < before) {
+                showToast('Omití los cuadros que ya estaban planificados. Para cambiarlos, edítalos desde el calendario.', 'info');
+            }
+            if (targetSlots.length === 0) { handleCloseModal(); return; }
+        }
+
+        // -- VALIDAR CADUCIDAD: se OMITEN (no abortan todo) los días con ingredientes vencidos --
         if (currentMenuPlan && aiDish.recipe_id) {
+            const okSlots = [];
+            const blockedDays = new Set();
             for (const slot of targetSlots) {
                 const [dayIndexStr] = slot.split('-');
                 const dayIndex = parseInt(dayIndexStr, 10);
                 const startDateStr = currentMenuPlan.start_date.split('T')[0];
                 const scheduledDate = new Date(`${startDateStr}T12:00:00`);
                 scheduledDate.setDate(scheduledDate.getDate() + dayIndex);
-
+                let ok = true;
                 try {
                     const validation = await recipesService.validateExpiration({
                         recipe_id: aiDish.recipe_id,
                         family_id: currentFamily.family_id || currentFamily.id,
                         scheduled_date: scheduledDate.toISOString().split('T')[0]
                     });
-                    if (!validation.valid) {
-                        showToast(`⚠️ No puedes planificar para el día ${DAY_ENUM[dayIndex]}.\n\nIngredientes vencidos:\n- ${validation.expiredIngredients.join('\n- ')}`);
-                        return;
-                    }
-                } catch (err) {
-                    console.error('Error validando caducidad IA', err);
-                }
+                    if (validation && !validation.valid) { ok = false; blockedDays.add(DAY_ENUM[dayIndex]); }
+                } catch (err) { console.error('Error validando caducidad IA', err); }
+                if (ok) okSlots.push(slot);
             }
+            if (blockedDays.size) showToast(`Omití ${blockedDays.size} ${blockedDays.size === 1 ? 'día' : 'días'} con ingredientes vencidos: ${[...blockedDays].join(', ')}.`, 'warning');
+            targetSlots = okSlots;
+            if (targetSlots.length === 0) { handleCloseModal(); return; }
         }
 
-        // Agregar al planner UI
+        // Agregar al planner UI. Guardamos los ingredientes BASE + servings base de la
+        // receta (no los ya escalados): así el detalle escala igual que al recargar.
+        // Bloque 7: quiénes comen (los elegidos en el paso de personas). Vacío = toda la familia (null).
+        const eatersVal = (Array.isArray(selectedMemberIds) && selectedMemberIds.length) ? selectedMemberIds : null;
+        const baseDish = { ...aiDish, servings: base, eaters: eatersVal };
         const newMenu = { ...plannerData };
-        targetSlots.forEach(slot => { newMenu[slot] = { ...scaledDish }; });
+        targetSlots.forEach(slot => { newMenu[slot] = { ...baseDish }; });
         setPlannerData(newMenu);
 
         // Persistir en BD
+        let savedCount = 0, failedCount = 0;
         if (currentMenuPlan && aiDish.recipe_id) {
             for (const slot of targetSlots) {
                 const [dayIndexStr, type] = slot.split('-');
@@ -715,25 +1030,30 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                         recipe_id: aiDish.recipe_id,
                         meal_type: MEAL_ENUM[type] || type.toLowerCase(),
                         day_of_week: DAY_ENUM[dayIndex],
+                        eaters: eatersVal,
                     });
                     setPlannerData(prev => ({
                         ...prev,
                         [slot]: { ...prev[slot], daily_meal_id: saved.daily_meal_id },
                     }));
+                    savedCount++;
                 } catch (saveErr) {
+                    failedCount++;
                     console.error('Error guardando meal en BD:', saveErr);
+                    // Revertir el pintado optimista de este cuadro (no se persistió en BD).
+                    setPlannerData(prev => { const n = { ...prev }; delete n[slot]; return n; });
                 }
             }
         }
 
-        // Descontar inventario escalado por número de personas
-        const familyId = currentFamily?.family_id || currentFamily?.id;
-        if (aiDish.recipe_id && familyId) {
-            try {
-                await inventoryService.deduct(aiDish.recipe_id, familyId, aiPlanServings);
-            } catch (deductErr) {
-                console.error('Error al descontar inventario:', deductErr);
-            }
+        // Bloque 8: el inventario ya NO se descuenta al planificar (era un estimado).
+        // Se descuenta en el momento REAL, al marcar la comida como cocinada.
+
+        // Notificar el resultado del guardado (el sistema avisa siempre)
+        if (currentMenuPlan && aiDish.recipe_id) {
+            if (savedCount > 0 && failedCount === 0) showToast('Receta agregada al plan.', 'success');
+            else if (savedCount > 0) showToast('Se agregó, pero algún cuadro no se pudo guardar.', 'warning');
+            else showToast('No se pudo guardar en el plan. Revisa tu conexión e intenta de nuevo.', 'error');
         }
 
         // Cerrar modal y resetear todo
@@ -745,6 +1065,10 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         setSelectedSlots([]);
         setAiChosenTurn(null);
         setSuggestionTurns({});
+        setAiFromExisting(false);
+        setPlanMode('plan');
+        setSlotAssignments({});
+        setSlotEaters({});
     };
 
     // Resetear al cerrar modal
@@ -759,16 +1083,251 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
         setSelectedSlots([]);
         setAiChosenTurn(null);
         setSuggestionTurns({});
+        setAiFromExisting(false);
         setRecipeSearch('');
+        setPlanMode('plan');
+        setPlanItems([]);
+        setPlanGenerating(false);
+        setSlotAssignments({});
+        setSlotEaters({});
+        setEditingExisting(false);
+        setCalSelectMode(false);
+        setCalSelected([]);
+        setCalMode(null);
     };
 
-    // Abrir el planificador para un cuadro (día+turno) concreto → va DIRECTO al modo IA.
-    // La opción "receta existente" queda como enlace secundario dentro de la pantalla IA.
-    const handlePlanSlot = (dayIndex, type) => {
+    // Abrir el planificador para un cuadro (día+turno) concreto.
+    // mode='plan' (cuadro vacío) → va directo al modo IA. mode='edit' (Cambiar una receta ya
+    // planificada) → pregunta primero si quiere IA o una receta existente (item 3).
+    const handlePlanSlot = (dayIndex, type, mode = 'plan') => {
         if (userRole === 'ayudante') { showToast('No tienes permiso para planificar.'); return; }
+        setPlanMode(mode);
         setSelectedSlots([`${dayIndex}-${type}`]);
+        setAiChosenTurn(null);
+        setAiFromExisting(false);
+        setAiDish(null);
+        setAiStep(mode === 'edit' ? 'choose' : 'config');
+        setShowModal(true);
+    };
+
+    // ── Selección múltiple desde el calendario ──
+    // La PRIMERA casilla decide el modo: vacía → 'plan' (solo vacías); con receta → 'manage'
+    // (solo planificadas, para editar o eliminar).
+    const exitCalSelect = () => { setCalSelectMode(false); setCalSelected([]); setCalMode(null); };
+    const toggleCalSelect = (dayIndex, type, hasMeal) => {
+        if (userRole === 'ayudante') { showToast('No tienes permiso para planificar.'); return; }
+        const key = `${dayIndex}-${type}`;
+        // Deseleccionar siempre permitido; si queda vacío, se libera el modo.
+        if (calSelected.includes(key)) {
+            const next = calSelected.filter(k => k !== key);
+            setCalSelected(next);
+            if (next.length === 0) setCalMode(null);
+            return;
+        }
+        const mode = calMode || (hasMeal ? 'manage' : 'plan');
+        if (mode === 'plan') {
+            if (hasMeal) { showToast('Estás planificando cuadros vacíos. Para editar o eliminar recetas, sal y empieza tocando una ya planificada.', 'info'); return; }
+            // Validaciones de fecha (solo al planificar cuadros nuevos).
+            if (expiredDayIndexes.has(dayIndex)) { showToast('Ese día tiene ingredientes vencidos, no puedes planificar ahí.', 'warning'); return; }
+            if (weekOffset === 0) {
+                const now = new Date();
+                const currentDayIndex = now.getDay() === 0 ? 6 : now.getDay() - 1;
+                const currentHour = now.getHours();
+                if (dayIndex < currentDayIndex) { showToast('Ese día ya pasó, no puedes planificar ahí.', 'warning'); return; }
+                if (dayIndex === currentDayIndex && ((type === 'Desayuno' && currentHour >= 11) || (type === 'Almuerzo' && currentHour >= 17) || (type === 'Cena' && currentHour >= 22))) {
+                    showToast('Ese horario de hoy ya pasó.', 'warning'); return;
+                }
+            }
+        } else { // manage
+            if (!hasMeal) { showToast('Estás gestionando recetas planificadas. Toca solo cuadros que ya tengan receta.', 'info'); return; }
+        }
+        if (!calMode) setCalMode(mode);
+        setCalSelected(prev => [...prev, key]);
+    };
+    // "Planificar (N)": abre el asistente con esos cuadros VACÍOS ya elegidos.
+    const startPlanFromSelection = () => {
+        if (calSelected.length === 0) { showToast('Toca al menos un cuadro vacío para planificar.', 'info'); return; }
+        setPlanMode('plan');
+        setSelectedSlots([...calSelected]);
+        setAiChosenTurn(null);
+        setAiFromExisting(false);
+        setAiDish(null);
         setAiStep('config');
         setShowModal(true);
+        exitCalSelect();
+    };
+    // "Editar (N)": abre la interfaz de asignación PRECARGADA con la receta y comensales
+    // actuales de cada cuadro planificado; al guardar actualiza (no crea encima).
+    const startEditSelection = () => {
+        const slots = [...calSelected];
+        if (slots.length === 0) { showToast('Toca al menos una receta planificada para editar.', 'info'); return; }
+        const preAssign = {}, preEaters = {};
+        slots.forEach(s => {
+            const m = plannerData[s];
+            if (!m) return;
+            preAssign[s] = { ...m };
+            preEaters[s] = (Array.isArray(m.eaters) && m.eaters.length) ? [...m.eaters] : familyMembers.map(x => x.user_id);
+        });
+        setSlotAssignments(preAssign);
+        setSlotEaters(preEaters);
+        setSelectedSlots(slots);
+        setEditingExisting(true);
+        setPlanMode('plan');
+        setAiStep('existing');
+        setAiChosenTurn(null);
+        setAiFromExisting(false);
+        setAiDish(null);
+        setShowModal(true);
+        loadExistingRecipes();
+        setCalSelectMode(false); // conservamos calSelected por si se cancela; se limpia al cerrar
+    };
+    // Guardar la edición múltiple: por cada cuadro, si cambió la receta hace upsert (revalida
+    // caducidad); si solo cambiaron los comensales, actualiza eaters (sin revalidar).
+    const handleSaveEditMulti = async () => {
+        if (!currentMenuPlan) { showToast('No hay un plan de menú activo. Recarga la página e intenta de nuevo.', 'error'); return; }
+        const DAY_ENUM = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+        const MEAL_ENUM = { 'Desayuno': 'desayuno', 'Almuerzo': 'almuerzo', 'Cena': 'cena' };
+        // Validación: cada cuadro debe tener receta y al menos una persona.
+        if (familyMembers.length > 0) {
+            const sinPersonas = selectedSlots.filter(s => slotAssignments[s] && !(eatersFor(s) || []).length);
+            if (sinPersonas.length) {
+                const labels = sinPersonas.map(s => { const [d, t] = s.split('-'); return `${weekDays[parseInt(d, 10)] || ''} · ${t}`; }).join(', ');
+                showToast(`Selecciona al menos una persona en: ${labels}.`, 'error');
+                return;
+            }
+        }
+        const fid = currentFamily?.family_id || currentFamily?.id;
+        const startDateStr = (currentMenuPlan?.start_date || '').split('T')[0];
+        let updated = 0, failed = 0, blocked = 0;
+        const blockedDays = new Set();
+        for (const slot of selectedSlots) {
+            const dish = slotAssignments[slot];
+            if (!dish || !dish.recipe_id) continue; // "Sin receta" en edición = sin cambio
+            const original = plannerData[slot];
+            const [dayIndexStr, type] = slot.split('-');
+            const dayIndex = parseInt(dayIndexStr, 10);
+            const eaters = (eatersFor(slot) || []);
+            const eatersToPersist = eaters.length ? eaters : null;
+            const recipeChanged = !original || String(original.recipe_id) !== String(dish.recipe_id);
+            try {
+                if (recipeChanged) {
+                    // Revalidar caducidad para la nueva receta en ese día.
+                    if (fid && startDateStr) {
+                        const scheduledDate = new Date(`${startDateStr}T12:00:00`);
+                        scheduledDate.setDate(scheduledDate.getDate() + dayIndex);
+                        try {
+                            const v = await recipesService.validateExpiration({ recipe_id: dish.recipe_id, family_id: fid, scheduled_date: scheduledDate.toISOString().split('T')[0] });
+                            if (v && v.valid === false) { blocked++; blockedDays.add(DAY_ENUM[dayIndex]); continue; }
+                        } catch (e) { console.error('Error validando caducidad (editar):', e); }
+                    }
+                    const saved = await dailyMealsService.save({ menu_plan_id: currentMenuPlan.menu_plan_id, recipe_id: dish.recipe_id, meal_type: MEAL_ENUM[type] || type.toLowerCase(), day_of_week: DAY_ENUM[dayIndex], eaters: eatersToPersist });
+                    setPlannerData(prev => ({ ...prev, [slot]: { ...dish, eaters: eatersToPersist, daily_meal_id: saved.daily_meal_id } }));
+                    updated++;
+                } else {
+                    // Solo comensales: no revalida caducidad.
+                    if (original.daily_meal_id) await dailyMealsService.updateEaters(original.daily_meal_id, eatersToPersist);
+                    setPlannerData(prev => ({ ...prev, [slot]: { ...prev[slot], eaters: eatersToPersist } }));
+                    updated++;
+                }
+            } catch (e) {
+                failed++;
+                console.error('Error guardando edición:', e);
+            }
+        }
+        const parts = [];
+        if (updated > 0) parts.push(`${updated} ${updated === 1 ? 'actualizada' : 'actualizadas'}`);
+        if (blocked > 0) parts.push(`${blocked} con ingredientes vencidos (${[...blockedDays].join(', ')})`);
+        if (failed > 0) parts.push(`${failed} con error`);
+        const tone = updated > 0 ? ((blocked || failed) ? 'warning' : 'success') : 'error';
+        showToast(updated > 0 ? `Cambios: ${parts.join(' · ')}.` : (blocked ? `No se guardó: ingredientes vencidos (${[...blockedDays].join(', ')}).` : 'No se pudo guardar.'), tone);
+        handleCloseModal();
+    };
+    // "Eliminar (N)": pide confirmación para borrar las recetas planificadas seleccionadas.
+    const requestBulkDelete = () => {
+        if (calSelected.length === 0) { showToast('Toca al menos una receta planificada para eliminar.', 'info'); return; }
+        setPendingBulkDelete([...calSelected]);
+    };
+    const confirmBulkDelete = async () => {
+        const slots = pendingBulkDelete || [];
+        setPendingBulkDelete(null);
+        let deleted = 0, failed = 0;
+        for (const slot of slots) {
+            const meal = plannerData[slot];
+            if (!meal) continue;
+            setPlannerData(prev => { const n = { ...prev }; delete n[slot]; return n; });
+            try {
+                if (meal.daily_meal_id) await dailyMealsService.delete(meal.daily_meal_id);
+                deleted++;
+            } catch (e) {
+                failed++;
+                console.error('Error al eliminar (bulk):', e);
+                setPlannerData(prev => ({ ...prev, [slot]: meal })); // revertir
+            }
+        }
+        showToast(deleted > 0 ? `${deleted} ${deleted === 1 ? 'receta eliminada' : 'recetas eliminadas'}${failed ? ` · ${failed} con error` : ''}.` : 'No se pudo eliminar.', deleted > 0 ? (failed ? 'warning' : 'success') : 'error');
+        exitCalSelect();
+    };
+
+    // Bloque 8: descuenta el inventario REAL cuando una comida se marca como cocinada (una sola vez).
+    const deductForCooked = async (meal) => {
+        const fid = currentFamily?.family_id || currentFamily?.id;
+        if (!fid || !meal?.recipe_id || !meal?.daily_meal_id) return;
+        const dedKey = `nv_ded_${meal.daily_meal_id}`;
+        if (sessionStorage.getItem(dedKey)) return; // ya se descontó esta comida
+        const base = Number(meal.servings) || 2;
+        // Solo descuenta según quienes realmente comen (eaters); si no hay, toda la familia.
+        const eaterMembers = (Array.isArray(meal.eaters) && meal.eaters.length)
+            ? familyMembers.filter(m => meal.eaters.includes(m.user_id))
+            : familyMembers;
+        const factor = eaterMembers.length ? totalPortions(eaterMembers) : base;
+        const mult = base > 0 ? factor / base : 1;
+        try {
+            await inventoryService.deduct(meal.recipe_id, fid, mult);
+            sessionStorage.setItem(dedKey, '1');
+            showToast('🧊 Inventario descontado por lo cocinado.', 'success');
+        } catch (e) {
+            console.error('Error al descontar inventario:', e);
+            showToast('La comida se marcó como hecha, pero no se pudo descontar el inventario. Ajústalo a mano.', 'warning');
+        }
+    };
+
+    // Bloque 8: aviso "¿cocinaste?" por franja horaria (una sola vez por sesión y por cuadro).
+    // Desayuno tras 9h, almuerzo tras 16h, cena tras 22h; solo la semana actual.
+    useEffect(() => {
+        if (weekOffset !== 0) return;
+        if (userRole === 'ayudante') return; // los ayudantes no marcan comidas ni descuentan inventario
+        const now = new Date();
+        const todayIndex = (now.getDay() + 6) % 7;
+        const hour = now.getHours();
+        const dateStr = now.toISOString().split('T')[0];
+        const THRESHOLDS = [['Desayuno', 9], ['Almuerzo', 16], ['Cena', 22]];
+        for (const [type, th] of THRESHOLDS) {
+            if (hour < th) continue;
+            const meal = plannerData[`${todayIndex}-${type}`];
+            if (!meal || meal.is_completed) continue;
+            const askKey = `nv_cookask_${dateStr}_${todayIndex}_${type}`;
+            if (sessionStorage.getItem(askKey)) continue;
+            setCookedPrompt({ meal, dayIndex: todayIndex, type, askKey });
+            break; // uno a la vez
+        }
+    }, [plannerData, weekOffset]);
+
+    const handleCookedYes = async () => {
+        if (!cookedPrompt) return;
+        if (userRole === 'ayudante') { setCookedPrompt(null); showToast('No tienes permiso para marcar comidas.'); return; }
+        const { meal, dayIndex, type, askKey } = cookedPrompt;
+        sessionStorage.setItem(askKey, '1');
+        setCookedPrompt(null);
+        try {
+            await dailyMealsService.toggleComplete(meal.daily_meal_id, true);
+            setPlannerData(prev => ({ ...prev, [`${dayIndex}-${type}`]: { ...prev[`${dayIndex}-${type}`], is_completed: 1 } }));
+            await deductForCooked(meal);
+        } catch (e) { showToast('No se pudo marcar la comida.'); }
+    };
+    const handleCookedNo = () => {
+        if (!cookedPrompt) return;
+        sessionStorage.setItem(cookedPrompt.askKey, '1');
+        setCookedPrompt(null);
     };
 
     // Cargar las recetas que ya tiene la familia (modo "agregar receta existente")
@@ -812,31 +1371,12 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
             servings: r.servings || 2,
         };
 
-        // UI inmediata
-        const newMenu = { ...plannerData };
-        selectedSlots.forEach(slot => { newMenu[slot] = { ...meal }; });
-        setPlannerData(newMenu);
-
-        // Persistir (el backend reemplaza si el slot ya estaba ocupado)
-        if (currentMenuPlan && r.recipe_id) {
-            for (const slot of selectedSlots) {
-                const [dayIndexStr, type] = slot.split('-');
-                const dayIndex = parseInt(dayIndexStr, 10);
-                try {
-                    const saved = await dailyMealsService.save({
-                        menu_plan_id: currentMenuPlan.menu_plan_id,
-                        recipe_id: r.recipe_id,
-                        meal_type: MEAL_ENUM[type] || type.toLowerCase(),
-                        day_of_week: DAY_ENUM[dayIndex],
-                    });
-                    setPlannerData(prev => ({ ...prev, [slot]: { ...prev[slot], daily_meal_id: saved.daily_meal_id } }));
-                } catch (e) {
-                    console.error('Error guardando receta existente:', e);
-                }
-            }
-        }
-        showToast('Receta agregada al plan.', 'success');
-        handleCloseModal();
+        // Bloque 3: en vez de agregar directo, pasamos al paso "¿quiénes comerán?" para
+        // escalar las porciones por integrante. El guardado + descuento ocurre en
+        // handleConfirmAIServings (compartido con el flujo IA). `meal.servings` es la base.
+        setAiDish(meal);
+        setAiFromExisting(true);
+        setAiStep('servings');
     };
 
     // ── BORRADO CON CONFIRMACIÓN ──
@@ -862,15 +1402,32 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
             showToast('Receta eliminada del plan.', 'success');
         } catch (e) {
             console.error('Error al eliminar la comida:', e);
+            // Restaurar: no se borró en BD, no debe desaparecer de la vista.
+            setPlannerData(prev => ({ ...prev, [key]: meal }));
             showToast('No se pudo eliminar. Intenta de nuevo.', 'error');
         }
     };
 
     // Cuadrícula de slots reutilizable (paso IA y paso receta existente)
-    const renderSlotGrid = () => (
+    const renderSlotGrid = () => {
+        // Modo EDITAR: bloqueado a un solo cuadro (no se puede cambiar día ni comida)
+        if (planMode === 'edit' && selectedSlots.length === 1) {
+            const [dStr, t] = selectedSlots[0].split('-');
+            const dName = weekDays[parseInt(dStr, 10)] || '';
+            return (
+                <div style={{ marginTop: 20 }}>
+                    <div className="section-title"><CalendarBlank weight="fill" color="#FF9F43" /> Estás cambiando esta comida</div>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginTop: 10, padding: '12px 18px', borderRadius: 14, border: '2px solid #FF9F43', background: '#FFF7ED', fontWeight: 800, color: '#2A2118' }}>
+                        <Check size={18} weight="bold" color="#e67e22" /> {dName} · {t}
+                    </div>
+                    <p style={{ fontSize: '0.82rem', color: '#9b8d7c', marginTop: 10 }}>Solo elige la nueva receta. Para moverla a otro día, elimínala y planifícala de nuevo.</p>
+                </div>
+            );
+        }
+        return (
         <>
             <div className="section-title" style={{ marginTop: '20px' }}><CalendarBlank weight="fill" color="#FF9F43" /> ¿Dónde quieres agregar la receta?</div>
-            <p style={{ fontSize: '0.85rem', color: '#9b8d7c', marginBottom: '15px' }}>Toca los cuadros para elegir los días y comidas.</p>
+            <p style={{ fontSize: '0.85rem', color: '#9b8d7c', marginBottom: '15px' }}>Toca los cuadros libres para elegir. Los que tienen foto ya están planificados.</p>
 
             {expiredDayIndexes.size > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '8px 12px', marginBottom: 12, fontSize: '0.82rem', color: '#DC2626' }}>
@@ -911,21 +1468,37 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                 {weekDays.map((_, dayIndex) => {
                                     const slotKey = `${dayIndex}-${meal}`;
                                     const isSelected = selectedSlots.includes(slotKey);
+                                    const isPlanned = !isSelected && !!(plannerData && plannerData[slotKey]); // ya tiene comida
                                     const isExpiredBlocked = expiredDayIndexes.has(dayIndex);
                                     const isTimeDisabled = isSlotDisabled(dayIndex, meal);
-                                    const isBlocked = isExpiredBlocked || isTimeDisabled;
+                                    const isBlocked = isExpiredBlocked || isTimeDisabled || isPlanned;
+                                    // Toda acción bloqueada NOTIFICA el porqué al usuario.
+                                    const handleCell = () => {
+                                        if (isSelected) { toggleSlot(dayIndex, meal); return; } // permitir deseleccionar
+                                        if (isPlanned) { showToast('Ese cuadro ya tiene una comida planificada. Para cambiarla o quitarla, tócala en el calendario.', 'info'); return; }
+                                        if (isExpiredBlocked) { showToast('Ese día tiene ingredientes vencidos, no puedes planificar ahí.', 'warning'); return; }
+                                        if (isTimeDisabled) { showToast(dayIndex < currentDayIndex ? 'Ese día ya pasó, no puedes planificar ahí.' : 'Ese horario de hoy ya pasó.', 'warning'); return; }
+                                        toggleSlot(dayIndex, meal);
+                                    };
                                     return (
-                                        <div key={slotKey} onClick={() => { if (!isBlocked) toggleSlot(dayIndex, meal); }} style={{
-                                            aspectRatio: '1', borderRadius: '8px',
-                                            border: isExpiredBlocked ? '2px solid #FECACA' : (isTimeDisabled ? '2px solid #e2e8f0' : (isSelected ? '2px solid #FF9F43' : '2px dashed #e2e8f0')),
-                                            background: isExpiredBlocked ? '#FEF2F2' : (isTimeDisabled ? '#f1f5f9' : (isSelected ? '#fffaf0' : 'transparent')),
+                                        <div key={slotKey} onClick={handleCell} title={isPlanned ? 'Ya planificado' : (isExpiredBlocked ? 'Ingrediente vencido este día' : (isTimeDisabled ? 'Horario pasado' : ''))} style={{
+                                            aspectRatio: '1', borderRadius: '8px', overflow: 'hidden',
+                                            border: isPlanned ? '2px solid #F7B27B' : (isExpiredBlocked ? '2px solid #FECACA' : (isTimeDisabled ? '2px solid #e2e8f0' : (isSelected ? '2px solid #FF9F43' : '2px dashed #e2e8f0'))),
+                                            background: isPlanned ? '#FFF3E6' : (isExpiredBlocked ? '#FEF2F2' : (isTimeDisabled ? '#f1f5f9' : (isSelected ? '#fffaf0' : 'transparent'))),
                                             cursor: isBlocked ? 'not-allowed' : 'pointer',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                                             transition: 'all 0.2s', minWidth: '40px',
-                                            opacity: isBlocked ? 0.6 : 1,
-                                        }} title={isExpiredBlocked ? 'Ingrediente vencido este día' : (isTimeDisabled ? 'Horario pasado' : '')}>
-                                            {isBlocked && <span style={{ fontSize: '0.8rem', color: isExpiredBlocked ? '#DC2626' : '#cbd5e1' }}>{isExpiredBlocked ? '🚫' : '✕'}</span>}
-                                            {!isBlocked && isSelected && <Check size={18} weight="bold" color="#FF9F43" />}
+                                            opacity: (isExpiredBlocked || isTimeDisabled) ? 0.6 : 1,
+                                        }}>
+                                            {isPlanned
+                                                ? <img src={imgProxy(plannerData[slotKey].img)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                : isExpiredBlocked
+                                                    ? <span style={{ fontSize: '0.8rem', color: '#DC2626' }}>🚫</span>
+                                                    : isTimeDisabled
+                                                        ? <span style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>✕</span>
+                                                        : isSelected
+                                                            ? <Check size={18} weight="bold" color="#FF9F43" />
+                                                            : null}
                                         </div>
                                     );
                                 })}
@@ -935,23 +1508,9 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                 );
             })()}
         </>
-    );
+        );
+    };
 
-    // Determinar si podemos incrementar personas según inventario para IA
-    let canIncrementAI = aiPlanServings < 20;
-    if (canIncrementAI && aiDish && aiDish.ingredients && myInventory.length > 0) {
-        for (const ingStr of aiDish.ingredients) {
-            const match = ingStr.match(/^(?:([\d.]+)\s+(.+?)\s+de\s+)?(.+?)\s*\(([\d.]+)\s*(.+?)\)$/);
-            if (!match) continue;
-            const name = match[3].trim().toLowerCase();
-            const reqQty = parseFloat(match[4]) * (aiPlanServings + 1);
-            const invItem = myInventory.find(i => i.name.toLowerCase() === name);
-            if (invItem && reqQty > invItem.quantity) {
-                canIncrementAI = false;
-                break;
-            }
-        }
-    }
 
     return (
         <div className="main-content">
@@ -963,11 +1522,27 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                     <p>Hola, <strong>{userProfile.name}</strong> 👋 Organiza tu semana.</p>
                 </div>
                 <div className="header-actions">
+                    {weekOffset === 0 && userRole !== 'ayudante' && (
+                        <button
+                            type="button"
+                            onClick={() => { if (calSelectMode) exitCalSelect(); else { setCalSelectMode(true); setCalSelected([]); } }}
+                            disabled={isGenerating}
+                            style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 14,
+                                border: `2px solid ${calSelectMode ? '#e67e22' : 'rgba(230,126,34,0.35)'}`,
+                                background: calSelectMode ? 'linear-gradient(135deg,#FF9F43,#FF7F50)' : '#fff',
+                                color: calSelectMode ? '#fff' : '#e67e22', fontWeight: 800, fontFamily: 'inherit',
+                                cursor: isGenerating ? 'not-allowed' : 'pointer', fontSize: '0.95rem', transition: 'all 0.18s',
+                            }}
+                        >
+                            {calSelectMode ? <><X size={18} weight="bold" /> Salir</> : <><CheckSquare size={18} weight="fill" /> Seleccionar varios</>}
+                        </button>
+                    )}
                     {weekOffset === 0 && (
                         <div className="btn-locked-wrapper" data-tooltip={userRole === 'ayudante' ? '🔒 Sin permiso' : undefined}>
                             <button
                                 className={`btn-primary${userRole === 'ayudante' ? ' btn-locked' : ''}`}
-                                onClick={userRole !== 'ayudante' ? () => { setSelectedSlots([]); setAiStep('config'); setShowModal(true); } : undefined}
+                                onClick={userRole !== 'ayudante' ? () => { setPlanMode('plan'); setSelectedSlots([]); setAiStep('config'); setShowModal(true); } : undefined}
                                 disabled={isGenerating}
                             >
                                 {isGenerating ? <CircleNotch size={20} className="ph-spin" /> : <Sparkle size={20} weight="fill" />}
@@ -1026,14 +1601,18 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                         {/* Header */}
                         <div className="modal-header-modern">
                             <div>
-                                <h2 style={{ margin: 0, fontSize: '1.5rem', color: '#111827', fontWeight: '800' }}>
-                                    {aiStep === 'choose' ? '🍽️ ¿Cómo quieres planificar?' : aiStep === 'existing' ? '📖 Tus recetas' : aiStep === 'config' ? '🍳 Chef Inteligente' : aiStep === 'suggestions' ? '🍽️ Elige una Receta' : aiStep === 'servings' ? '👥 ¿Para cuántas personas?' : '🍳 Generando...'}
+                                <h2 style={{ display: 'flex', alignItems: 'center', gap: 10, margin: 0, fontSize: '1.5rem', color: '#111827', fontWeight: 800 }}>
+                                    {(() => {
+                                        const M = { choose: [CalendarBlank, '¿Cómo quieres planificar?'], existing: [BookOpen, 'Tus recetas'], config: [ChefHat, 'Chef Inteligente'], suggestions: [Sparkle, 'Elige una Receta'], servings: [UsersThree, '¿Quiénes comerán?'], generating: [CircleNotch, 'Generando...'] };
+                                        const [Ic, t] = (aiStep === 'existing' && editingExisting) ? [PencilSimple, 'Editar planificadas'] : (M[aiStep] || M.generating);
+                                        return <><Ic size={24} weight="fill" color="#FF7F50" className={aiStep === 'generating' ? 'ph-spin' : ''} /> {t}</>;
+                                    })()}
                                 </h2>
                                 <p style={{ margin: '4px 0 0', color: '#6B5E4F', fontSize: '0.95rem' }}>
-                                    {aiStep === 'choose' ? 'Elige cómo agregar la receta' : aiStep === 'existing' ? 'Agrega una receta que ya tienes' : aiStep === 'config' ? 'Personaliza tu menú con IA' : aiStep === 'suggestions' ? 'La IA sugiere estos platos para ti' : aiStep === 'servings' ? 'Los ingredientes se escalarán automáticamente' : 'Creando tu receta completa...'}
+                                    {aiStep === 'choose' ? 'Elige cómo agregar la receta' : aiStep === 'existing' ? (editingExisting ? 'Cambia la receta o los comensales de cada día' : 'Agrega una receta que ya tienes') : aiStep === 'config' ? 'Personaliza tu menú con IA' : aiStep === 'suggestions' ? 'La IA sugiere estos platos para ti' : aiStep === 'servings' ? 'Ajustamos las cantidades a cada persona según sus datos' : 'Creando tu receta completa...'}
                                 </p>
                             </div>
-                            <button onClick={handleCloseModal} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 5 }}>
+                            <button onClick={handleCloseModal} style={{ background: 'none', border: 'none', cursor: 'pointer', width: 40, height: 40, display: 'grid', placeItems: 'center', borderRadius: 10 }}>
                                 <X size={24} color="#9b8d7c" />
                             </button>
                         </div>
@@ -1126,57 +1705,120 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                             {/* ── PASO ALTERNATIVO: RECETA EXISTENTE ── */}
                             {aiStep === 'existing' && (
                                 <>
-                                    {renderSlotGrid()}
+                                    {!editingExisting && renderSlotGrid()}
 
-                                    <div className="section-title" style={{ marginTop: 24 }}><BookOpen weight="fill" color="#FF9F43" /> Elige una receta</div>
-
-                                    <div style={{ position: 'relative', marginBottom: 14 }}>
-                                        <MagnifyingGlass size={18} color="#9b8d7c" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} />
-                                        <input
-                                            type="text"
-                                            value={recipeSearch}
-                                            onChange={e => setRecipeSearch(e.target.value)}
-                                            placeholder="Buscar receta..."
-                                            style={{ width: '100%', padding: '12px 14px 12px 42px', borderRadius: 12, border: '2px solid rgba(230,126,34,0.2)', background: '#FFF9F2', fontSize: '0.95rem', color: '#2A2118', outline: 'none' }}
-                                        />
-                                    </div>
-
-                                    {loadingExisting ? (
-                                        <div style={{ textAlign: 'center', padding: '30px 0' }}>
-                                            <CircleNotch size={40} className="ph-spin" color="#FF9F43" />
-                                            <p style={{ color: '#6B5E4F', marginTop: 12, fontWeight: 600 }}>Cargando tus recetas...</p>
-                                        </div>
-                                    ) : (() => {
-                                        const q = recipeSearch.trim().toLowerCase();
-                                        const list = existingRecipes.filter(r => !q || (r.title || '').toLowerCase().includes(q));
-                                        if (existingRecipes.length === 0) {
-                                            return <p style={{ color: '#9b8d7c', fontSize: '0.9rem', textAlign: 'center', padding: '20px 0' }}>No tienes recetas guardadas todavía. Créalas en la sección Recetas.</p>;
-                                        }
-                                        if (list.length === 0) {
-                                            return <p style={{ color: '#9b8d7c', fontSize: '0.9rem', textAlign: 'center', padding: '20px 0' }}>Ninguna receta coincide con "{recipeSearch}".</p>;
-                                        }
-                                        return (
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                                {list.map(r => (
-                                                    <div key={r.recipe_id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#FFF9F2', border: '1px solid rgba(230,126,34,0.18)', borderRadius: 14, padding: 10 }}>
-                                                        <img src={r.image_url || 'https://images.unsplash.com/photo-1546554137-f86b9593a222?w=200'} alt={r.title} style={{ width: 56, height: 56, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
-                                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                                            <div style={{ fontWeight: 700, color: '#2A2118', fontSize: '0.98rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.title}</div>
-                                                            <div style={{ fontSize: '0.8rem', color: '#9b8d7c' }}>🔥 {r.calories_per_serving || '—'} kcal · ⏱️ {r.preparation_time ? `${r.preparation_time} min` : 'N/A'}</div>
+                                    {(selectedSlots.length >= 2 || editingExisting) ? (
+                                        /* ── MODO PLAN / EDICIÓN: una receta (puede ser distinta) por cada cuadro ── */
+                                        (() => {
+                                            const MEAL_ORDER = { 'Desayuno': 0, 'Almuerzo': 1, 'Cena': 2 };
+                                            const orderedSlots = [...selectedSlots].sort((a, b) => {
+                                                const [ad, am] = a.split('-'); const [bd, bm] = b.split('-');
+                                                return (parseInt(ad, 10) - parseInt(bd, 10)) || ((MEAL_ORDER[am] ?? 0) - (MEAL_ORDER[bm] ?? 0));
+                                            });
+                                            const assignedCount = orderedSlots.filter(s => slotAssignments[s]).length;
+                                            const recipeOpts = [{ value: '', label: 'Sin receta' }, ...existingRecipes.map(r => ({ value: String(r.recipe_id), label: `${r.title}${r.calories_per_serving ? ` · ${r.calories_per_serving} kcal` : ''}` }))];
+                                            // En edición, asegurar que la receta ya planificada aparezca aunque no esté en la lista de la familia.
+                                            if (editingExisting) {
+                                                const have = new Set(recipeOpts.map(o => String(o.value)));
+                                                orderedSlots.forEach(s => { const d = slotAssignments[s]; if (d && d.recipe_id && !have.has(String(d.recipe_id))) { have.add(String(d.recipe_id)); recipeOpts.push({ value: String(d.recipe_id), label: `${d.name}${d.cal ? ` · ${d.cal} kcal` : ''}` }); } });
+                                            }
+                                            return (
+                                                <>
+                                                    <div className="section-title" style={{ marginTop: 24 }}><BookOpen weight="fill" color="#FF9F43" /> {editingExisting ? 'Editar las recetas planificadas' : 'Asigna una receta a cada cuadro'}</div>
+                                                    <p style={{ fontSize: '0.85rem', color: '#9b8d7c', marginBottom: 14 }}>{editingExisting ? 'Cambia la receta o los comensales de cada día. Se actualizará lo ya planificado (no se crea uno nuevo).' : 'Elige qué receta va en cada espacio. Pueden ser recetas distintas y puedes dejar alguno sin receta.'}</p>
+                                                    {loadingExisting ? (
+                                                        <div style={{ textAlign: 'center', padding: '30px 0' }}>
+                                                            <CircleNotch size={40} className="ph-spin" color="#FF9F43" />
+                                                            <p style={{ color: '#6B5E4F', marginTop: 12, fontWeight: 600 }}>Cargando tus recetas...</p>
                                                         </div>
-                                                        <button
-                                                            className="btn-generate"
-                                                            style={{ flexShrink: 0, padding: '9px 14px' }}
-                                                            disabled={selectedSlots.length === 0}
-                                                            onClick={() => handleAddExistingToSlots(r)}
-                                                        >
-                                                            Agregar <Check weight="bold" />
-                                                        </button>
-                                                    </div>
-                                                ))}
+                                                    ) : existingRecipes.length === 0 ? (
+                                                        <p style={{ color: '#9b8d7c', fontSize: '0.9rem', textAlign: 'center', padding: '20px 0' }}>No tienes recetas guardadas todavía. Créalas en la sección Recetas.</p>
+                                                    ) : (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                                            {orderedSlots.map(slot => {
+                                                                const [dStr, t] = slot.split('-');
+                                                                const dName = weekDays[parseInt(dStr, 10)] || '';
+                                                                const dish = slotAssignments[slot];
+                                                                return (
+                                                                    <div key={slot} style={{ background: '#FFF9F2', border: `1px solid ${dish ? 'rgba(255,159,67,0.5)' : 'rgba(230,126,34,0.18)'}`, borderRadius: 14, padding: 10 }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                                                            <div style={{ flex: 'none', width: 48, height: 48, borderRadius: 10, overflow: 'hidden', background: '#F3EADF', display: 'grid', placeItems: 'center' }}>
+                                                                                {dish ? <img src={imgProxy(dish.img)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <CalendarBlank size={20} color="#c9b8a3" weight="fill" />}
+                                                                            </div>
+                                                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                                                <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#9b8d7c', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 5 }}>{dName} · {t}</div>
+                                                                                <NvSelect
+                                                                                    value={dish ? String(dish.recipe_id) : ''}
+                                                                                    onChange={val => assignRecipeToSlot(slot, val)}
+                                                                                    placeholder="Elegir receta"
+                                                                                    options={recipeOpts}
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                        {dish && renderSlotEaters(slot)}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                            <div style={{ fontSize: '0.82rem', color: '#6B5E4F', fontWeight: 700, textAlign: 'right', marginTop: 2 }}>{assignedCount} de {orderedSlots.length} asignadas</div>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            );
+                                        })()
+                                    ) : (
+                                        /* ── MODO SIMPLE: una receta a los cuadros elegidos ── */
+                                        <>
+                                            <div className="section-title" style={{ marginTop: 24 }}><BookOpen weight="fill" color="#FF9F43" /> Elige una receta</div>
+
+                                            <div style={{ position: 'relative', marginBottom: 14 }}>
+                                                <MagnifyingGlass size={18} color="#9b8d7c" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} />
+                                                <input
+                                                    type="text"
+                                                    value={recipeSearch}
+                                                    onChange={e => setRecipeSearch(e.target.value)}
+                                                    placeholder="Buscar receta..."
+                                                    style={{ width: '100%', padding: '12px 14px 12px 42px', borderRadius: 12, border: '2px solid rgba(230,126,34,0.2)', background: '#FFF9F2', fontSize: '0.95rem', color: '#2A2118', outline: 'none' }}
+                                                />
                                             </div>
-                                        );
-                                    })()}
+
+                                            {loadingExisting ? (
+                                                <div style={{ textAlign: 'center', padding: '30px 0' }}>
+                                                    <CircleNotch size={40} className="ph-spin" color="#FF9F43" />
+                                                    <p style={{ color: '#6B5E4F', marginTop: 12, fontWeight: 600 }}>Cargando tus recetas...</p>
+                                                </div>
+                                            ) : (() => {
+                                                const q = recipeSearch.trim().toLowerCase();
+                                                const list = existingRecipes.filter(r => !q || (r.title || '').toLowerCase().includes(q));
+                                                if (existingRecipes.length === 0) {
+                                                    return <p style={{ color: '#9b8d7c', fontSize: '0.9rem', textAlign: 'center', padding: '20px 0' }}>No tienes recetas guardadas todavía. Créalas en la sección Recetas.</p>;
+                                                }
+                                                if (list.length === 0) {
+                                                    return <p style={{ color: '#9b8d7c', fontSize: '0.9rem', textAlign: 'center', padding: '20px 0' }}>Ninguna receta coincide con "{recipeSearch}".</p>;
+                                                }
+                                                return (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                                        {list.map(r => (
+                                                            <div key={r.recipe_id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#FFF9F2', border: '1px solid rgba(230,126,34,0.18)', borderRadius: 14, padding: 10 }}>
+                                                                <img src={imgProxy(r.image_url || 'https://images.unsplash.com/photo-1546554137-f86b9593a222?w=200')} alt={r.title} style={{ width: 56, height: 56, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
+                                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                                    <div style={{ fontWeight: 700, color: '#2A2118', fontSize: '0.98rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.title}</div>
+                                                                    <div style={{ fontSize: '0.8rem', color: '#9b8d7c' }}>🔥 {r.calories_per_serving || '—'} kcal · ⏱️ {r.preparation_time ? `${r.preparation_time} min` : 'N/A'}</div>
+                                                                </div>
+                                                                <button
+                                                                    className="btn-generate"
+                                                                    style={{ flexShrink: 0, padding: '9px 14px' }}
+                                                                    disabled={selectedSlots.length === 0}
+                                                                    onClick={() => handleAddExistingToSlots(r)}
+                                                                >
+                                                                    Agregar <Check weight="bold" />
+                                                                </button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                );
+                                            })()}
+                                        </>
+                                    )}
                                 </>
                             )}
 
@@ -1338,72 +1980,188 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                             )}
 
                             {/* ── PASO 4: ¿CUÁNTAS PERSONAS? ── */}
-                            {aiStep === 'servings' && aiDish && (
-                                <div style={{ textAlign: 'center', padding: '10px 0 20px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, margin: '24px 0 16px' }}>
-                                        <button
-                                            onClick={() => setAiPlanServings(p => Math.max(1, p - 1))}
-                                            style={{ width: 44, height: 44, borderRadius: '50%', border: '2px solid rgba(230,126,34,0.18)', background: 'white', cursor: 'pointer', fontSize: '1.5rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
-                                            onMouseEnter={e => { e.currentTarget.style.background = '#FFF7ED'; e.currentTarget.style.borderColor = '#FF9F43'; }}
-                                            onMouseLeave={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = 'rgba(230,126,34,0.18)'; }}
-                                        >&minus;</button>
+                            {aiStep === 'servings' && aiDish && (() => {
+                                const selMembers = familyMembers.filter(m => selectedMemberIds.includes(m.user_id));
+                                const base = aiDish.servings || 1;
+                                const planFactor = selMembers.length ? totalPortions(selMembers) : base;
+                                const multiplier = base > 0 ? planFactor / base : 1;
+                                const sugg = buildSuggestions(selMembers, aiDish.ingredients);
+                                const totalKcal = Number(aiDish.cal) ? Math.round(Number(aiDish.cal) * planFactor) : null;
+                                const hasIngs = aiDish.ingredients && aiDish.ingredients.length > 0;
+                                const showPerPerson = servingsView === 'person' && selMembers.length >= 2;
+                                return (
+                                <div className="nv-stagger" style={{ padding: '4px 0 8px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                                    {/* 1) INTEGRANTES */}
+                                    {familyMembers.length > 0 ? (
                                         <div>
-                                            <span style={{ display: 'block', fontSize: '2.8rem', fontWeight: 900, color: '#2A2118', lineHeight: 1 }}>{aiPlanServings}</span>
-                                            <span style={{ fontSize: '0.85rem', color: '#9b8d7c' }}>{aiPlanServings === 1 ? 'persona' : 'personas'}</span>
+                                            <div className="nv-serv-label"><UsersThree size={14} weight="fill" /> ¿Quiénes comen?</div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} role="group" aria-label="Integrantes que comerán">
+                                                {familyMembers.map(m => {
+                                                    const on = selectedMemberIds.includes(m.user_id);
+                                                    const f = portionFactor(m);
+                                                    const initial = (m.name || '?').trim().charAt(0).toUpperCase();
+                                                    return (
+                                                        <button type="button" key={m.user_id} onClick={() => toggleMember(m.user_id)} aria-pressed={on}
+                                                            className={`nv-serv-member${on ? ' on' : ''}`}>
+                                                            <span className="nv-serv-check">{on && <Check size={13} weight="bold" />}</span>
+                                                            <span className="nv-serv-avatar">{initial}</span>
+                                                            <span style={{ flex: 1, textAlign: 'left', minWidth: 0 }}>
+                                                                <span style={{ display: 'block', fontWeight: 800, color: '#2A2118', fontSize: '0.92rem' }}>{m.name}</span>
+                                                                {m.goal && <span style={{ display: 'block', fontSize: '0.72rem', color: '#9b8d7c', fontWeight: 600 }}>{goalLabel(m.goal)}</span>}
+                                                            </span>
+                                                            <span className="nv-serv-x" title="Factor de porción">×{f}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
-                                        <button
-                                            disabled={!canIncrementAI}
-                                            onClick={() => {
-                                                if (canIncrementAI) setAiPlanServings(p => p + 1);
-                                            }}
-                                            style={{ 
-                                                width: 44, height: 44, borderRadius: '50%', border: '2px solid rgba(230,126,34,0.18)', 
-                                                background: 'white', fontSize: '1.5rem', fontWeight: 700, 
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                                                transition: 'all 0.15s',
-                                                cursor: canIncrementAI ? 'pointer' : 'not-allowed',
-                                                opacity: canIncrementAI ? 1 : 0.4
-                                            }}
-                                            onMouseEnter={e => { if (canIncrementAI) { e.currentTarget.style.background = '#FFF7ED'; e.currentTarget.style.borderColor = '#FF9F43'; } }}
-                                            onMouseLeave={e => { if (canIncrementAI) { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = 'rgba(230,126,34,0.18)'; } }}
-                                        >+</button>
-                                    </div>
+                                    ) : (
+                                        <p style={{ fontSize: '0.85rem', color: '#9b8d7c', textAlign: 'center' }}>No se pudieron cargar los integrantes; se usará la porción base de la receta.</p>
+                                    )}
 
-                                    {/* Preview escalado */}
-                                    {aiDish.ingredients && aiDish.ingredients.length > 0 && (
-                                        <div style={{ background: '#FFF9F2', border: '1px solid rgba(230,126,34,0.18)', borderRadius: 12, padding: '12px 16px', textAlign: 'left', maxHeight: 160, overflowY: 'auto', marginTop: 12 }}>
-                                            <p style={{ margin: '0 0 8px', fontSize: '0.78rem', fontWeight: 700, color: '#9b8d7c', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Ingredientes para {aiPlanServings} {aiPlanServings === 1 ? 'persona' : 'personas'}</p>
-                                            {scaleAIDish(aiDish, aiPlanServings).map((ing, i) => (
-                                                <div key={i} style={{ fontSize: '0.88rem', color: '#2A2118', padding: '3px 0', borderBottom: i < aiDish.ingredients.length - 1 ? '1px dashed rgba(230,126,34,0.2)' : 'none' }}>
-                                                    🥄 {ing}
-                                                </div>
-                                            ))}
+                                    {familyMembers.length > 0 && selMembers.length === 0 && (
+                                        <div className="nv-serv-warn" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <Warning size={14} weight="fill" /> Selecciona al menos una persona para poder agregar la receta.
                                         </div>
                                     )}
+
+                                    {/* 2) RESUMEN */}
+                                    <div className="nv-serv-stats">
+                                        <div className="nv-serv-stat"><span className="nv-serv-stat-n">{selMembers.length}</span><span className="nv-serv-stat-l">{selMembers.length === 1 ? 'persona' : 'personas'}</span></div>
+                                        <div className="nv-serv-stat"><span className="nv-serv-stat-n">{portionsLabel(planFactor)}</span><span className="nv-serv-stat-l">porciones</span></div>
+                                        {totalKcal != null && <div className="nv-serv-stat"><span className="nv-serv-stat-n">{totalKcal}</span><span className="nv-serv-stat-l">kcal total</span></div>}
+                                    </div>
+
+                                    {/* 3) SUGERENCIAS */}
+                                    {(sugg.warnings.length > 0 || sugg.tips.length > 0) && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                            {sugg.warnings.map((w, i) => (<div key={`w${i}`} className="nv-serv-warn"><Warning size={14} weight="fill" style={{ verticalAlign: '-2px', marginRight: 4 }} />{w}</div>))}
+                                            {sugg.tips.map((t, i) => (<div key={`t${i}`} className="nv-serv-tip"><Lightbulb size={14} weight="fill" style={{ verticalAlign: '-2px', marginRight: 4 }} />{t}</div>))}
+                                        </div>
+                                    )}
+
+                                    {/* 4) INGREDIENTES: total / por persona */}
+                                    {hasIngs && (
+                                        <div>
+                                            <div className="nv-serv-toggle">
+                                                <button type="button" className={!showPerPerson ? 'on' : ''} onClick={() => setServingsView('total')}>Total</button>
+                                                <button type="button" className={showPerPerson ? 'on' : ''} onClick={() => setServingsView('person')} disabled={selMembers.length < 2}>Por persona</button>
+                                            </div>
+                                            {!showPerPerson ? (
+                                                <div className="nv-serv-panel">
+                                                    {scaleAIDish(aiDish, multiplier, true).map((ing, i) => (
+                                                        <div key={i} className="nv-serv-ing">{ing}</div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                                    {selMembers.map(m => {
+                                                        const pf = portionFactor(m);
+                                                        const list = scaleAIDish(aiDish, base > 0 ? pf / base : pf, true);
+                                                        const initial = (m.name || '?').trim().charAt(0).toUpperCase();
+                                                        return (
+                                                            <div key={m.user_id} className="nv-serv-person">
+                                                                <div className="nv-serv-person-head">
+                                                                    <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                                                                        <span className="nv-serv-avatar sm">{initial}</span>
+                                                                        <span style={{ fontWeight: 800, color: '#2A2118', fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</span>
+                                                                    </span>
+                                                                    <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#e67e22', whiteSpace: 'nowrap' }}>×{pf}{Number(aiDish.cal) ? ` · ${Math.round(Number(aiDish.cal) * pf)} kcal` : ''}</span>
+                                                                </div>
+                                                                <div style={{ fontSize: '0.8rem', color: '#6B5E4F', marginTop: 4, lineHeight: 1.5 }}>{list.join(' · ')}</div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                                );
+                            })()}
+
+                            {/* Bloque 7: revisión del plan variado (1 receta por cuadro) */}
+                            {aiStep === 'plan' && (
+                                <div style={{ padding: '4px 0 8px' }}>
+                                    <p style={{ fontSize: '0.9rem', color: '#6B5E4F', margin: '0 0 14px' }}>Una receta distinta para cada cuadro. {planGenerating ? 'Generando…' : 'Revisa y confirma.'}</p>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                        {planItems.map((p, i) => {
+                                            const [dStr, t] = p.slot.split('-');
+                                            const dName = weekDays[parseInt(dStr, 10)] || '';
+                                            return (
+                                                <div key={i} style={{ padding: '10px 12px', borderRadius: 14, border: '1px solid rgba(230,126,34,0.16)', background: '#fff' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                                        <div style={{ flex: 'none', width: 54, height: 54, borderRadius: 12, overflow: 'hidden', background: '#F3EADF', display: 'grid', placeItems: 'center' }}>
+                                                            {p.status === 'done' && p.recipe ? <img src={imgProxy(p.recipe.img)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                                : p.status === 'error' ? <Warning size={22} color="#EF4444" weight="fill" />
+                                                                    : <CircleNotch size={22} className="ph-spin" color="#FF9F43" />}
+                                                        </div>
+                                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                                            <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#9b8d7c', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{dName} · {t}</div>
+                                                            <div style={{ fontWeight: 800, color: '#2A2118', fontSize: '0.95rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                {p.status === 'done' ? p.recipe.name : p.status === 'error' ? 'No se pudo generar' : (p.title || 'Pensando…')}
+                                                            </div>
+                                                            {p.status === 'done' && p.recipe && <div style={{ fontSize: '0.78rem', color: '#e67e22', fontWeight: 700 }}>{p.recipe.cal || '—'} kcal · {p.recipe.time}</div>}
+                                                        </div>
+                                                    </div>
+                                                    {p.status === 'done' && p.recipe && renderSlotEaters(p.slot)}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             )}
                         </div>
 
                         {/* Footer */}
                         <div className="modal-footer-modern">
-                            {aiStep === 'existing' && (
+                            {aiStep === 'existing' && !editingExisting && (
                                 <button className="btn-cancel" onClick={() => setAiStep('config')}>← Volver a IA</button>
                             )}
                             {aiStep === 'suggestions' && !isGenerating && (
                                 <button className="btn-cancel" onClick={() => { setAiStep('config'); setSuggestions([]); }}>← Volver</button>
                             )}
                             {aiStep === 'servings' && (
-                                <button className="btn-cancel" onClick={() => { setAiStep('suggestions'); setAiDish(null); }}>← Volver</button>
+                                <button className="btn-cancel" onClick={() => { setAiStep(aiFromExisting ? 'existing' : 'suggestions'); setAiDish(null); setAiFromExisting(false); }}>← Volver</button>
+                            )}
+                            {aiStep === 'plan' && (
+                                <button className="btn-cancel" onClick={() => setAiStep('config')} disabled={planGenerating}>← Volver</button>
                             )}
                             <button className="btn-cancel" onClick={handleCloseModal}>Cancelar</button>
+                            {aiStep === 'existing' && editingExisting && (() => {
+                                const nAssigned = selectedSlots.filter(s => slotAssignments[s]).length;
+                                return (
+                                    <button className="btn-generate" onClick={handleSaveEditMulti} disabled={nAssigned === 0}>
+                                        Guardar cambios{nAssigned > 0 ? ` (${nAssigned})` : ''} <Check weight="bold" />
+                                    </button>
+                                );
+                            })()}
+                            {aiStep === 'existing' && !editingExisting && selectedSlots.length >= 2 && (() => {
+                                const nAssigned = selectedSlots.filter(s => slotAssignments[s]).length;
+                                return (
+                                    <button className="btn-generate" onClick={handleConfirmExistingPlan} disabled={nAssigned === 0}>
+                                        Agregar plan{nAssigned > 0 ? ` (${nAssigned})` : ''} <Check weight="bold" />
+                                    </button>
+                                );
+                            })()}
                             {aiStep === 'config' && (
-                                <button className="btn-generate" onClick={handleAISuggest} disabled={isGenerating || selectedIngredients.length === 0}>
+                                <button className="btn-generate" onClick={handleAISuggest} disabled={isGenerating || planGenerating || selectedIngredients.length === 0}>
                                     {isGenerating ? <><CircleNotch size={18} className="ph-spin" /> Pensando...</> : <>Generar Menú <Sparkle weight="fill" /></>}
+                                </button>
+                            )}
+                            {aiStep === 'config' && selectedSlots.length >= 2 && (
+                                <button className="btn-generate" onClick={handleGeneratePlan} disabled={isGenerating || planGenerating || selectedIngredients.length === 0} title="Una receta distinta por cada cuadro seleccionado" style={{ background: 'linear-gradient(135deg, #6C5CE7, #a29bfe)' }}>
+                                    Plan variado <Sparkle weight="fill" />
                                 </button>
                             )}
                             {aiStep === 'servings' && (
                                 <button className="btn-generate" onClick={handleConfirmAIServings}>
                                     Agregar al planner <Check weight="bold" />
+                                </button>
+                            )}
+                            {aiStep === 'plan' && (
+                                <button className="btn-generate" onClick={handleConfirmPlanMulti} disabled={planGenerating || !planItems.some(p => p.status === 'done')}>
+                                    {planGenerating ? <><CircleNotch size={18} className="ph-spin" /> Generando…</> : <>Agregar plan <Check weight="bold" /></>}
                                 </button>
                             )}
                         </div>
@@ -1416,6 +2174,26 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                 const mealSlot = resolveMealSlot();
                 const badgeType = mealSlot ? mealSlot.type : (Array.isArray(selectedMealDetails.category) ? selectedMealDetails.category[0] : null);
                 const canEditMeal = userRole !== 'ayudante' && mealSlot;
+                // Desglose por persona en el detalle: solo quienes comen esta comida (detailEaters, editable).
+                // Si no hay selección (o comidas antiguas), se asume toda la familia.
+                const dBase = Number(selectedMealDetails.servings) || 2;
+                const dMembers = (Array.isArray(detailEaters) && detailEaters.length)
+                    ? familyMembers.filter(m => detailEaters.includes(m.user_id))
+                    : familyMembers;
+                const dPlanFactor = dMembers.length ? totalPortions(dMembers) : dBase;
+                const dMultiplier = dBase > 0 ? dPlanFactor / dBase : 1;
+                const dCal = Number(selectedMealDetails.cal) || 0;
+                const dTotalKcal = dCal ? Math.round(dCal * dPlanFactor) : null;
+                const dHasIngs = Array.isArray(selectedMealDetails.ingredients) && selectedMealDetails.ingredients.length > 0;
+                const dShowPerPerson = servingsView === 'person' && dMembers.length >= 2;
+                // Texto para "Leer": la versión escalada a la familia (no la base estática).
+                const dReadable = {
+                    name: selectedMealDetails.name,
+                    servings: dMembers.length || dBase,
+                    cal: dTotalKcal,
+                    ingredients: dHasIngs ? scaleAIDish(selectedMealDetails, dMultiplier, true) : (selectedMealDetails.ingredients || []),
+                    steps: selectedMealDetails.steps,
+                };
                 return (
                 <div className="modal-overlay" onClick={handleCloseMealDetails}>
                     <div className="modal-modern" onClick={e => e.stopPropagation()}>
@@ -1423,7 +2201,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                             <h3 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 800, color: '#2A2118' }}>{selectedMealDetails.name}</h3>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <button
-                                    onClick={() => speechState === 'idle' ? startSpeech(selectedMealDetails) : togglePause()}
+                                    onClick={() => speechState === 'idle' ? startSpeech(dReadable) : togglePause()}
                                     title={speechState === 'idle' ? 'Leer receta en voz alta' : speechState === 'speaking' ? 'Pausar lectura' : 'Reanudar lectura'}
                                     className={`btn-speech${speechState === 'speaking' ? ' speaking' : speechState === 'paused' ? ' paused' : ''}`}
                                 >
@@ -1441,7 +2219,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                         </div>
                         <div className="modal-body">
                             <div className="recipe-hero-wrapper">
-                                <img src={selectedMealDetails.img} className="recipe-hero-img" alt={selectedMealDetails.name} />
+                                <img src={imgProxy(selectedMealDetails.img)} className="recipe-hero-img" alt={selectedMealDetails.name} />
                                 {badgeType && (
                                     <div className="hero-badges-overlay">
                                         <span className="mini-badge" style={{ background: 'rgba(255,255,255,0.95)', color: getMealColor(badgeType), boxShadow: '0 4px 10px rgba(0,0,0,0.2)' }}>{badgeType}</span>
@@ -1449,40 +2227,102 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                 )}
                             </div>
                             <div className="recipe-detail-stats" style={{ display: 'flex', justifyContent: 'center', gap: 30, marginBottom: 30, padding: '10px 0', borderBottom: '1px dashed #EADBC7', flexWrap: 'wrap' }}>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', color: '#6B5E4F', fontWeight: 700 }}>
-                                    <Fire weight="fill" color="#F7B27B" size={22} /> {selectedMealDetails.cal || '—'} kcal
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', color: '#6B5E4F', fontWeight: 700 }} title={dCal ? `${dCal} kcal por porción` : ''}>
+                                    <Fire weight="fill" color="#F7B27B" size={22} /> {dTotalKcal != null ? dTotalKcal.toLocaleString('es') : (selectedMealDetails.cal || '—')} kcal{dTotalKcal != null && dMembers.length > 1 ? ' (total)' : ''}
                                 </span>
                                 <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', color: '#6B5E4F', fontWeight: 700 }}>
                                     <Clock weight="fill" color="#F7B27B" size={22} /> {selectedMealDetails.time || '30 min'}
                                 </span>
                                 <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1rem', color: '#6B5E4F', fontWeight: 700 }}>
-                                    <UsersThree weight="fill" color="#F7B27B" size={22} /> {selectedMealDetails.servings || 2} {Number(selectedMealDetails.servings) === 1 ? 'persona' : 'personas'}
+                                    <UsersThree weight="fill" color="#F7B27B" size={22} /> {dMembers.length || (selectedMealDetails.servings || 2)} {(dMembers.length || 2) === 1 ? 'persona' : 'personas'}
                                 </span>
                             </div>
                             {selectedMealDetails.description && (
                                 <p style={{ color: '#6B5E4F', marginBottom: 20, fontStyle: 'italic' }}>{selectedMealDetails.description}</p>
                             )}
-                            <div className="detail-grid-responsive" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                                <div className="detail-card-section">
-                                    <h4><ChefHat size={24} weight="duotone" /> Ingredientes</h4>
-                                    <ul className="detail-list">
-                                        {selectedMealDetails.ingredients && selectedMealDetails.ingredients.length > 0
-                                            ? selectedMealDetails.ingredients.map((ing, i) => <li key={i}>{pluralizeUnits(ing)}</li>)
-                                            : <li style={{ color: '#c9b9a6' }}>Sin ingredientes registrados</li>}
-                                    </ul>
+                            {/* ¿Quiénes comen? — editable en el detalle; recalcula y guarda solo */}
+                            {familyMembers.length > 0 && (
+                                <div className="nv-eaters-wrap" style={{ marginBottom: 22 }}>
+                                    <div className="nv-serv-label">
+                                        <UsersThree size={15} weight="fill" /> ¿Quiénes comen?
+                                        <span className="nv-eaters-count">
+                                            {dMembers.length} {dMembers.length === 1 ? 'persona' : 'personas'}
+                                            {savingEaters && <CircleNotch size={11} className="ph-spin" />}
+                                        </span>
+                                    </div>
+                                    <div className="nv-eaters-row">
+                                        {familyMembers.map((m, idx) => {
+                                            const on = dMembers.some(x => x.user_id === m.user_id);
+                                            const clickable = canEditMeal && !savingEaters;
+                                            const initial = (m.name || '?').trim().charAt(0).toUpperCase();
+                                            return (
+                                                <button type="button" key={m.user_id}
+                                                    className={`nv-eater${on ? ' on' : ''}${(!canEditMeal && !on) ? ' off-locked' : ''}`}
+                                                    style={{ animationDelay: `${idx * 45}ms` }}
+                                                    onClick={clickable ? () => handleToggleDetailEater(m.user_id) : undefined}
+                                                    disabled={!clickable}
+                                                    aria-pressed={on}>
+                                                    <span className="nv-eater-av">{on ? <Check size={15} weight="bold" /> : initial}</span>
+                                                    {m.name}
+                                                    {on && <span className="nv-eater-fac">×{portionFactor(m)}</span>}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    {canEditMeal && <div className="nv-eater-hint"><Lightbulb size={13} weight="fill" color="#F7B27B" /> Toca para agregar o quitar. Las cantidades se recalculan y se guardan solas.</div>}
                                 </div>
-                                <div className="detail-card-section">
-                                    <h4><ListNumbers size={24} weight="duotone" /> Pasos</h4>
-                                    <ol className="detail-list" style={{ listStyle: 'none', padding: 0 }}>
-                                        {selectedMealDetails.steps && selectedMealDetails.steps.length > 0
-                                            ? selectedMealDetails.steps.map((step, i) => (
-                                                <li key={i} style={{ marginBottom: 15 }}>
-                                                    <span style={{ fontWeight: '800', color: '#F7B27B', marginRight: 5 }}>{i + 1}.</span> {step.replace(/^\d+[\.\-]?\s*/, '')}
-                                                </li>
-                                            ))
-                                            : <li style={{ color: '#c9b9a6' }}>Sin instrucciones registradas</li>}
+                            )}
+                            {/* Porciones y calorías (Total / Por persona) — mismo diseño que el planificador */}
+                            {dHasIngs && (
+                                <div style={{ marginBottom: 22 }}>
+                                    <div className="nv-serv-label"><ChefHat size={15} weight="fill" /> Porciones y calorías</div>
+                                    <div className="nv-serv-toggle">
+                                        <button type="button" className={!dShowPerPerson ? 'on' : ''} onClick={() => setServingsView('total')}>Total</button>
+                                        <button type="button" className={dShowPerPerson ? 'on' : ''} onClick={() => setServingsView('person')} disabled={dMembers.length < 2}>Por persona</button>
+                                    </div>
+                                    <div key={dMembers.length} className="nv-recalc">
+                                    {!dShowPerPerson ? (
+                                        <div className="nv-serv-panel">
+                                            {scaleAIDish(selectedMealDetails, dMultiplier, true).map((ing, i) => <div key={i} className="nv-serv-ing">{ing}</div>)}
+                                        </div>
+                                    ) : (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                            {dMembers.map(m => {
+                                                const pf = portionFactor(m);
+                                                const list = scaleAIDish(selectedMealDetails, dBase > 0 ? pf / dBase : pf, true);
+                                                const initial = (m.name || '?').trim().charAt(0).toUpperCase();
+                                                return (
+                                                    <div key={m.user_id} className="nv-serv-person">
+                                                        <div className="nv-serv-person-head">
+                                                            <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                                                                <span className="nv-serv-avatar sm">{initial}</span>
+                                                                <span style={{ fontWeight: 800, color: '#2A2118', fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</span>
+                                                            </span>
+                                                            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#e67e22', whiteSpace: 'nowrap' }}>×{pf}{dCal ? ` · ${Math.round(dCal * pf)} kcal` : ''}{m.goal ? ` · ${goalLabel(m.goal)}` : ''}</span>
+                                                        </div>
+                                                        <div style={{ fontSize: '0.8rem', color: '#6B5E4F', marginTop: 4, lineHeight: 1.5 }}>{list.join(' · ')}</div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Pasos — formato libro, más legibles (item 2) */}
+                            <div className="detail-card-section">
+                                <h4><ListNumbers size={24} weight="duotone" /> Pasos</h4>
+                                {selectedMealDetails.steps && selectedMealDetails.steps.length > 0 ? (
+                                    <ol className="nv-instr-list">
+                                        {selectedMealDetails.steps.map((step, i) => (
+                                            <li key={i} className="nv-instr">
+                                                <span className="nv-step-n">{i + 1}</span>
+                                                <span className="nv-step-tx">{step.replace(/^\d+[\.\-]?\s*/, '')}</span>
+                                            </li>
+                                        ))}
                                     </ol>
-                                </div>
+                                ) : <p style={{ color: '#c9b9a6' }}>Sin instrucciones registradas</p>}
                             </div>
                         </div>
                         <div className="modal-footer nv-detail-footer">
@@ -1506,6 +2346,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                                 setSelectedMealDetails(prev => ({ ...prev, is_completed: newStatus ? 1 : 0 }));
                                                 
                                                 if (newStatus) {
+                                                    await deductForCooked(selectedMealDetails);
                                                     setPendingLeftovers({
                                                         name: selectedMealDetails.name,
                                                         recipe_id: selectedMealDetails.recipe_id,
@@ -1524,7 +2365,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                     </button>
                                     <button
                                         className="btn-secondary nv-df-change"
-                                        onClick={() => { handleCloseMealDetails(); handlePlanSlot(mealSlot.dayIndex, mealSlot.type); }}
+                                        onClick={() => { handleCloseMealDetails(); handlePlanSlot(mealSlot.dayIndex, mealSlot.type, 'edit'); }}
                                         style={{ color: '#e67e22', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}
                                     >
                                         <ArrowsClockwise size={18} weight="bold" /> Cambiar
@@ -1545,6 +2386,23 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
             })()}
 
             {/* === CONFIRMACIÓN DE BORRADO === */}
+            {/* Bloque 8: aviso "¿cocinaste?" (por franja horaria) */}
+            {cookedPrompt && (
+                <div className="modal-overlay" style={{ zIndex: 7000 }} onClick={handleCookedNo}>
+                    <div className="nv-confirm-card" onClick={e => e.stopPropagation()}>
+                        <div className="nv-confirm-icon" style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
+                            <Fire size={34} weight="fill" color="#fff" />
+                        </div>
+                        <h3 className="nv-confirm-title">¿Cocinaste el {cookedPrompt.type.toLowerCase()} de hoy?</h3>
+                        <p className="nv-confirm-text"><b>{cookedPrompt.meal.name}</b><br />Si ya lo cocinaste, descontamos sus ingredientes de tu inventario.</p>
+                        <div className="nv-confirm-actions">
+                            <button className="nv-confirm-cancel" onClick={handleCookedNo}>Aún no</button>
+                            <button className="nv-confirm-del" style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }} onClick={handleCookedYes}>Sí, la cociné</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {pendingDelete && (
                 <div className="modal-overlay" onClick={() => setPendingDelete(null)}>
                     <div className="nv-confirm-card" onClick={e => e.stopPropagation()}>
@@ -1559,6 +2417,56 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                             <button className="nv-confirm-cancel" onClick={() => setPendingDelete(null)}>Cancelar</button>
                             <button className="nv-confirm-del" onClick={confirmDeleteMeal}><Trash size={18} weight="bold" /> Eliminar</button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* === CONFIRMACIÓN DE BORRADO MÚLTIPLE === */}
+            {pendingBulkDelete && (
+                <div className="modal-overlay" onClick={() => setPendingBulkDelete(null)}>
+                    <div className="nv-confirm-card" onClick={e => e.stopPropagation()}>
+                        <div className="nv-confirm-icon"><Warning size={38} weight="fill" /></div>
+                        <h3 className="nv-confirm-title">¿Eliminar {pendingBulkDelete.length} {pendingBulkDelete.length === 1 ? 'receta' : 'recetas'}?</h3>
+                        <p className="nv-confirm-text">
+                            Vas a quitar del plan:
+                            <br />
+                            <span style={{ fontWeight: 700, color: '#2A2118' }}>
+                                {pendingBulkDelete.map(s => { const [d, t] = s.split('-'); return `${weekDays[parseInt(d, 10)]} · ${t}`; }).join(', ')}
+                            </span>
+                            <br />Esta acción no se puede deshacer.
+                        </p>
+                        <div className="nv-confirm-actions">
+                            <button className="nv-confirm-cancel" onClick={() => setPendingBulkDelete(null)}>Cancelar</button>
+                            <button className="nv-confirm-del" onClick={confirmBulkDelete}><Trash size={18} weight="bold" /> Eliminar {pendingBulkDelete.length}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* === POPUP ANIMADO: motivo por el que no se pudo planificar/generar === */}
+            {planNotice && (
+                <div className="modal-overlay" onClick={() => setPlanNotice(null)} style={{ zIndex: 3000 }}>
+                    <div onClick={e => e.stopPropagation()} style={{
+                        background: '#fff', borderRadius: 24, padding: '30px 26px 24px', maxWidth: 420, width: 'calc(100% - 40px)',
+                        textAlign: 'center', boxShadow: '0 30px 70px rgba(120,60,10,0.32)',
+                        animation: 'nv-pop 0.34s cubic-bezier(.34,1.56,.64,1)',
+                    }}>
+                        <div style={{ width: 68, height: 68, borderRadius: '50%', margin: '0 auto 16px', display: 'grid', placeItems: 'center', background: 'linear-gradient(135deg,#FFE7CF,#FFD3AE)', color: '#e67e22', boxShadow: '0 8px 20px rgba(230,126,34,0.25)' }}>
+                            <Warning size={34} weight="fill" />
+                        </div>
+                        <h3 style={{ margin: '0 0 8px', fontSize: '1.3rem', fontWeight: 800, color: '#2A2118' }}>{planNotice.title}</h3>
+                        <p style={{ margin: 0, color: '#6B5E4F', fontSize: '0.98rem', lineHeight: 1.5 }}>{planNotice.reason}</p>
+                        {planNotice.hint && (
+                            <div style={{ background: '#FFF7ED', border: '1px solid rgba(230,126,34,0.2)', borderRadius: 12, padding: '10px 14px', margin: '16px 0 0', display: 'flex', gap: 8, alignItems: 'flex-start', textAlign: 'left' }}>
+                                <Lightbulb size={18} weight="fill" color="#F7B27B" style={{ flexShrink: 0, marginTop: 1 }} />
+                                <span style={{ fontSize: '0.86rem', color: '#6B5E4F', fontWeight: 600, lineHeight: 1.45 }}>{planNotice.hint}</span>
+                            </div>
+                        )}
+                        <button onClick={() => setPlanNotice(null)} style={{
+                            marginTop: 18, padding: '13px 28px', borderRadius: 14, border: 'none', width: '100%',
+                            background: 'linear-gradient(135deg,#FF9F43,#FF7F50)', color: '#fff', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', fontFamily: 'inherit',
+                            boxShadow: '0 8px 20px rgba(255,127,80,0.35)',
+                        }}>Entendido</button>
                     </div>
                 </div>
             )}
@@ -1666,7 +2574,7 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                                     >
                                         <div className={`today-meal-img ${meal ? 'filled' : 'empty'}`}>
                                             {meal
-                                                ? <img src={meal.img} alt={meal.name} />
+                                                ? <img src={imgProxy(meal.img)} alt={meal.name} />
                                                 : <Plus size={24} weight="bold" />}
                                         </div>
                                         <span className="today-meal-type">{type}</span>
@@ -1694,9 +2602,68 @@ const PlannerPage = ({ userProfile, plannerData, setPlannerData, currentMenuPlan
                         onMealClick={openMealDetails}
                         onEmptyClick={handlePlanSlot}
                         canEdit={userRole !== 'ayudante'}
+                        selectMode={calSelectMode}
+                        selected={calSelected}
+                        onToggleSelect={toggleCalSelect}
                     />
                 </div>
             </div>
+
+            {/* Barra CRUD flotante del modo selección múltiple */}
+            {calSelectMode && !showModal && !selectedMealDetails && !pendingBulkDelete && (
+                <div className="nv-crud-bar" style={{
+                    position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)', zIndex: 1200,
+                    display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', justifyContent: 'center',
+                    maxWidth: 'calc(100vw - 24px)',
+                    background: '#fff', border: '1px solid rgba(230,126,34,0.25)', borderRadius: 18,
+                    padding: '12px 16px', boxShadow: '0 18px 45px rgba(120,60,10,0.25)',
+                    animation: 'nv-toast-in 0.25s ease',
+                }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+                        <span style={{ fontWeight: 800, color: '#2A2118', fontSize: '0.98rem' }}>
+                            {calSelected.length} {calSelected.length === 1 ? 'cuadro elegido' : 'cuadros elegidos'}
+                            {calMode === 'manage' && <span style={{ marginLeft: 6, fontSize: '0.72rem', fontWeight: 800, color: '#e67e22', background: '#FFF3E6', padding: '2px 8px', borderRadius: 999 }}>PLANIFICADAS</span>}
+                        </span>
+                        <span style={{ fontSize: '0.78rem', color: '#9b8d7c' }}>
+                            {calMode === 'manage' ? 'Toca recetas planificadas para editar o eliminar' : calMode === 'plan' ? 'Toca cuadros vacíos para planificar' : 'Toca un cuadro: vacío → planificar · con receta → editar/eliminar'}
+                        </span>
+                    </div>
+                    <button type="button" onClick={exitCalSelect} style={{
+                        padding: '10px 16px', borderRadius: 12, border: '1.5px solid #e7dccb', background: '#fff',
+                        color: '#6B5E4F', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.9rem',
+                    }}>Cancelar</button>
+                    {calMode === 'manage' ? (
+                        <>
+                            <button type="button" onClick={requestBulkDelete} disabled={calSelected.length === 0} style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 12,
+                                border: '1.5px solid #FCA5A5', background: '#fff', color: '#DC2626', fontWeight: 800,
+                                cursor: calSelected.length === 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontSize: '0.92rem',
+                            }}>
+                                <Trash size={16} weight="bold" /> Eliminar ({calSelected.length})
+                            </button>
+                            <button type="button" onClick={startEditSelection} disabled={calSelected.length === 0} style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 18px', borderRadius: 12, border: 'none',
+                                background: calSelected.length === 0 ? '#f0e6d8' : 'linear-gradient(135deg,#FF9F43,#FF7F50)',
+                                color: calSelected.length === 0 ? '#b6a894' : '#fff', fontWeight: 800,
+                                cursor: calSelected.length === 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontSize: '0.95rem',
+                                boxShadow: calSelected.length === 0 ? 'none' : '0 6px 16px rgba(255,127,80,0.32)',
+                            }}>
+                                <PencilSimple size={16} weight="bold" /> Editar ({calSelected.length})
+                            </button>
+                        </>
+                    ) : (
+                        <button type="button" onClick={startPlanFromSelection} disabled={calSelected.length === 0} style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 18px', borderRadius: 12, border: 'none',
+                            background: calSelected.length === 0 ? '#f0e6d8' : 'linear-gradient(135deg,#FF9F43,#FF7F50)',
+                            color: calSelected.length === 0 ? '#b6a894' : '#fff', fontWeight: 800,
+                            cursor: calSelected.length === 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontSize: '0.95rem',
+                            boxShadow: calSelected.length === 0 ? 'none' : '0 6px 16px rgba(255,127,80,0.32)',
+                        }}>
+                            <Sparkle size={17} weight="fill" /> Planificar ({calSelected.length})
+                        </button>
+                    )}
+                </div>
+            )}
         </div>
     );
 };
@@ -1915,6 +2882,10 @@ function App() {
     const MEAL_ENUM = { 'Desayuno': 'desayuno', 'Almuerzo': 'almuerzo', 'Cena': 'cena' };
     const MEAL_ENUM_REV = { 'desayuno': 'Desayuno', 'almuerzo': 'Almuerzo', 'cena': 'Cena' };
 
+    // Dedup de creación de plan: comparte la MISMA promesa si el efecto corre 2 veces
+    // (React StrictMode) → evita crear planes duplicados para la misma semana.
+    const planCreatePromises = useRef({});
+
     // Cargar o crear el menu_plan y sus daily_meals cuando se selecciona una familia
     useEffect(() => {
         if (!currentFamily || !userProfile?.user_id) return;
@@ -1939,14 +2910,20 @@ function App() {
                     return pMondayStr === targetMondayStr;
                 });
 
-                // 3. Si no existe plan para esa semana Y es la semana actual o futura, crear uno nuevo
+                // 3. Si no existe plan para esa semana Y es la semana actual o futura, crear uno nuevo.
+                //    Se comparte la promesa por semana para no crear duplicados (efecto 2x).
                 if (!plan && offset >= 0) {
-                    plan = await menuPlansService.create({
-                        plan_name: `Menú de ${currentFamily.name}`,
-                        start_date: targetMondayStr,
-                        created_by: userProfile.user_id,
-                        family_id: currentFamily.family_id || currentFamily.id,
-                    });
+                    const fid = currentFamily.family_id || currentFamily.id;
+                    const lockKey = `${fid}-${targetMondayStr}`;
+                    if (!planCreatePromises.current[lockKey]) {
+                        planCreatePromises.current[lockKey] = menuPlansService.create({
+                            plan_name: `Menú de ${currentFamily.name}`,
+                            start_date: targetMondayStr,
+                            created_by: userProfile.user_id,
+                            family_id: fid,
+                        }).finally(() => { delete planCreatePromises.current[lockKey]; });
+                    }
+                    plan = await planCreatePromises.current[lockKey];
                 }
 
                 // Si es semana pasada y no hay plan, no hay nada que mostrar
@@ -1988,6 +2965,8 @@ function App() {
                         steps: meal.instructions ? meal.instructions.split('\n').filter(Boolean) : [],
                         description: meal.description || '',
                         servings: meal.servings ?? meal.servings_count ?? null,
+                        eaters: Array.isArray(meal.eaters) ? meal.eaters : null,
+                        is_completed: meal.is_completed || 0,
                         recommended_meal: meal.recommended_meal || 'almuerzo',
                         category: [{ desayuno: 'Desayuno', almuerzo: 'Almuerzo', cena: 'Cena', cualquiera: 'Cualquiera' }[meal.recommended_meal] || 'Almuerzo'],
                     };
@@ -2009,8 +2988,8 @@ function App() {
     };
 
     // Guardar en BD cuando se asigna una receta al planificador
-    const handleAddToPlanner = async (recipe, dayIndex, mealType) => {
-        if (!currentMenuPlan) return;
+    const handleAddToPlanner = async (recipe, dayIndex, mealType, multiplier, eaters) => {
+        if (!currentMenuPlan) return false;
 
         // Calcular la fecha exacta en la que se planifica
         const startDateStr = currentMenuPlan.start_date.split('T')[0];
@@ -2034,30 +3013,26 @@ function App() {
         }
 
         const key = `${dayIndex}-${mealType}`;
-        // Actualizar UI inmediatamente (optimistic update)
-        setPlannerData(prev => ({ ...prev, [key]: recipe }));
+        const eatersVal = (Array.isArray(eaters) && eaters.length) ? eaters : null;
+        // Pintado optimista (con los comensales elegidos)
+        setPlannerData(prev => ({ ...prev, [key]: { ...recipe, eaters: eatersVal } }));
 
-        // Guardar en BD si hay un plan activo
-        if (currentMenuPlan) {
-            try {
-                const saved = await dailyMealsService.save({
-                    menu_plan_id: currentMenuPlan.menu_plan_id,
-                    recipe_id: recipe.recipe_id || recipe.id,
-                    meal_type: MEAL_ENUM[mealType] || mealType.toLowerCase(),
-                    day_of_week: DAY_ENUM[dayIndex],
-                });
-                // Guardar el daily_meal_id para poder eliminar después si se necesita
-                setPlannerData(prev => ({
-                    ...prev,
-                    [key]: { ...prev[key], daily_meal_id: saved.daily_meal_id },
-                }));
-                return true;
-            } catch (err) {
-                console.error('Error guardando en el menú:', err);
-                return false;
-            }
+        try {
+            const saved = await dailyMealsService.save({
+                menu_plan_id: currentMenuPlan.menu_plan_id,
+                recipe_id: recipe.recipe_id || recipe.id,
+                meal_type: MEAL_ENUM[mealType] || mealType.toLowerCase(),
+                day_of_week: DAY_ENUM[dayIndex],
+                eaters: eatersVal,
+            });
+            setPlannerData(prev => ({ ...prev, [key]: { ...prev[key], daily_meal_id: saved.daily_meal_id } }));
+            return true;
+        } catch (err) {
+            console.error('Error guardando en el menú:', err);
+            // Revertir el pintado: no se guardó en BD.
+            setPlannerData(prev => { const n = { ...prev }; delete n[key]; return n; });
+            return false;
         }
-        return false;
     };
 
     if (!isAuthenticated) return (
@@ -2109,6 +3084,13 @@ function App() {
                         onClose={() => setShowFamilyManager(false)}
                         onSwitchFamily={handleSwitchFamily}
                         onCreateNew={() => { setShowFamilyManager(false); setCurrentFamily(null); }}
+                        onLeaveFamily={() => {
+                            setShowFamilyManager(false);
+                            const fid = currentFamily?.family_id || currentFamily?.id;
+                            setUserFamilies(prev => prev.filter(f => (f.family_id || f.id) !== fid));
+                            setCurrentFamily(null);
+                            localStorage.removeItem('neverita_family');
+                        }}
                         onLogout={handleLogout}
                     />
                 )}
@@ -2120,6 +3102,9 @@ function App() {
                     <Route path="/shopping-list" element={<ShoppingList currentFamily={currentFamily} />} />
                     <Route path="/stats" element={<Stats currentFamily={currentFamily} />} />
                 </Routes>
+                {currentFamily && userProfile && (
+                    <SuggestionsPanel currentFamily={currentFamily} currentUser={userProfile} userRole={userRole} />
+                )}
             </div>
         </HashRouter>
     );

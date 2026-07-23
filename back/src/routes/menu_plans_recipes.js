@@ -3,6 +3,22 @@ import { db } from '../db.js';
 
 export const router = express.Router();
 
+// eaters: en BD es un TEXT con un JSON array de user_id. NULL = toda la familia.
+function parseEaters(raw) {
+  if (raw == null) return null;
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return null;
+    const ids = arr.map(Number).filter(n => Number.isFinite(n));
+    return ids.length ? ids : null;
+  } catch { return null; }
+}
+function serializeEaters(value) {
+  if (!Array.isArray(value)) return null;
+  const ids = value.map(Number).filter(n => Number.isFinite(n));
+  return ids.length ? JSON.stringify(ids) : null;
+}
+
 // GET /daily-meals?menu_plan_id=X — trae las comidas del plan con datos de la receta
 router.get('/', async (req, res, next) => {
   try {
@@ -11,13 +27,18 @@ router.get('/', async (req, res, next) => {
       return res.status(400).json({ error: 'menu_plan_id es obligatorio.' });
     }
     const [rows] = await db.query(
-      `SELECT dm.daily_meal_id, dm.menu_plan_id, dm.meal_type, dm.day_of_week, dm.recipe_id, dm.is_completed, dm.completed_at,
-              r.title, r.image_url, r.calories_per_serving, r.preparation_time, r.instructions, r.description
+      `SELECT dm.daily_meal_id, dm.menu_plan_id, dm.meal_type, dm.day_of_week, dm.recipe_id, dm.is_completed, dm.completed_at, dm.eaters,
+              r.title, r.image_url, r.calories_per_serving, r.preparation_time, r.instructions, r.description, r.servings
        FROM daily_meals dm
        JOIN recipes r ON dm.recipe_id = r.recipe_id
        WHERE dm.menu_plan_id = ?`,
       [menu_plan_id]
     );
+
+    // Normalizar eaters (TEXT JSON) a array de user_id (o null = toda la familia)
+    for (const meal of rows) {
+      meal.eaters = parseEaters(meal.eaters);
+    }
 
     // Traer ingredientes de las recetas del plan
     if (rows.length > 0) {
@@ -54,10 +75,11 @@ router.get('/:daily_meal_id', async (req, res, next) => {
 
 // POST /daily-meals — guarda una receta en un slot del menú
 router.post('/', async (req, res, next) => {
-  const { menu_plan_id, recipe_id, meal_type, day_of_week } = req.body;
+  const { menu_plan_id, recipe_id, meal_type, day_of_week, eaters } = req.body;
   if (!menu_plan_id || !recipe_id || !meal_type || !day_of_week) {
     return res.status(400).json({ error: 'menu_plan_id, recipe_id, meal_type y day_of_week son obligatorios.' });
   }
+  const eatersStr = serializeEaters(eaters); // null = toda la familia
 
   // Upsert atómico: DELETE + INSERT dentro de una transacción para no perder
   // el slot previo si el INSERT falla.
@@ -70,11 +92,11 @@ router.post('/', async (req, res, next) => {
       [menu_plan_id, meal_type, day_of_week]
     );
     const [result] = await connection.query(
-      'INSERT INTO daily_meals (menu_plan_id, recipe_id, meal_type, day_of_week) VALUES (?, ?, ?, ?)',
-      [menu_plan_id, recipe_id, meal_type, day_of_week]
+      'INSERT INTO daily_meals (menu_plan_id, recipe_id, meal_type, day_of_week, eaters) VALUES (?, ?, ?, ?, ?)',
+      [menu_plan_id, recipe_id, meal_type, day_of_week, eatersStr]
     );
     await connection.commit();
-    res.status(201).json({ daily_meal_id: result.insertId, menu_plan_id, recipe_id, meal_type, day_of_week });
+    res.status(201).json({ daily_meal_id: result.insertId, menu_plan_id, recipe_id, meal_type, day_of_week, eaters: parseEaters(eatersStr) });
   } catch (err) {
     if (connection) await connection.rollback();
     next(err);
@@ -85,13 +107,17 @@ router.post('/', async (req, res, next) => {
 
 router.put('/:daily_meal_id', async (req, res, next) => {
   try {
-    const { meal_type, day_of_week, recipe_id, menu_plan_id } = req.body;
+    const { meal_type, day_of_week, recipe_id, menu_plan_id, eaters } = req.body;
+    if (!menu_plan_id || !recipe_id || !meal_type || !day_of_week) {
+      return res.status(400).json({ error: 'menu_plan_id, recipe_id, meal_type y day_of_week son obligatorios.' });
+    }
+    const eatersStr = serializeEaters(eaters);
     const [result] = await db.query(
-      'UPDATE daily_meals SET menu_plan_id = ?, recipe_id = ?, meal_type = ?, day_of_week = ? WHERE daily_meal_id = ?',
-      [menu_plan_id, recipe_id, meal_type, day_of_week, req.params.daily_meal_id]
+      'UPDATE daily_meals SET menu_plan_id = ?, recipe_id = ?, meal_type = ?, day_of_week = ?, eaters = ? WHERE daily_meal_id = ?',
+      [menu_plan_id, recipe_id, meal_type, day_of_week, eatersStr, req.params.daily_meal_id]
     );
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found' });
-    res.json({ daily_meal_id: Number(req.params.daily_meal_id), menu_plan_id, recipe_id, meal_type, day_of_week });
+    res.json({ daily_meal_id: Number(req.params.daily_meal_id), menu_plan_id, recipe_id, meal_type, day_of_week, eaters: parseEaters(eatersStr) });
   } catch (err) { next(err); }
 });
 
@@ -100,6 +126,19 @@ router.delete('/:daily_meal_id', async (req, res, next) => {
     const [result] = await db.query('DELETE FROM daily_meals WHERE daily_meal_id = ?', [req.params.daily_meal_id]);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found' });
     res.status(204).send();
+  } catch (err) { next(err); }
+});
+
+// PUT /daily-meals/:daily_meal_id/eaters — actualiza SOLO los comensales de una comida
+router.put('/:daily_meal_id/eaters', async (req, res, next) => {
+  try {
+    const eatersStr = serializeEaters(req.body.eaters); // null = toda la familia
+    const [result] = await db.query(
+      'UPDATE daily_meals SET eaters = ? WHERE daily_meal_id = ?',
+      [eatersStr, req.params.daily_meal_id]
+    );
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found' });
+    res.json({ daily_meal_id: Number(req.params.daily_meal_id), eaters: parseEaters(eatersStr) });
   } catch (err) { next(err); }
 });
 

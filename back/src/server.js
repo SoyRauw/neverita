@@ -16,6 +16,8 @@ import { errorHandler } from './utils/errorHandler.js';
 import { router as aiRecipesRouter } from './routes/ai_recipes.js';
 import { router as passwordResetRouter } from './routes/password_reset.js';
 import { router as shoppingListRouter } from './routes/shopping_list.js';
+import { router as mealSuggestionsRouter } from './routes/meal_suggestions.js';
+import { router as imageProxyRouter } from './routes/image_proxy.js';
 
 dotenv.config();
 
@@ -59,6 +61,8 @@ app.use('/family_recipes', familyRecipesRouter); // alias with underscore
 app.use('/ai', aiRecipesRouter);
 app.use('/password-reset', passwordResetRouter);
 app.use('/shopping-list', shoppingListRouter);
+app.use('/meal-suggestions', mealSuggestionsRouter);
+app.use('/img', imageProxyRouter); // proxy de imágenes de mismo origen (evita bloqueadores/hotlink)
 
 // Ruta no encontrada (después de todas las rutas, antes del manejador de errores)
 app.use((req, res) => {

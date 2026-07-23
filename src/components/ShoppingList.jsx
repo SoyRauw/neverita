@@ -1,7 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { showToast } from '../Toast';
-import { CheckCircle, Circle, Trash, MagicWand, X, Plus } from '@phosphor-icons/react';
+import { CheckCircle, Circle, Trash, MagicWand, X, Plus, ShoppingCart, Carrot, Fish, Drop, Coffee, Package, Pepper, Cherries, BowlFood, MagnifyingGlass } from '@phosphor-icons/react';
+
+// Secciones de la lista de compras (agrupadas por categoría del ingrediente).
+const SHOP_SECTIONS = [
+    { key: 'proteína', label: 'Proteínas', Icon: Fish, color: '#DC2626', bg: '#FEE2E2' },
+    { key: 'vegetal', label: 'Vegetales', Icon: Carrot, color: '#16A34A', bg: '#DCFCE7' },
+    { key: 'fruta', label: 'Frutas', Icon: Cherries, color: '#DB2777', bg: '#FCE7F3' },
+    { key: 'lácteo', label: 'Lácteos', Icon: Drop, color: '#0EA5E9', bg: '#E0F2FE' },
+    { key: 'grano', label: 'Granos y cereales', Icon: BowlFood, color: '#CA8A04', bg: '#FEF9C3' },
+    { key: 'condimento', label: 'Condimentos', Icon: Pepper, color: '#9333EA', bg: '#F3E8FF' },
+    { key: 'grasa', label: 'Grasas y aceites', Icon: Drop, color: '#0891B2', bg: '#CFFAFE' },
+    { key: 'bebida', label: 'Bebidas', Icon: Coffee, color: '#2563EB', bg: '#DBEAFE' },
+    { key: 'otro', label: 'Otros', Icon: Package, color: '#6B7280', bg: '#F3F4F6' },
+];
 import NvSelect from './NvSelect';
+import NvDatePicker from './NvDatePicker';
 
 const UNIT_OPTIONS = [
     { value: 'unidad', label: 'unidad' },
@@ -11,6 +25,7 @@ const UNIT_OPTIONS = [
     { value: 'l', label: 'l' },
 ];
 import { shoppingListService, aiService, ingredientsService, inventoryService, menuPlansService, dailyMealsService } from '../api';
+import { formatQty, isReasonableQty } from '../units';
 
 const ShoppingList = ({ currentFamily }) => {
     const [items, setItems] = useState([]);
@@ -53,6 +68,7 @@ const ShoppingList = ({ currentFamily }) => {
             setIngredients(ingList);
         } catch (error) {
             console.error("Error loading shopping list data", error);
+            showToast('No se pudo cargar la lista de compras. Revisa tu conexión.', 'error');
         } finally {
             setLoading(false);
         }
@@ -86,10 +102,14 @@ const ShoppingList = ({ currentFamily }) => {
     };
 
     const handleCreateIngredient = async () => {
-        if (!newIngredient.name.trim()) return showToast('Escribe el nombre.');
+        const nm = newIngredient.name.trim();
+        if (!nm) return showToast('Escribe el nombre.');
+        if (nm.length < 2 || !/[a-záéíóúñ]/i.test(nm)) return showToast('Escribe un nombre de alimento válido.', 'warning');
+        if (aiLoading) return showToast('Espera un momento, estamos verificando el alimento…', 'info');
+        if (newIngredient.is_food === false) return showToast(`"${nm}" no parece un alimento. Escribe un ingrediente comestible.`, 'error');
         try {
             const created = await ingredientsService.create({
-                name: newIngredient.name.trim(),
+                name: nm,
                 unit: newIngredient.unit,
                 category: newIngredient.category,
                 average_expiry_days: newIngredient.average_expiry_days,
@@ -97,19 +117,25 @@ const ShoppingList = ({ currentFamily }) => {
             setIngredients(prev => [...prev, created]);
             handleSelectSuggestion(created);
         } catch (err) {
-            showToast('Error al crear ingrediente.');
+            console.error(err);
+            showToast(err?.message || 'Error al crear ingrediente.', 'error');
         }
     };
 
     // --- Add Manual Item ---
     const handleAddManual = async () => {
-        if (!searchText.trim()) return;
+        const name = selectedIngredient ? selectedIngredient.name : searchText.trim();
+        if (!name) { showToast('Escribe o elige un ingrediente.', 'warning'); return; }
+        const q = Number(quantity);
+        if (quantity === '' || !Number.isFinite(q) || q <= 0) { showToast('Ingresa una cantidad válida mayor que 0.', 'warning'); return; }
+        const u = selectedIngredient ? selectedIngredient.unit : unit;
+        if (!isReasonableQty(q, u)) { showToast(`Esa cantidad es demasiado alta para "${u}". Revisa el número.`, 'warning'); return; }
         try {
             const payload = {
                 family_id: currentFamily.family_id || currentFamily.id,
-                name: selectedIngredient ? selectedIngredient.name : searchText.trim(),
-                quantity: Number(quantity) || 1,
-                unit: selectedIngredient ? selectedIngredient.unit : unit,
+                name,
+                quantity: q,
+                unit: u,
                 source: 'manual'
             };
             const created = await shoppingListService.create(payload);
@@ -119,7 +145,8 @@ const ShoppingList = ({ currentFamily }) => {
             setQuantity('');
             setUnit('unidad');
         } catch (error) {
-            showToast("Error al agregar.");
+            console.error(error);
+            showToast(error?.message || "Error al agregar.", 'error');
         }
     };
 
@@ -290,11 +317,19 @@ const ShoppingList = ({ currentFamily }) => {
     const toBuy = items.filter(i => !i.checked);
     const bought = items.filter(i => i.checked);
 
+    // Categoría de un producto (por su nombre, buscando en el catálogo de ingredientes).
+    const catOf = (name) => {
+        if (!name) return 'otro';
+        const ing = ingredients.find(i => i.name && i.name.toLowerCase() === name.toLowerCase());
+        const c = ing && ing.category ? ing.category.toLowerCase() : 'otro';
+        return SHOP_SECTIONS.some(s => s.key === c) ? c : 'otro';
+    };
+
     return (
         <div className="main-content">
             <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
                 <div className="header-title">
-                    <h1>🛒 Lista de Compras</h1>
+                    <h1 style={{ display: 'flex', alignItems: 'center', gap: 10 }}><ShoppingCart size={26} weight="fill" color="#FF7F50" /> Lista de Compras</h1>
                     <p>
                         Organiza tu semana
                         {currentFamily && <span style={{ color: '#FF9F43', fontWeight: 600 }}> — {currentFamily.name}</span>}
@@ -318,15 +353,18 @@ const ShoppingList = ({ currentFamily }) => {
 
                     <div style={{ flex: 2, minWidth: '200px', position: 'relative' }}>
                         <label className="shop-field-label">Ingrediente</label>
-                        <input
-                            type="text"
-                            className="nv-field"
-                            placeholder="Buscar ingrediente..."
-                            value={searchText}
-                            onChange={(e) => { setSearchText(e.target.value); setSelectedIngredient(null); setShowSuggestions(true); }}
-                            onFocus={() => setShowSuggestions(true)}
-                            style={{ width: '100%', ...(selectedIngredient ? { borderColor: '#22C55E', background: '#F0FFF4' } : {}) }}
-                        />
+                        <div className="nv-searchbar" style={{ position: 'relative' }}>
+                            <MagnifyingGlass size={18} className="nv-search-ic" style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: '#9b8d7c' }} />
+                            <input
+                                type="text"
+                                className="nv-field"
+                                placeholder="Buscar ingrediente..."
+                                value={searchText}
+                                onChange={(e) => { setSearchText(e.target.value); setSelectedIngredient(null); setShowSuggestions(true); }}
+                                onFocus={() => setShowSuggestions(true)}
+                                style={{ width: '100%', paddingLeft: 40, ...(selectedIngredient ? { borderColor: '#22C55E', background: '#F0FFF4' } : {}) }}
+                            />
+                        </div>
                         {selectedIngredient && (
                             <span style={{ position: 'absolute', right: 12, top: 12, fontSize: '0.8rem', color: '#22C55E', fontWeight: 700 }}>✓ {selectedIngredient.unit}</span>
                         )}
@@ -393,25 +431,46 @@ const ShoppingList = ({ currentFamily }) => {
                     Por Comprar
                     <span style={{ background: '#FEE2E2', color: '#DC2626', padding: '3px 12px', borderRadius: 999, fontSize: '0.8rem', fontWeight: 800 }}>{toBuy.length}</span>
                 </h3>
-                <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 30px 0' }}>
-                    {loading ? <p style={{ color: '#9b8d7c' }}>Cargando...</p> : toBuy.length === 0 ? <p style={{ color: '#9b8d7c', fontSize: '0.9rem' }}>Todo al día.</p> : toBuy.map(item => (
-                        <li key={item.item_id} className="shop-item">
-                            <div className="shop-item-main" onClick={() => openInventoryModal(item)} title="Marcar como comprado">
-                                <Circle className="shop-check" size={28} weight="bold" />
-                                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                                    <span className="shop-name">
-                                        {item.name}
-                                        {item.source === 'ai' && <span className="shop-ai-tag">✨ IA</span>}
-                                    </span>
-                                    <span className="shop-qty">{item.quantity} {item.unit}</span>
+                {loading ? (
+                    <p style={{ color: '#9b8d7c', marginBottom: 30 }}>Cargando...</p>
+                ) : toBuy.length === 0 ? (
+                    <p style={{ color: '#9b8d7c', fontSize: '0.9rem', marginBottom: 30 }}>Todo al día.</p>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 18, marginBottom: 30 }}>
+                        {SHOP_SECTIONS.map((sec, si) => {
+                            const its = toBuy.filter(it => catOf(it.name) === sec.key);
+                            if (!its.length) return null;
+                            return (
+                                <div key={sec.key} className="shop-section" style={{ animationDelay: `${si * 55}ms` }}>
+                                    <div className="shop-section-head">
+                                        <span className="shop-section-ic" style={{ background: sec.bg, color: sec.color }}><sec.Icon size={17} weight="fill" /></span>
+                                        <span className="shop-section-label">{sec.label}</span>
+                                        <span className="shop-section-count">{its.length}</span>
+                                    </div>
+                                    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                                        {its.map(item => (
+                                            <li key={item.item_id} className="shop-item">
+                                                <div className="shop-item-main" onClick={() => openInventoryModal(item)} title="Marcar como comprado">
+                                                    <Circle className="shop-check" size={28} weight="bold" />
+                                                    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                                                        <span className="shop-name">
+                                                            {item.name}
+                                                            {item.source === 'ai' && <span className="shop-ai-tag">✨ IA</span>}
+                                                        </span>
+                                                        <span className="shop-qty">{formatQty(item.quantity, item.unit)}</span>
+                                                    </div>
+                                                </div>
+                                                <button className="shop-del" onClick={() => handleDelete(item.item_id)} title="Eliminar">
+                                                    <Trash size={20} />
+                                                </button>
+                                            </li>
+                                        ))}
+                                    </ul>
                                 </div>
-                            </div>
-                            <button className="shop-del" onClick={() => handleDelete(item.item_id)} title="Eliminar">
-                                <Trash size={20} />
-                            </button>
-                        </li>
-                    ))}
-                </ul>
+                            );
+                        })}
+                    </div>
+                )}
 
                 {/* --- LISTA COMPRADOS --- */}
                 {bought.length > 0 && (
@@ -427,7 +486,7 @@ const ShoppingList = ({ currentFamily }) => {
                                         <CheckCircle size={28} color="#10B981" weight="fill" style={{ flex: 'none' }} />
                                         <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                                             <span className="shop-name">{item.name}</span>
-                                            <span className="shop-qty">{item.quantity} {item.unit}</span>
+                                            <span className="shop-qty">{formatQty(item.quantity, item.unit)}</span>
                                         </div>
                                     </div>
                                     <button className="shop-del" onClick={() => handleDelete(item.item_id)} title="Eliminar">
@@ -472,7 +531,7 @@ const ShoppingList = ({ currentFamily }) => {
 
                             <div>
                                 <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#6B5E4F', marginBottom: 6, display: 'block' }}>Fecha de vencimiento (Opcional)</label>
-                                <input type="date" value={modalExpDate} onChange={e => setModalExpDate(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '2px solid rgba(230,126,34,0.18)', boxSizing: 'border-box' }} />
+                                <NvDatePicker value={modalExpDate} onChange={v => setModalExpDate(v)} placeholder="Elige la fecha" />
                             </div>
 
                             <button onClick={confirmInventoryAdd} disabled={modalSaving} style={{ background: '#10B981', color: 'white', border: 'none', padding: '14px', borderRadius: 12, fontWeight: 700, fontSize: '1rem', marginTop: 10, cursor: modalSaving ? 'not-allowed' : 'pointer' }}>
