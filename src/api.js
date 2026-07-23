@@ -1,5 +1,5 @@
-//const API_BASE_URL = 'https://neverita.onrender.com';
-const API_BASE_URL = 'http://localhost:3000';
+// En desarrollo (npm run dev) usa el backend local; en producción (build/deploy) usa Render.
+const API_BASE_URL = import.meta.env.DEV ? 'http://localhost:3000' : 'https://neverita.onrender.com';
 
 /**
  * Función genérica para hacer peticiones al backend.
